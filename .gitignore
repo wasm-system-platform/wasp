@@ -1,0 +1,6 @@
+# IDE
+.cache
+
+# Meson
+/subprojects/*
+!/subprojects/*.wrap

@@ -1,10 +1,9 @@
-project('stubs-sp', 'cpp', default_options : ['cpp_std=c++23'])
+project('wasm-sp', 'cpp', default_options : ['cpp_std=c++23'])
 
 fmt = subproject('fmt')
 fmt_dep = fmt.get_variable('fmt_dep')
 
 sp_sources = files(
-    'src/main.cpp',
     'src/grammar/instructions.cpp',
     'src/grammar/module.cpp',
     'src/grammar/sections.cpp',
@@ -27,9 +26,25 @@ if get_option('enable_trace')
     add_project_arguments('-DENABLE_TRACE', language : 'cpp')
 endif
 
-sp = executable(
-    'stubs-sp',
+sp_lib = static_library(
+    'wasm-sp-lib',
     sources: sp_sources,
     dependencies: fmt_dep,
     include_directories: include_directories('src/')
 )
+
+sp_dep = declare_dependency(
+    link_with: sp_lib,
+    dependencies: fmt_dep,
+    include_directories: include_directories('src/')
+)
+
+sp = executable(
+    'wasm-sp',
+    sources: 'src/main.cpp',
+    link_with: sp_lib,
+    dependencies: fmt_dep,
+    include_directories: include_directories('src/')
+)
+
+subdir('test')
