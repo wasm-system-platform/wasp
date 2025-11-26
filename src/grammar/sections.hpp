@@ -9,6 +9,28 @@
 
 namespace grammar {
 
+/******************/
+/* Custom Section */
+/******************/
+
+class CustomSection {
+public:
+    static constexpr uint8_t ID = 0x00;
+
+    static Expected<CustomSection> parse(std::istream& in, uint32_t size);
+
+    const std::string& getName() const { return name_; }
+    const std::vector<uint8_t>& getBytes() const { return bytes_; }
+
+    std::string toString() const;
+
+private:
+    Name name_;
+    std::vector<uint8_t> bytes_;
+
+    CustomSection(const Name& name, std::vector<uint8_t>&& bytes);
+};
+
 /****************/
 /* Type Section */
 /****************/
@@ -306,6 +328,8 @@ class ElemenSection {
 public:
     static constexpr uint8_t ID = 0x09;
 
+    ElemenSection() = default;
+
     static Expected<ElemenSection> parse(std::istream& in);
 
     std::string toString() const;
@@ -325,7 +349,7 @@ private:
 
 class Function {
 public:
-    static Expected<Function> parse(std::istream& in);
+    static Expected<Function> parse(std::istream& in, size_t code_start);
 
     const std::vector<ValueType>& getLocals() const { return locals_; }
     const Expression& getBody() const { return body_; }
@@ -344,7 +368,7 @@ class CodeSection {
 public:
     static constexpr uint8_t ID = 10;
 
-    static Expected<CodeSection> parse(std::istream& in);
+    static Expected<CodeSection> parse(std::istream& in, size_t code_start);
 
     const std::vector<Function>& getFunctions() const { return funcs_; }
 
@@ -360,18 +384,24 @@ private:
 /* Data Section */
 /****************/
 
-class Data {
+class Segment {
 public:
-    static Expected<Data> parse(std::istream& in);
+    static Expected<Segment> parse(std::istream& in);
 
     const std::vector<uint8_t>& getBytes() const { return bytes_; }
+
+    const bool isActive() const { return offset_opt_.has_value(); }
+
+    const Expression& getOffset() const { return offset_opt_.value(); }
 
     std::string toString() const;
 
 private:
     std::vector<uint8_t> bytes_;
+    std::optional<Expression> offset_opt_;
 
-    Data(std::vector<uint8_t>&& bytes) : bytes_(std::move(bytes)) {}
+    Segment(std::vector<uint8_t>&& bytes, std::optional<Expression>&& offset)
+        : bytes_(std::move(bytes)), offset_opt_(std::move(offset)) {}
 };
 
 class DataSection {
@@ -382,14 +412,14 @@ public:
 
     static Expected<DataSection> parse(std::istream& in);
 
-    const std::vector<Data>& getSegments() const { return segments_; }
+    const std::vector<Segment>& getSegments() const { return segments_; }
 
     std::string toString() const;
 
 private:
-    std::vector<Data> segments_;
+    std::vector<Segment> segments_;
 
-    DataSection(std::vector<Data>&& segments)
+    DataSection(std::vector<Segment>&& segments)
         : segments_(std::move(segments)) {}
 };
 

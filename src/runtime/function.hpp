@@ -37,9 +37,12 @@ public:
     // (i32) -> (i32, i32)
     static Function
         createExternal(std::function<int32_t(Instance&, int32_t, int32_t)>);
+    // (i32) -> (i32, i32, i32, i32)
+    static Function createExternal(
+        std::function<int32_t(Instance&, int32_t, int32_t, int32_t, int32_t)>);
 
     inline Continuation enterFrame(Context& context) {
-        TRACE_LOG(" --- enter frame ---");
+        TRACE_VERBOSE(" --- enter frame ---");
         for (int i = num_params_ - 1; i >= 0; --i) {
             locals_[i] = context.pop();
         }
@@ -49,7 +52,7 @@ public:
     }
 
     inline void leaveFrame(Context& context) {
-        TRACE_LOG(" --- leave frame ---");
+        TRACE_VERBOSE(" --- leave frame ---");
         context.popLocals();
     }
 

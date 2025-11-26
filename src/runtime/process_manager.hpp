@@ -16,6 +16,7 @@ public:
     void runProcess(uint32_t pid, Instance& instance);
     void loadProgram(uint32_t pid, Instance& kernel, Instance& program,
                      uint32_t entry_func_idx);
+    Instance& getProcess(uint32_t pid);
 
     const std::shared_ptr<runtime::ProcessManager>& getContext(size_t id);
 

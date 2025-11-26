@@ -1,6 +1,7 @@
 #include <fmt/format.h>
 #include <sstream>
 
+#include "devices/keyboard.hpp"
 #include "hw/wasm_disk.hpp"
 #include "runtime/context_manager.hpp"
 #include "runtime/instance.hpp"
@@ -40,8 +41,8 @@ Instance::create(const grammar::Module& module,
                         Export{func.getIdx(), func_type, signature});
     }
 
-    return std::make_shared<Instance>(Instance(std::move(*store_exp), std::move(exports),
-                                     module));
+    return std::make_shared<Instance>(
+        Instance(std::move(*store_exp), std::move(exports), module));
 }
 
 Expected<std::shared_ptr<Instance>>
@@ -88,7 +89,7 @@ Instance::createKernel(const std::string& kernel_path,
 
         if (offset + len < memory.size()) {
             std::string_view msg(reinterpret_cast<char*>(&memory[offset]), len);
-            fmt::print("console: {}", msg);
+            fmt::print("{}", msg);
         }
     };
 
@@ -175,10 +176,29 @@ Instance::createKernel(const std::string& kernel_path,
         proc_mgr.runProcess(pid, instance);
         return 0;
     };
+    std::function<void(Instance&, int32_t)> process_terminate_func =
+        [](Instance& instance, uint32_t pid) -> void {
+        ProcessManager& proc_mgr = ProcessManager::instance();
+        Instance& proc = proc_mgr.getProcess(pid);
+        proc.getActiveContext().setRunState(Context::RunState::rdy);
+    };
+    std::function<int32_t(Instance&, int32_t, int32_t, int32_t, int32_t)>
+        process_read_func = [](Instance& instance, int pid, uint32_t dst,
+                               uint32_t proc_src, uint32_t count) -> int32_t {
+        std::vector<uint8_t>& mem = instance.getGlobalState().getMemory();
+        ProcessManager& proc_mgr = ProcessManager::instance();
+        std::vector<uint8_t>& proc_mem =
+            proc_mgr.getProcess(pid).getGlobalState().getMemory();
+        std::memcpy(&mem[dst], &proc_mem[proc_src], count);
+        return count;
+    };
 
     Function process_load = Function::createExternal(process_load_func);
     Function process_unload = Function::createExternal(process_unload_func);
     Function process_run = Function::createExternal(process_run_func);
+    Function process_terminate =
+        Function::createExternal(process_terminate_func);
+    Function process_read = Function::createExternal(process_read_func);
 
     // Devices
     std::function<void(Instance&, int32_t)> timer_set_interval_func =
@@ -194,7 +214,7 @@ Instance::createKernel(const std::string& kernel_path,
                      {"interrupt.enable", interrupt_enable},
                      {"interrupt.disable", interrupt_disable},
                      {"console.write", console_write},
-                     {"terminal.write", terminal_write},
+                     {"console.debug", terminal_write},
                      {"context.get", context_get},
                      {"context.create", context_create},
                      {"context.switch", context_switch},
@@ -204,6 +224,8 @@ Instance::createKernel(const std::string& kernel_path,
                      {"process.load", process_load},
                      {"process.unload", process_unload},
                      {"process.run", process_run},
+                     {"process.terminate", process_terminate},
+                     {"process.read", process_read},
                      {"timer.set_interval", timer_set_interval},
                  });
     if (!instance_exp)
@@ -228,21 +250,24 @@ Instance::createKernel(const std::string& kernel_path,
 
     instance.devices_.emplace(
         TIMER_PORT, std::make_shared<Timer>(interrupt_handler.func_idx));
+    // instance.devices_.emplace(
+    //     KEYBOARD_PORT,
+    //     std::make_shared<Keyboard>(interrupt_handler.func_idx));
 
-    it = instance.exports_.find("sys_call_handler");
+    it = instance.exports_.find("syscall_handler");
     if (it == instance.exports_.end())
         return Unexpected(ERROR("no system call handler found"));
 
-    const Export& sys_call_handler = it->second;
+    const Export& syscall_handler = it->second;
 
-    size_t sys_call_handler_sig =
-        std::hash<FunctionType>()(FunctionType::ProducerI32_I32_I32_I32_I32_I32());
-    if (sys_call_handler.signature != sys_call_handler_sig)
-        return Unexpected(
-            ERROR(fmt::format("interrupt handler has a wrong signature; "
-                              "expected signature '{}' but found '{}'",
-                              FunctionType::ProducerI32_I32_I32_I32_I32_I32().toString(),
-                              sys_call_handler.func_type.toString())));
+    size_t syscall_handler_sig = std::hash<FunctionType>()(
+        FunctionType::ProducerI32_I32_I32_I32_I32_I32());
+    if (syscall_handler.signature != syscall_handler_sig)
+        return Unexpected(ERROR(fmt::format(
+            "interrupt handler has a wrong signature; "
+            "expected signature '{}' but found '{}'",
+            FunctionType::ProducerI32_I32_I32_I32_I32_I32().toString(),
+            syscall_handler.func_type.toString())));
 
     return instance_exp;
 }
@@ -267,7 +292,8 @@ Instance::createUserProgram(const std::string& program, Instance& parent) {
                        int32_t(0), int32_t(0)},
                       sys_call_handler.signature);
 
-    Expected<std::shared_ptr<Instance>> instance_result = Instance::create(*module_exp, {{"sys.call", sys_call}});
+    Expected<std::shared_ptr<Instance>> instance_result =
+        Instance::create(*module_exp, {{"sys.call", sys_call}});
     if (!instance_result)
         return Unexpected(PROPAGATE(instance_result));
 
@@ -324,7 +350,7 @@ Instance::Instance(GlobalState&& store,
     ContextManager& mgr = ContextManager::instance();
 
     size_t context_id = mgr.createContext();
-    active_context_ = mgr.getContext(context_id);
+    active_context_ = mgr.getContext(context_id).get();
 
     if (module.hasStartSection()) {
         uint32_t start_function = module.getStartSection().getFunctionIdx();
@@ -360,7 +386,7 @@ Expected<void> Instance::call(const std::string& name,
 }
 
 void Instance::invoke(size_t func_idx) {
-    Call call(func_idx);
+    Call call(func_idx, UINT32_MAX);
     run(call);
 }
 
@@ -431,10 +457,13 @@ Continuation Instance::SysCall::Epilogue::action(Instance& kernel) {
         kernel.getGlobalState().getFunction(parent_.sys_call_handler_idx_);
     syscall_handler.leaveFrame(kernel_ctx);
 
-    int32_t result = kernel_ctx.popI32();
-    suspended_instance_.getActiveContext().pushI32(result);
+    Context& proc_ctx = suspended_instance_.getActiveContext();
+    if (proc_ctx.getRunState() == Context::RunState::running) {
+        int32_t result = kernel_ctx.popI32(); // else this is the exit code
+        proc_ctx.pushI32(result);
+        kernel.switchToInstance(suspended_instance_);
+    }
 
-    kernel.switchToInstance(suspended_instance_);
     return nullptr;
 }
 

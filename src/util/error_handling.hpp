@@ -6,13 +6,24 @@
 
 #include <fmt/format.h>
 
-#ifdef ENABLE_TRACE
-#define TRACE_LOG(...)                                                         \
+#if TRACE_LEVEL >= 1
+#define TRACE(...)                                                             \
     do {                                                                       \
         fmt::println(__VA_ARGS__);                                             \
     } while (0)
 #else
-#define TRACE_LOG(...)                                                         \
+#define TRACE(...)                                                             \
+    do {                                                                       \
+    } while (0)
+#endif
+
+#if TRACE_LEVEL >= 2
+#define TRACE_VERBOSE(...)                                                     \
+    do {                                                                       \
+        fmt::println(__VA_ARGS__);                                             \
+    } while (0)
+#else
+#define TRACE_VERBOSE(...)                                                     \
     do {                                                                       \
     } while (0)
 #endif

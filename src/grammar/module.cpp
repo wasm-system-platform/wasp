@@ -1,9 +1,10 @@
 #include <array>
-#include <fstream>
 #include <iostream>
+#include <sstream>
 
 #include <fmt/format.h>
 
+#include "grammar/dwarf.hpp"
 #include "grammar/module.hpp"
 
 namespace grammar {
@@ -38,11 +39,16 @@ Expected<Module> Module::parse(std::istream& in) {
     std::optional<GlobalSection> global_section;
     std::optional<ExportSection> export_section;
     std::optional<StartSection> start_section;
-    std::optional<ElemenSection> element_section;
+    ElemenSection element_section;
     std::optional<CodeSection> code_section;
     std::optional<DataSection> data_section;
+    DebugLineSection debug_line_section;
+
+    std::vector<CustomSection> custom_sections;
 
     while (true) {
+        size_t module_start = static_cast<size_t>(in.tellg());
+
         Expected<Byte> section_id_exp = Byte::parse(in);
         if (!section_id_exp)
             return Unexpected(PROPAGATE(section_id_exp));
@@ -54,9 +60,15 @@ Expected<Module> Module::parse(std::istream& in) {
         uint32_t size = *size_res;
 
         switch (section_id) {
-        case 0:
-            in.seekg(size, std::ios_base::cur);
+        case CustomSection::ID: {
+            Expected<CustomSection> custom_section_res =
+                CustomSection::parse(in, size);
+            if (!custom_section_res)
+                return Unexpected(PROPAGATE(custom_section_res));
+
+            custom_sections.emplace_back(std::move(*custom_section_res));
             break;
+        }
         case TypeSection::ID: {
             Expected<TypeSection> type_section_res = TypeSection::parse(in);
             if (!type_section_res)
@@ -115,11 +127,12 @@ Expected<Module> Module::parse(std::istream& in) {
                 ElemenSection::parse(in);
             if (!element_section_res)
                 return Unexpected(PROPAGATE(element_section_res));
-            element_section = *element_section_res;
+            element_section = std::move(*element_section_res);
             break;
         }
         case CodeSection::ID: {
-            Expected<CodeSection> code_section_res = CodeSection::parse(in);
+            Expected<CodeSection> code_section_res =
+                CodeSection::parse(in, module_start);
             if (!code_section_res)
                 return Unexpected(PROPAGATE(code_section_res));
             code_section = *code_section_res;
@@ -149,13 +162,34 @@ Expected<Module> Module::parse(std::istream& in) {
             break;
     }
 
-    return Module(type_section.value_or(TypeSection()),
-                  import_section.value_or(ImportSection()),
-                  std::move(func_section), std::move(table_section),
-                  global_section.value_or(GlobalSection()),
-                  std::move(export_section), std::move(start_section),
-                  std::move(element_section), std::move(code_section),
-                  data_section.value_or(DataSection()));
+    for (const auto& custom_section : custom_sections) {
+        if (custom_section.getName() != ".debug_line")
+            continue;
+
+        const std::vector<uint8_t>& custom_bytes = custom_section.getBytes();
+        std::string custom_string(
+            reinterpret_cast<const char*>(custom_bytes.data()),
+            custom_bytes.size());
+        std::stringstream custom_stream(custom_string);
+
+        Expected<DebugLineSection> debug_line_section_exp =
+            DebugLineSection::parse(custom_stream);
+        if (!debug_line_section_exp) {
+            fmt::println("[warning] failed to parse debug line section: {}",
+                         debug_line_section_exp.error().toString());
+            continue;
+        }
+
+        debug_line_section = std::move(*debug_line_section_exp);
+    }
+
+    return Module(
+        type_section.value_or(TypeSection()),
+        import_section.value_or(ImportSection()), std::move(func_section),
+        std::move(table_section), global_section.value_or(GlobalSection()),
+        std::move(export_section), std::move(start_section),
+        std::move(element_section), std::move(code_section),
+        data_section.value_or(DataSection()), std::move(debug_line_section));
 }
 
 } // namespace grammar

@@ -30,6 +30,7 @@ void ProcessManager::runProcess(uint32_t pid, Instance& instance) {
 
     Process& process = processes_[pid];
     process.program->setContext(process.program_ctx);
+    process.program_ctx->setRunState(Context::RunState::running);
     instance.switchToInstance(*process.program);
 }
 
@@ -47,10 +48,14 @@ void ProcessManager::loadProgram(uint32_t pid, Instance& kernel,
     process.program = program.shared_from_this();
     process.kernel_ctx = program.getActiveContext().shared_from_this();
     process.program_ctx = ctx;
-    process.entry = std::make_shared<Call>(entry_func_idx);
+    process.entry = std::make_shared<Call>(entry_func_idx, UINT32_MAX);
 
     ctx->pushReturn(nullptr);
     ctx->pushReturn(process.entry.get());
+}
+
+Instance& ProcessManager::getProcess(uint32_t pid) {
+    return *processes_[pid].program;
 }
 
 } // namespace runtime

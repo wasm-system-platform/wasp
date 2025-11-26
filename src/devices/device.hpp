@@ -4,7 +4,8 @@
 
 #include "runtime/operations.hpp"
 
-constexpr size_t TIMER_PORT = 1;
+constexpr uint32_t TIMER_PORT = 1;
+constexpr uint32_t KEYBOARD_PORT = 420;
 
 class DeviceBase;
 using Device = std::shared_ptr<DeviceBase>;

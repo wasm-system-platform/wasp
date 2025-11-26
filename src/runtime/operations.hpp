@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cassert>
 #include <stack>
 
 #include "grammar/sections.hpp"
@@ -26,11 +27,13 @@ public:
            std::vector<Operation>& targets);
 
     virtual void addNext(Operation next) {
+        assert(!next_ || (next_.get() != next.get()));
         if (next_)
             next_->addNext(next);
         else
             next_ = next;
     }
+    void clearNext() { next_.reset(); }
 
     virtual Continuation action(Instance& instance) { return next_.get(); }
     virtual Expected<Continuation> eval(Context& context) const {
@@ -46,19 +49,17 @@ public:
 
 protected:
     Operation next_;
-    size_t ip_;
+    size_t addr_;
 
     OperationBase() = default;
-    OperationBase(size_t ip) : ip_(ip) {}
+    OperationBase(size_t addr) : addr_(addr) {}
 
-    Continuation trap() const;
+    Continuation trap(Instance& instance, std::string msg, size_t addr) const;
 };
 
 /*********************/
 /* Helper Operations */
 /*********************/
-
-class Nop : public OperationBase {};
 
 class Tick : public OperationBase {
 public:
@@ -90,8 +91,12 @@ private:
 
 class Unreachable : public OperationBase {
 public:
+    Unreachable(const grammar::Unreachable& unreachable);
+
     Continuation action(Instance& instance) override;
 };
+
+class Nop : public OperationBase {};
 
 class Block : public OperationBase {
 public:
@@ -161,7 +166,7 @@ private:
 class Call : public OperationBase {
 public:
     Call(const grammar::Call& call);
-    Call(uint32_t func_idx);
+    Call(uint32_t func_idx, size_t addr);
 
     void addNext(Operation next) override { epilogue_->addNext(next); }
 
@@ -397,7 +402,27 @@ public:
     Continuation action(Instance& instance) override;
 };
 
+class I64LessEqualSigned : public OperationBase {
+public:
+    Continuation action(Instance& instance) override;
+};
+
+class I64LessEqualUnsigned : public OperationBase {
+public:
+    Continuation action(Instance& instance) override;
+};
+
 class I64GreaterEqualSigned : public OperationBase {
+public:
+    Continuation action(Instance& instance) override;
+};
+
+class I32CountLeadingZeros : public OperationBase {
+public:
+    Continuation action(Instance& instance) override;
+};
+
+class I32CountTrailingZeros : public OperationBase {
 public:
     Continuation action(Instance& instance) override;
 };
@@ -463,6 +488,16 @@ public:
 };
 
 class I32ShiftRightUnsigned : public OperationBase {
+public:
+    Continuation action(Instance& instance) override;
+};
+
+class I64CountLeadingZeros : public OperationBase {
+public:
+    Continuation action(Instance& instance) override;
+};
+
+class I64CountTrailingZeros : public OperationBase {
 public:
     Continuation action(Instance& instance) override;
 };
@@ -606,6 +641,17 @@ private:
     uint32_t align_;
 };
 
+class I64Load32Unsigned : public OperationBase {
+public:
+    I64Load32Unsigned(const grammar::I64Load32Unsigned& i64_load32_u);
+
+    Continuation action(Instance& instance) override;
+
+private:
+    uint32_t offset_;
+    uint32_t align_;
+};
+
 class I32Store : public OperationBase {
 public:
     I32Store(const grammar::I32Store& i32_store);
@@ -659,6 +705,13 @@ public:
 private:
     uint32_t offset_;
     uint32_t align_;
+};
+
+class MemoryGrow : public OperationBase {
+public:
+    MemoryGrow(const grammar::MemoryGrow& mem_grow);
+
+    Continuation action(Instance& instance) override;
 };
 
 class MemoryInit : public OperationBase {

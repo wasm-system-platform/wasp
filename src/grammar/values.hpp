@@ -23,17 +23,6 @@ private:
 /* Integers */
 /************/
 
-struct U32 {
-    static Expected<U32> parse(std::istream& in);
-
-    operator uint32_t() const { return val_; }
-
-private:
-    uint32_t val_;
-
-    explicit U32(uint32_t val) : val_(val) {}
-};
-
 struct S32 {
     static Expected<S32> parse(std::istream& in);
 
@@ -45,6 +34,17 @@ private:
     explicit S32(int32_t val) : val_(val) {}
 };
 
+struct U32 {
+    static Expected<U32> parse(std::istream& in);
+
+    operator uint32_t() const { return val_; }
+
+private:
+    uint32_t val_;
+
+    explicit U32(uint32_t val) : val_(val) {}
+};
+
 struct S64 {
     static Expected<S64> parse(std::istream& in);
 
@@ -53,7 +53,18 @@ struct S64 {
 private:
     int64_t val_;
 
-    explicit S64(int32_t val) : val_(val) {}
+    explicit S64(int64_t val) : val_(val) {}
+};
+
+struct U64 {
+    static Expected<U64> parse(std::istream& in);
+
+    operator uint64_t() const { return val_; }
+
+private:
+    uint64_t val_;
+
+    explicit U64(uint64_t val) : val_(val) {}
 };
 
 /*********/

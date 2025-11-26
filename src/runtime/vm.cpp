@@ -11,6 +11,7 @@ namespace runtime {
 Expected<MemoryInstances>
 MemoryInstances::create(const grammar::Module& module) {
     const grammar::ImportSection& import_section = module.getImportSection();
+    const grammar::DataSection& data_section = module.getDataSection();
     const std::vector<grammar::MemoryImport> mem_imports =
         import_section.getMemoryImports();
 
@@ -20,10 +21,53 @@ MemoryInstances::create(const grammar::Module& module) {
     if (mem_imports.size() > 1)
         return Unexpected(ERROR("multi memory is currently not supported"));
 
-    constexpr size_t PAGE_SIZE = 1024 * 64;
+    constexpr size_t WASM_PAGE_SIZE = 1024 * 64;
 
     const MemoryType& type = mem_imports[0].getMemoryType();
-    std::vector<uint8_t> heap(type.getInitial() * PAGE_SIZE);
+    std::vector<uint8_t> heap(type.getInitial() * WASM_PAGE_SIZE);
+
+    /* copy active segments */
+    const std::vector<grammar::Segment>& segments = data_section.getSegments();
+    for (const auto& segment : segments) {
+        if (!segment.isActive())
+            continue;
+
+        /* why is the offset an expression?! */
+        const grammar::Expression& offset_expr = segment.getOffset();
+
+        std::vector<Operation> targets;
+        Context dummy_context(0);
+        std::vector<FunctionType> dummy_types;
+        const Operation offset_op = OperationBase::create(
+            offset_expr.getInstructions(), dummy_types, targets);
+
+        Expected<Continuation> continuation_exp =
+            offset_op->eval(dummy_context);
+        if (!continuation_exp)
+            return Unexpected(PROPAGATE(continuation_exp));
+
+        while (continuation_exp.value()) {
+            continuation_exp = continuation_exp.value()->eval(dummy_context);
+            if (!continuation_exp)
+                return Unexpected(PROPAGATE(continuation_exp));
+        }
+
+        if (dummy_context.size() != 1)
+            return Unexpected(ERROR("malformed constant expression"));
+
+        Value offset_val = dummy_context.pop();
+        if (!std::holds_alternative<int32_t>(offset_val))
+            return Unexpected(ERROR("malformed constant expression"));
+
+        uint32_t offset = static_cast<uint32_t>(std::get<int32_t>(offset_val));
+        const std::vector<uint8_t>& bytes = segment.getBytes();
+
+        if (offset + bytes.size() > heap.size())
+            return Unexpected(ERROR("data segment out of bound"));
+
+        fmt::println("copied segment: offset={} size={}", offset, bytes.size());
+        std::memcpy(heap.data() + offset, bytes.data(), bytes.size());
+    }
 
     return MemoryInstances(std::move(heap), type.getMax(), type.isShared());
 }
@@ -70,11 +114,11 @@ GlobalInstances::create(const grammar::Module& module) {
 
 Expected<DataInstances> DataInstances::create(const grammar::Module& module) {
     const grammar::DataSection& data_section = module.getDataSection();
-    const std::vector<grammar::Data>& data_segments =
+    const std::vector<grammar::Segment>& data_segments =
         data_section.getSegments();
 
     std::vector<std::vector<uint8_t>> segments;
-    for (const grammar::Data& segment : data_segments) {
+    for (const grammar::Segment& segment : data_segments) {
         segments.push_back(segment.getBytes());
     }
 
@@ -106,9 +150,77 @@ GlobalState::create(const grammar::Module& module,
     if (!datas_exp)
         return Unexpected(PROPAGATE(datas_exp));
 
+    DebugInfoInstance debug_info = DebugInfoInstance::create(module);
+
     return GlobalState(std::move(*funcs_exp), std::move(*indirect_funcs_exp),
-                       *mems_exp, *global_exp, *datas_exp);
+                       *mems_exp, *global_exp, *datas_exp,
+                       std::move(debug_info));
 }
+
+/**************/
+/* Debug Info */
+/**************/
+
+DebugInfoInstance DebugInfoInstance::create(const grammar::Module& module) {
+    const DebugLineSection& debug_line_section = module.getDebugLineSection();
+
+    const std::vector<DebugLineSection::Segment>& section_segments =
+        debug_line_section.getSegments();
+
+    std::vector<LineInfoSegment> segments;
+    for (const auto& ss : section_segments) {
+        LineInfoSegment s;
+        s.start_addr = ss.start_addr;
+        s.end_addr = ss.end_addr;
+        s.src_file_idx = ss.src_file_idx;
+        s.line = ss.line;
+
+        segments.push_back(s);
+    }
+
+    std::sort(segments.begin(), segments.end(),
+              [](const LineInfoSegment& a, const LineInfoSegment& b) {
+                  return a.start_addr < b.start_addr;
+              });
+
+    return DebugInfoInstance(std::move(segments),
+                             debug_line_section.getSourceFiles());
+}
+
+std::string DebugInfoInstance::getFormattedLocation(size_t addr) const {
+    for (int i = 0; i < 32; i++) {
+        // fmt::println("{}");
+    }
+
+    std::string unknown_loc = fmt::format("<0x{:x}>", addr);
+
+    if (line_info_segments_.empty())
+        return unknown_loc;
+
+    auto it =
+        std::upper_bound(line_info_segments_.begin(), line_info_segments_.end(),
+                         addr, [](size_t a, const LineInfoSegment& seg) {
+                             return a < seg.start_addr;
+                         });
+
+    if (it == line_info_segments_.begin())
+        return unknown_loc;
+
+    --it;
+
+    if (addr >= it->start_addr && addr < it->end_addr) {
+        const std::string& file = src_files_[it->src_file_idx];
+        return fmt::format("{}:{}", file, it->line);
+    }
+
+    return unknown_loc;
+}
+
+DebugInfoInstance::DebugInfoInstance(
+    std::vector<LineInfoSegment>&& line_info_segments,
+    const std::vector<std::string>& src_files)
+    : line_info_segments_(std::move(line_info_segments)),
+      src_files_(src_files) {}
 
 Expected<std::vector<Function>> GlobalState::createFunctions(
     const grammar::Module& module,

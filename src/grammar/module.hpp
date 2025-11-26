@@ -2,6 +2,7 @@
 
 #include <optional>
 
+#include "grammar/dwarf.hpp"
 #include "sections.hpp"
 
 namespace grammar {
@@ -21,9 +22,12 @@ public:
     const FunctionSection& getFunctionSection() const { return *func_section_; }
     const ExportSection& getExportSection() const { return *export_section_; }
     const StartSection& getStartSection() const { return *start_section_; }
-    const ElemenSection& getElementSection() const { return *element_section_; }
+    const ElemenSection& getElementSection() const { return element_section_; }
     const CodeSection& getCodeSection() const { return *code_section_; }
     const DataSection& getDataSection() const { return data_section_; };
+    const DebugLineSection& getDebugLineSection() const {
+        return debug_line_section_;
+    }
 
 private:
     TypeSection type_section_;
@@ -33,9 +37,10 @@ private:
     GlobalSection global_section_;
     std::optional<ExportSection> export_section_;
     std::optional<StartSection> start_section_;
-    std::optional<ElemenSection> element_section_;
+    ElemenSection element_section_;
     std::optional<CodeSection> code_section_;
     DataSection data_section_;
+    DebugLineSection debug_line_section_;
 
     Module(TypeSection&& type_section, ImportSection&& import_section,
            std::optional<FunctionSection>&& function_section,
@@ -43,8 +48,9 @@ private:
            GlobalSection&& global_section,
            std::optional<ExportSection>&& export_section,
            std::optional<StartSection>&& start_section,
-           std::optional<ElemenSection>&& element_section,
-           std::optional<CodeSection>&& code_section, DataSection data_section)
+           ElemenSection&& element_section,
+           std::optional<CodeSection>&& code_section, DataSection data_section,
+           DebugLineSection&& debug_line_section)
         : type_section_(std::move(type_section)),
           import_section_(std::move(import_section)),
           func_section_(std::move(function_section)),
@@ -54,7 +60,8 @@ private:
           start_section_(std::move(start_section)),
           element_section_(std::move(element_section)),
           code_section_(std::move(code_section)),
-          data_section_(std::move(data_section)) {}
+          data_section_(std::move(data_section)),
+          debug_line_section_(std::move(debug_line_section)) {}
 };
 
 } // namespace grammar

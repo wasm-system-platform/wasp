@@ -17,6 +17,7 @@ runtime::Operation Timer::tick(runtime::Instance& instance, uint32_t port,
             t_.active_ = false;
 
         instance.getActiveContext().pushI32(port);
+        handler_call->clearNext();
         handler_call->addNext(interrupt);
         return handler_call;
     }

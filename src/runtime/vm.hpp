@@ -14,42 +14,6 @@ namespace runtime {
 using Params = std::vector<Value>;
 using Result = std::optional<Value>;
 
-/*
-class FunctionInstances {
-public:
-    static Expected<FunctionInstances>
-    create(const grammar::Module& module,
-           const std::vector<ExternalFunction>& imports);
-
-    inline Continuation invoke(size_t idx, Context& stack, Store& store) {
-        // call external function
-        if (idx < externals_.size()) {
-            const ExternalFunction& external = externals_[idx];
-
-            Params params(external.getNumParams());
-            for (auto it = params.rbegin(); it != params.rend(); ++it) {
-                *it = stack.pop();
-            }
-
-            Result result = external.exec(params);
-            if (result.has_value())
-                stack.push(*result);
-
-            return nullptr;
-        }
-
-        // call internal function
-        internals_[idx - externals_.size()].invoke();
-    }
-
-private:
-    std::vector<ExternalFunction> externals_;
-    std::vector<InternalFunction> internals_;
-
-    FunctionInstances(std::vector<ExternalFunction>&& externals,
-                      std::vector<InternalFunction>&& internals);
-}; */
-
 /********************/
 /* Memory Instances */
 /********************/
@@ -109,6 +73,31 @@ private:
         : segments_(std::move(segments)) {}
 };
 
+/***********************/
+/* Debug Info Instance */
+/***********************/
+
+class DebugInfoInstance {
+public:
+    static DebugInfoInstance create(const grammar::Module& module);
+
+    std::string getFormattedLocation(size_t addr) const;
+
+private:
+    struct LineInfoSegment {
+        size_t start_addr;
+        size_t end_addr;
+        size_t src_file_idx;
+        int64_t line;
+    };
+
+    std::vector<LineInfoSegment> line_info_segments_;
+    std::vector<std::string> src_files_;
+
+    DebugInfoInstance(std::vector<LineInfoSegment>&& line_info_segments,
+                      const std::vector<std::string>& src_files);
+};
+
 /*********/
 /* Store */
 /*********/
@@ -126,11 +115,11 @@ public:
     inline std::vector<uint8_t>& getMemory() { return mems_.getHeap(); }
 
     inline std::vector<std::vector<uint8_t>>& getData() {
-        return datas_.getSegments();
+        return segments_.getSegments();
     }
 
     inline void dropSegment(uint32_t segment_idx) {
-        datas_.getSegments()[segment_idx].clear();
+        segments_.getSegments()[segment_idx].clear();
     }
 
     inline Value getGlobal(uint32_t idx) const {
@@ -162,22 +151,27 @@ public:
         return interrupts_enabled_ ? interrupt.get() : nullptr;
     }
 
+    const DebugInfoInstance& getDebugInfo() const { return debug_info_; }
+
 private:
     std::vector<Function> funcs_;
     std::vector<uint32_t> indirect_funcs_;
 
     MemoryInstances mems_;
     GlobalInstances globals_;
-    DataInstances datas_;
+    DataInstances segments_;
+    DebugInfoInstance debug_info_;
 
     bool interrupts_enabled_ = false;
 
     GlobalState(std::vector<Function>&& funcs,
                 std::vector<uint32_t>&& indirect_funcs,
                 const MemoryInstances& mems, const GlobalInstances& globals,
-                const DataInstances& datas)
+                const DataInstances& segments,
+                const DebugInfoInstance&& debug_info)
         : funcs_(std::move(funcs)), indirect_funcs_(std::move(indirect_funcs)),
-          mems_(mems), globals_(globals), datas_(datas) {}
+          mems_(mems), globals_(globals), segments_(segments),
+          debug_info_(std::move(debug_info)) {}
 
     static Expected<std::vector<Function>>
     createFunctions(const grammar::Module& module,

@@ -142,6 +142,29 @@ Function Function::createExternal(
     return Function(std::move(body), 2, {int32_t(0), int32_t(0)}, signature);
 }
 
+// (i32) -> (i32, i32, i32, i32)
+Function Function::createExternal(
+    std::function<int32_t(Instance&, int32_t, int32_t, int32_t, int32_t)>
+        external_func) {
+    Operation body =
+        std::make_shared<Wrapper>([external_func](Instance& instance) {
+            Context& context = instance.getActiveContext();
+            int32_t a = std::get<int32_t>(context.getLocal(0));
+            int32_t b = std::get<int32_t>(context.getLocal(1));
+            int32_t c = std::get<int32_t>(context.getLocal(2));
+            int32_t d = std::get<int32_t>(context.getLocal(3));
+
+            int32_t result = external_func(instance, a, b, c, d);
+            context.pushI32(result);
+        });
+
+    size_t signature =
+        std::hash<FunctionType>()(FunctionType::ProducerI32_I32_I32_I32());
+    return Function(std::move(body), 4,
+                    {int32_t(0), int32_t(0), int32_t(0), int32_t(0)},
+                    signature);
+}
+
 bool Function::isCompatible(const FunctionType& other) const {
     return signature_ == std::hash<FunctionType>()(other);
 }

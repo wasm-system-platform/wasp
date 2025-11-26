@@ -6,8 +6,11 @@
 
 namespace grammar {
 
-Expected<Instruction> IntstructionBase::parse(std::istream& in) {
-    size_t ip = in.tellg();
+Expected<Instruction> InstructionBase::parse(std::istream& in,
+                                             size_t code_start) {
+    size_t addr = (code_start == UINT32_MAX)
+                      ? code_start
+                      : static_cast<size_t>(in.tellg()) - code_start;
 
     Expected<Byte> opcode_res = Byte::parse(in);
     if (!opcode_res)
@@ -16,16 +19,19 @@ Expected<Instruction> IntstructionBase::parse(std::istream& in) {
 
     switch (opcode) {
     case Unreachable::OPCODE: {
-        return std::make_shared<Unreachable>();
+        return std::make_shared<Unreachable>(addr);
+    }
+    case Nop::OPCODE: {
+        return std::make_shared<Nop>();
     }
     case Block::OPCODE: {
-        Expected<Block> block_res = Block::parse(in);
+        Expected<Block> block_res = Block::parse(in, code_start);
         if (!block_res)
             return Unexpected(PROPAGATE(block_res));
         return std::make_shared<Block>(*block_res);
     }
     case Loop::OPCODE: {
-        Expected<Loop> loop_res = Loop::parse(in);
+        Expected<Loop> loop_res = Loop::parse(in, code_start);
         if (!loop_res)
             return Unexpected(PROPAGATE(loop_res));
         return std::make_shared<Loop>(*loop_res);
@@ -53,7 +59,7 @@ Expected<Instruction> IntstructionBase::parse(std::istream& in) {
         return std::make_shared<BranchTable>(*br_table_res);
     }
     case Call::OPCODE: {
-        Expected<Call> call_res = Call::parse(in);
+        Expected<Call> call_res = Call::parse(in, addr);
         if (!call_res)
             return Unexpected(PROPAGATE(call_res));
         return std::make_shared<Call>(*call_res);
@@ -65,7 +71,7 @@ Expected<Instruction> IntstructionBase::parse(std::istream& in) {
         return std::make_shared<CallIndirect>(*call_indirect_res);
     }
     case LocalGet::OPCODE: {
-        Expected<LocalGet> local_get_res = LocalGet::parse(in);
+        Expected<LocalGet> local_get_res = LocalGet::parse(in, addr);
         if (!local_get_res)
             return Unexpected(PROPAGATE(local_get_res));
         return std::make_shared<LocalGet>(*local_get_res);
@@ -89,7 +95,7 @@ Expected<Instruction> IntstructionBase::parse(std::istream& in) {
         return std::make_shared<GlobalSet>(*global_set_res);
     }
     case Drop::OPCODE:
-        return std::make_shared<Drop>(ip);
+        return std::make_shared<Drop>(addr);
     case Select::OPCODE:
         return std::make_shared<Select>();
     case I32Const::OPCODE: {
@@ -134,12 +140,22 @@ Expected<Instruction> IntstructionBase::parse(std::istream& in) {
         return std::make_shared<I64NotEqual>();
     case I64LessThanSigned::OPCODE:
         return std::make_shared<I64LessThanSigned>();
+    case I64LessThanUnsigned::OPCODE:
+        return std::make_shared<I64LessThanUnsigned>();
     case I64GreaterThanSigned::OPCODE:
         return std::make_shared<I64GreaterThanSigned>();
     case I64GreaterThanUnsigned::OPCODE:
         return std::make_shared<I64GreaterThanUnsigned>();
+    case I64LessEqualSigned::OPCODE:
+        return std::make_shared<I64LessEqualSigned>();
+    case I64LessEqualUnsigned::OPCODE:
+        return std::make_shared<I64LessEqualUnsigned>();
     case I64GreaterEqualSigned::OPCODE:
         return std::make_shared<I64GreaterEqualSigned>();
+    case I32CountLeadingZeros::OPCODE:
+        return std::make_shared<I32CountLeadingZeros>();
+    case I32CountTrailingZeros::OPCODE:
+        return std::make_shared<I32CountTrailingZeros>();
     case I32Add::OPCODE:
         return std::make_shared<I32Add>();
     case I32Sub::OPCODE:
@@ -166,6 +182,10 @@ Expected<Instruction> IntstructionBase::parse(std::istream& in) {
         return std::make_shared<I32ShiftRightSigned>();
     case I32ShiftRightUnsigned::OPCODE:
         return std::make_shared<I32ShiftRightUnsigned>();
+    case I64CountLeadingZeros::OPCODE:
+        return std::make_shared<I64CountLeadingZeros>();
+    case I64CountTrailingZeros::OPCODE:
+        return std::make_shared<I64CountTrailingZeros>();
     case I64Add::OPCODE:
         return std::make_shared<I64Add>();
     case I64Sub::OPCODE:
@@ -230,6 +250,13 @@ Expected<Instruction> IntstructionBase::parse(std::istream& in) {
             return Unexpected(PROPAGATE(i32_load16_u_res));
         return std::make_shared<I32Load16Unsigned>(*i32_load16_u_res);
     }
+    case I64Load32Unsigned::OPCODE: {
+        Expected<I64Load32Unsigned> i64_load32_u_res =
+            I64Load32Unsigned::parse(in);
+        if (!i64_load32_u_res)
+            return Unexpected(PROPAGATE(i64_load32_u_res));
+        return std::make_shared<I64Load32Unsigned>(*i64_load32_u_res);
+    }
     case I32Store::OPCODE: {
         Expected<I32Store> i32_store_res = I32Store::parse(in);
         if (!i32_store_res)
@@ -259,6 +286,12 @@ Expected<Instruction> IntstructionBase::parse(std::istream& in) {
         if (!i32_store16_res)
             return Unexpected(PROPAGATE(i32_store16_res));
         return std::make_shared<I32Store16>(*i32_store16_res);
+    }
+    case MemoryGrow::OPCODE: {
+        Expected<MemoryGrow> memory_grow_exp = MemoryGrow::parse(in, addr);
+        if (!memory_grow_exp)
+            return Unexpected(PROPAGATE(memory_grow_exp));
+        return std::make_shared<MemoryGrow>(*memory_grow_exp);
     }
     case MemoryIntstructionBase::OPCODE:
         return MemoryIntstructionBase::parse(in);
@@ -294,7 +327,7 @@ std::string BlockType::toString() const {
     return val_type_opt_.has_value() ? val_type_opt_->toString() : "";
 }
 
-Expected<Block> Block::parse(std::istream& in) {
+Expected<Block> Block::parse(std::istream& in, size_t code_start) {
     Expected<BlockType> block_type_res = BlockType::parse(in);
     if (!block_type_res)
         return Unexpected(PROPAGATE(block_type_res));
@@ -302,7 +335,7 @@ Expected<Block> Block::parse(std::istream& in) {
     std::vector<Instruction> instructions;
 
     while (true) {
-        Expected<Instruction> inst_res = IntstructionBase::parse(in);
+        Expected<Instruction> inst_res = InstructionBase::parse(in, code_start);
         if (!inst_res)
             return Unexpected(PROPAGATE(inst_res));
         const Instruction& inst = *inst_res;
@@ -326,7 +359,7 @@ std::string Block::toString() const {
     return fmt::format("block\n{}\nend", fmt::join(fmt_instructions, "\n"));
 }
 
-Expected<Loop> Loop::parse(std::istream& in) {
+Expected<Loop> Loop::parse(std::istream& in, size_t code_start) {
     Expected<BlockType> block_type_res = BlockType::parse(in);
     if (!block_type_res)
         return Unexpected(PROPAGATE(block_type_res));
@@ -334,7 +367,7 @@ Expected<Loop> Loop::parse(std::istream& in) {
     std::vector<Instruction> instructions;
 
     while (true) {
-        Expected<Instruction> inst_res = IntstructionBase::parse(in);
+        Expected<Instruction> inst_res = InstructionBase::parse(in, code_start);
         if (!inst_res)
             return Unexpected(PROPAGATE(inst_res));
         const Instruction& inst = *inst_res;
@@ -408,13 +441,13 @@ std::string BranchTable::toString() const {
     return fmt::format("br_table {}", fmt::join(label_indices_, " "));
 }
 
-Expected<Call> Call::parse(std::istream& in) {
+Expected<Call> Call::parse(std::istream& in, size_t addr) {
     Expected<U32> func_idx_res = U32::parse(in);
     if (!func_idx_res)
         return Unexpected(PROPAGATE(func_idx_res));
     uint32_t func_idx = *func_idx_res;
 
-    return Call(func_idx);
+    return Call(func_idx, addr);
 }
 
 std::string Call::toString() const { return fmt::format("call {}", func_idx_); }
@@ -441,13 +474,13 @@ std::string CallIndirect::toString() const {
 /* Variable Instructions */
 /*************************/
 
-Expected<LocalGet> LocalGet::parse(std::istream& in) {
+Expected<LocalGet> LocalGet::parse(std::istream& in, size_t addr) {
     Expected<U32> local_idx_res = U32::parse(in);
     if (!local_idx_res)
         return Unexpected(PROPAGATE(local_idx_res));
     uint32_t local_idx = *local_idx_res;
 
-    return LocalGet(local_idx);
+    return LocalGet(local_idx, addr);
 }
 
 std::string LocalGet::toString() const {
@@ -603,6 +636,18 @@ std::string I32Load16Unsigned::toString() const {
     return fmt::format("i32.load16_u {}", mem_arg_.toString());
 }
 
+Expected<I64Load32Unsigned> I64Load32Unsigned::parse(std::istream& in) {
+    Expected<MemoryArgument> mem_arg_res = MemoryArgument::parse(in);
+    if (!mem_arg_res)
+        return Unexpected(PROPAGATE(mem_arg_res));
+
+    return I64Load32Unsigned(*mem_arg_res);
+}
+
+std::string I64Load32Unsigned::toString() const {
+    return fmt::format("i64.load32_u {}", MemoryArgument::toString());
+}
+
 Expected<I32Store> I32Store::parse(std::istream& in) {
     Expected<MemoryArgument> mem_arg_res = MemoryArgument::parse(in);
     if (!mem_arg_res)
@@ -662,6 +707,20 @@ Expected<I32Store16> I32Store16::parse(std::istream& in) {
 std::string I32Store16::toString() const {
     return fmt::format("i32.store16 {}", mem_arg_.toString());
 }
+
+Expected<MemoryGrow> MemoryGrow::parse(std::istream& in, size_t addr) {
+    Expected<Byte> mem_idx_exp = Byte::parse(in);
+    if (!mem_idx_exp)
+        return Unexpected(PROPAGATE(mem_idx_exp));
+
+    uint8_t mem_idx = *mem_idx_exp;
+    if (mem_idx != 0)
+        return Unexpected(ERROR("multi memory currently not supported"));
+
+    return MemoryGrow(addr);
+}
+
+std::string MemoryGrow::toString() const { return "memory.grow 0"; }
 
 Expected<Instruction> MemoryIntstructionBase::parse(std::istream& in) {
     Expected<Byte> mem_opcode_exp = Byte::parse(in);
@@ -964,11 +1023,11 @@ std::string AtomicCompareExchange8Unsigned::toString() const {
 /* Expressions */
 /***************/
 
-Expected<Expression> Expression::parse(std::istream& in) {
+Expected<Expression> Expression::parse(std::istream& in, size_t code_start) {
     std::vector<Instruction> instructions;
 
     while (true) {
-        Expected<Instruction> inst_res = IntstructionBase::parse(in);
+        Expected<Instruction> inst_res = InstructionBase::parse(in, code_start);
         if (!inst_res)
             return Unexpected(PROPAGATE(inst_res));
         const Instruction& inst = *inst_res;

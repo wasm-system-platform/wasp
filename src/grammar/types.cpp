@@ -159,6 +159,15 @@ const FunctionType& FunctionType::ProducerI32I32() {
     return TYPE;
 }
 
+const FunctionType& FunctionType::ProducerI32_I32_I32_I32() {
+    static const FunctionType TYPE(
+        ExpectedType({ValueType::Type::i32, ValueType::Type::i32,
+                      ValueType::Type::i32, ValueType::Type::i32}),
+        ExpectedType({ValueType::Type::i32}));
+
+    return TYPE;
+}
+
 const FunctionType& FunctionType::ProducerI32_I32_I32_I32_I32_I32() {
     static const FunctionType TYPE(
         ExpectedType({ValueType::Type::i32, ValueType::Type::i32,

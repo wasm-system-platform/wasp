@@ -1,1 +1,7 @@
-option('enable_trace', type : 'boolean', value : false, description : 'Enable trace logging')
+option('trace_level',
+    type : 'integer',
+    value : 0,
+    min : 0,
+    max : 2,
+    description : 'Trace level (0=off, 1=calls, 2=full)'
+)

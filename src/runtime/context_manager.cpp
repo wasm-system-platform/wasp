@@ -22,8 +22,6 @@ void ContextManager::prepareContext(size_t id, uint32_t entry_func_idx,
     std::shared_lock lock(mutex_);
     auto& [context, entry] = contexts_[id];
 
-    fmt::println("prepareContext: {}", entry_func_idx);
-
     static const size_t entry_signature =
         std::hash<FunctionType>()(FunctionType::ConsumerI32());
     entry = std::make_shared<CallIndirect>(entry_signature);

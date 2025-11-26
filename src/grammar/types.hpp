@@ -90,6 +90,8 @@ public:
     static const FunctionType& ProducerI32();       // (i32) -> (i32)
     static const FunctionType& ProducerI32I32();    // (i32, i32) -> (i32)
     static const FunctionType&
+    ProducerI32_I32_I32_I32(); // (i32, i32, i32, i32) -> (i32)
+    static const FunctionType&
     ProducerI32_I32_I32_I32_I32_I32(); // (i32, i32, i32, i32, i32, i32) ->
                                        // (i32)
 

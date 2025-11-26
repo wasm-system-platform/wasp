@@ -42,7 +42,7 @@ public:
 
     inline Context& getActiveContext() { return *active_context_; };
     inline void setContext(const std::shared_ptr<Context>& context) {
-        active_context_ = context;
+        active_context_ = context.get();
     }
     inline GlobalState& getGlobalState() { return state_; }
 
@@ -64,7 +64,7 @@ public:
         Instance& kernel = getKernel();
         kernel.active_instance_ = &instance;
     }
-    
+
 private:
     class SysCall : public OperationBase {
     public:
@@ -98,7 +98,7 @@ private:
 
     Instance* active_instance_;
     GlobalState state_;
-    std::shared_ptr<Context> active_context_;
+    Context* active_context_;
 
     std::unordered_map<std::string, Export> exports_;
     std::unordered_map<uint32_t, Device> devices_;

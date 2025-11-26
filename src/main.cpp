@@ -154,7 +154,7 @@ int main() {
 
     runtime::Instance& kernel = **kernel_result;
 
-    Expected<void> result = kernel.call("kernel_init");
+    Expected<void> result = kernel.call("kernel_start", 0);
     if (!result) {
         std::cout << result.error().toString() << std::endl;
         return -1;

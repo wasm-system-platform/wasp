@@ -8,6 +8,36 @@
 
 namespace grammar {
 
+/******************/
+/* Custom Section */
+/******************/
+
+Expected<CustomSection> CustomSection::parse(std::istream& in, uint32_t size) {
+    size_t start = in.tellg();
+
+    Expected<Name> name_exp = Name::parse(in);
+    if (!name_exp)
+        return Unexpected(PROPAGATE(name_exp));
+
+    uint32_t offset = static_cast<size_t>(in.tellg()) - start;
+    if (offset > size)
+        return Unexpected(ERROR("custom section has an invalid size"));
+
+    std::vector<uint8_t> bytes(size - offset);
+    for (size_t i = 0; i < size - offset; i++) {
+        Expected<Byte> b_exp = Byte::parse(in);
+        if (!b_exp)
+            return Unexpected(PROPAGATE(b_exp));
+
+        bytes[i] = *b_exp;
+    }
+
+    return CustomSection(*name_exp, std::move(bytes));
+}
+
+CustomSection::CustomSection(const Name& name, std::vector<uint8_t>&& bytes)
+    : name_(name), bytes_(std::move(bytes)) {}
+
 /****************/
 /* Type Section */
 /****************/
@@ -262,7 +292,7 @@ Expected<Global> Global::parse(std::istream& in) {
     if (!global_type_res)
         return Unexpected(PROPAGATE(global_type_res));
 
-    Expected<Expression> expr_res = Expression::parse(in);
+    Expected<Expression> expr_res = Expression::parse(in, UINT32_MAX);
     if (!expr_res)
         return Unexpected(PROPAGATE(expr_res));
 
@@ -411,7 +441,7 @@ Expected<ElementSegment> ElementSegment::parse(std::istream& in) {
     if (bitfield != 0)
         return Unexpected(ERROR("unsupported element format"));
 
-    Expected<Expression> offset_res = Expression::parse(in);
+    Expected<Expression> offset_res = Expression::parse(in, UINT32_MAX);
     if (!offset_res)
         return Unexpected(PROPAGATE(offset_res));
 
@@ -483,7 +513,7 @@ std::string ElemenSection::toString() const {
 /* Code Section */
 /****************/
 
-Expected<Function> Function::parse(std::istream& in) {
+Expected<Function> Function::parse(std::istream& in, size_t code_start) {
     Expected<U32> len_res = U32::parse(in);
     if (!len_res)
         return Unexpected(PROPAGATE(len_res));
@@ -508,7 +538,7 @@ Expected<Function> Function::parse(std::istream& in) {
             locals.push_back(local);
     }
 
-    Expected<Expression> body_res = Expression::parse(in);
+    Expected<Expression> body_res = Expression::parse(in, code_start);
     if (!body_res)
         return Unexpected(PROPAGATE(body_res));
 
@@ -526,7 +556,7 @@ std::string Function::toString() const {
                        body_.toString());
 }
 
-Expected<CodeSection> CodeSection::parse(std::istream& in) {
+Expected<CodeSection> CodeSection::parse(std::istream& in, size_t code_start) {
     Expected<U32> len_res = U32::parse(in);
     if (!len_res)
         return Unexpected(PROPAGATE(len_res));
@@ -540,7 +570,7 @@ Expected<CodeSection> CodeSection::parse(std::istream& in) {
         if (!size_res)
             return Unexpected(PROPAGATE(size_res));
 
-        Expected<Function> func_res = Function::parse(in);
+        Expected<Function> func_res = Function::parse(in, code_start);
         if (!func_res)
             return Unexpected(PROPAGATE(func_res));
         funcs.push_back(*func_res);
@@ -566,13 +596,24 @@ std::string CodeSection::toString() const {
 /* Data Section */
 /****************/
 
-Expected<Data> Data::parse(std::istream& in) {
+Expected<Segment> Segment::parse(std::istream& in) {
     Expected<Byte> b_res = Byte::parse(in);
     if (!b_res)
         return Unexpected(PROPAGATE(b_res));
-    if (*b_res != 0x01)
+
+    uint8_t b = *b_res;
+
+    std::optional<Expression> offset_opt;
+    if (b == 0x00) {
+        Expected<Expression> offset_exp = Expression::parse(in, UINT32_MAX);
+        if (!offset_exp)
+            return Unexpected(PROPAGATE(offset_exp));
+
+        offset_opt = *offset_exp;
+    } else if (b != 0x01) {
         return Unexpected(
-            ERROR("non passive data segments currently not supported"));
+            ERROR("multi memory data segments currently not supported"));
+    }
 
     Expected<U32> len_res = U32::parse(in);
     if (!len_res)
@@ -586,10 +627,10 @@ Expected<Data> Data::parse(std::istream& in) {
         return Unexpected(ERROR("unexpected end of file"));
     }
 
-    return Data(std::move(bytes));
+    return Segment(std::move(bytes), std::move(offset_opt));
 }
 
-std::string Data::toString() const {
+std::string Segment::toString() const {
     fmt::memory_buffer buf;
 
     for (size_t i = 0; i < bytes_.size(); ++i) {
@@ -608,11 +649,11 @@ Expected<DataSection> DataSection::parse(std::istream& in) {
         return Unexpected(PROPAGATE(len_res));
     uint32_t len = static_cast<uint32_t>(*len_res);
 
-    std::vector<Data> segments;
+    std::vector<Segment> segments;
     segments.reserve(len);
 
     for (uint32_t i = 0; i < len; i++) {
-        Expected<Data> data_res = Data::parse(in);
+        Expected<Segment> data_res = Segment::parse(in);
         if (!data_res)
             return Unexpected(PROPAGATE(data_res));
 
