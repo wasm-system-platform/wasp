@@ -16,80 +16,89 @@ OperationBase::create(const std::vector<grammar::Instruction>& instructions,
     for (size_t i = 0; i < instructions.size(); ++i) {
         Operation next;
 
-        const grammar::Instruction& instruction = instructions[i];
-        uint8_t opcode = instruction->getOpcode();
+        const grammar::Instruction& inst = instructions[i];
+        uint8_t opcode = inst->getOpcode();
 
         switch (opcode) {
         // Control Instructions
         case grammar::Unreachable::OPCODE:
-            next = std::make_shared<Unreachable>(
-                instruction->as<grammar::Unreachable>());
+            next =
+                std::make_shared<Unreachable>(inst->as<grammar::Unreachable>());
             break;
         case grammar::Nop::OPCODE:
-            next = std::make_shared<Nop>();
+            next = std::make_shared<Nop>(inst->as<grammar::Nop>());
             break;
         case grammar::Block::OPCODE:
-            next = std::make_shared<Block>(instruction->as<grammar::Block>(),
+            next = std::make_shared<Block>(inst->as<grammar::Block>(),
                                            func_types, targets);
             break;
         case grammar::Loop::OPCODE:
-            next = std::make_shared<Loop>(instruction->as<grammar::Loop>(),
-                                          func_types, targets);
+            next = std::make_shared<Loop>(inst->as<grammar::Loop>(), func_types,
+                                          targets);
             break;
+        case grammar::IfElse::OPCODE: {
+            grammar::IfElse if_else_inst = inst->as<grammar::IfElse>();
+
+            if (if_else_inst.hasElseExpression())
+                next =
+                    std::make_shared<IfElse>(if_else_inst, func_types, targets);
+            else
+                next =
+                    std::make_shared<IfThen>(if_else_inst, func_types, targets);
+
+            break;
+        }
         case grammar::Branch::OPCODE:
-            next = std::make_shared<Branch>(instruction->as<grammar::Branch>(),
-                                            targets);
+            next =
+                std::make_shared<Branch>(inst->as<grammar::Branch>(), targets);
             break;
         case grammar::BranchIf::OPCODE:
-            next = std::make_shared<BranchIf>(
-                instruction->as<grammar::BranchIf>(), targets);
+            next = std::make_shared<BranchIf>(inst->as<grammar::BranchIf>(),
+                                              targets);
             break;
         case grammar::BranchTable::OPCODE:
             next = std::make_shared<BranchTable>(
-                instruction->as<grammar::BranchTable>(), targets);
+                inst->as<grammar::BranchTable>(), targets);
             break;
         case grammar::Call::OPCODE:
-            next = std::make_shared<Call>(instruction->as<grammar::Call>());
+            next = std::make_shared<Call>(inst->as<grammar::Call>());
             break;
         case grammar::CallIndirect::OPCODE:
             next = std::make_shared<CallIndirect>(
-                instruction->as<grammar::CallIndirect>(), func_types);
+                inst->as<grammar::CallIndirect>(), func_types);
             break;
         case grammar::Return::OPCODE:
             next = std::make_shared<Return>();
             break;
         // Parametric Instructions
         case grammar::Drop::OPCODE:
-            next = std::make_shared<Drop>(instruction->as<grammar::Drop>());
+            next = std::make_shared<Drop>(inst->as<grammar::Drop>());
             break;
         case grammar::Select::OPCODE:
             next = std::make_shared<Select>();
             break;
         // Variable Instruction
         case grammar::LocalGet::OPCODE:
-            next = std::make_shared<LocalGet>(
-                instruction->as<grammar::LocalGet>());
+            next = std::make_shared<LocalGet>(inst->as<grammar::LocalGet>());
             break;
         case grammar::LocalSet::OPCODE:
-            next = std::make_shared<LocalSet>(
-                instruction->as<grammar::LocalSet>());
+            next = std::make_shared<LocalSet>(inst->as<grammar::LocalSet>());
+            break;
+        case grammar::LocalTee::OPCODE:
+            next = std::make_shared<LocalTee>(inst->as<grammar::LocalTee>());
             break;
         case grammar::GlobalGet::OPCODE:
-            next = std::make_shared<GlobalGet>(
-                instruction->as<grammar::GlobalGet>());
+            next = std::make_shared<GlobalGet>(inst->as<grammar::GlobalGet>());
             break;
         case grammar::GlobalSet::OPCODE:
-            next = std::make_shared<GlobalSet>(
-                instruction->as<grammar::GlobalSet>());
+            next = std::make_shared<GlobalSet>(inst->as<grammar::GlobalSet>());
             break;
         // Numeric Instructions
         case grammar::I32Const::OPCODE:
-            next = std::make_shared<I32Const>(
-                instruction->as<grammar::I32Const>());
+            next = std::make_shared<I32Const>(inst->as<grammar::I32Const>());
             break;
         case grammar::I64Const::OPCODE:
-            next = std::make_shared<I64Const>(
-                instruction->as<grammar::I64Const>());
+            next = std::make_shared<I64Const>(inst->as<grammar::I64Const>());
             break;
         case grammar::I32EqualZero::OPCODE:
             next = std::make_shared<I32EqualZero>();
@@ -161,10 +170,10 @@ OperationBase::create(const std::vector<grammar::Instruction>& instructions,
             next = std::make_shared<I32CountTrailingZeros>();
             break;
         case grammar::I32Add::OPCODE:
-            next = std::make_shared<I32Add>();
+            next = std::make_shared<I32Add>(inst->as<grammar::I32Add>());
             break;
         case grammar::I32Sub::OPCODE:
-            next = std::make_shared<I32Sub>();
+            next = std::make_shared<I32Sub>(inst->as<grammar::I32Sub>());
             break;
         case grammar::I32Mul::OPCODE:
             next = std::make_shared<I32Mul>();
@@ -255,66 +264,60 @@ OperationBase::create(const std::vector<grammar::Instruction>& instructions,
             break;
         // Memory Instructions
         case grammar::I32Load::OPCODE:
-            next =
-                std::make_shared<I32Load>(instruction->as<grammar::I32Load>());
+            next = std::make_shared<I32Load>(inst->as<grammar::I32Load>());
             break;
         case grammar::I64Load::OPCODE:
-            next =
-                std::make_shared<I64Load>(instruction->as<grammar::I64Load>());
+            next = std::make_shared<I64Load>(inst->as<grammar::I64Load>());
             break;
         case grammar::I32Load8Signed::OPCODE:
             next = std::make_shared<I32Load8Signed>(
-                instruction->as<grammar::I32Load8Signed>());
+                inst->as<grammar::I32Load8Signed>());
             break;
         case grammar::I32Load8Unsigned::OPCODE:
             next = std::make_shared<I32Load8Unsigned>(
-                instruction->as<grammar::I32Load8Unsigned>());
+                inst->as<grammar::I32Load8Unsigned>());
             break;
         case grammar::I32Load16Unsigned::OPCODE:
             next = std::make_shared<I32Load16Unsigned>(
-                instruction->as<grammar::I32Load16Unsigned>());
+                inst->as<grammar::I32Load16Unsigned>());
             break;
         case grammar::I64Load32Unsigned::OPCODE:
             next = std::make_shared<I64Load32Unsigned>(
-                instruction->as<grammar::I64Load32Unsigned>());
+                inst->as<grammar::I64Load32Unsigned>());
             break;
         case grammar::I32Store::OPCODE:
-            next = std::make_shared<I32Store>(
-                instruction->as<grammar::I32Store>());
+            next = std::make_shared<I32Store>(inst->as<grammar::I32Store>());
             break;
         case grammar::I64Store::OPCODE:
-            next = std::make_shared<I64Store>(
-                instruction->as<grammar::I64Store>());
+            next = std::make_shared<I64Store>(inst->as<grammar::I64Store>());
             break;
         case grammar::F64Store::OPCODE:
-            next = std::make_shared<F64Store>(
-                instruction->as<grammar::F64Store>());
+            next = std::make_shared<F64Store>(inst->as<grammar::F64Store>());
             break;
         case grammar::I32Store8::OPCODE:
-            next = std::make_shared<I32Store8>(
-                instruction->as<grammar::I32Store8>());
+            next = std::make_shared<I32Store8>(inst->as<grammar::I32Store8>());
             break;
         case grammar::I32Store16::OPCODE:
-            next = std::make_shared<I32Store16>(
-                instruction->as<grammar::I32Store16>());
+            next =
+                std::make_shared<I32Store16>(inst->as<grammar::I32Store16>());
             break;
         case grammar::MemoryGrow::OPCODE:
-            next = std::make_shared<MemoryGrow>(
-                instruction->as<grammar::MemoryGrow>());
+            next =
+                std::make_shared<MemoryGrow>(inst->as<grammar::MemoryGrow>());
             break;
         case grammar::MemoryIntstructionBase::OPCODE: {
             const grammar::MemoryIntstructionBase& mem_inst =
-                instruction->as<grammar::MemoryIntstructionBase>();
+                inst->as<grammar::MemoryIntstructionBase>();
             uint32_t mem_opcode = mem_inst.getMemoryOpcode();
 
             switch (mem_opcode) {
             case grammar::MemoryInit::MEM_OPCODE:
                 next = std::make_shared<MemoryInit>(
-                    instruction->as<grammar::MemoryInit>());
+                    inst->as<grammar::MemoryInit>());
                 break;
             case grammar::DataDrop::MEM_OPCODE:
-                next = std::make_shared<DataDrop>(
-                    instruction->as<grammar::DataDrop>());
+                next =
+                    std::make_shared<DataDrop>(inst->as<grammar::DataDrop>());
                 break;
             case grammar::MemoryCopy::MEM_OPCODE:
                 next = std::make_shared<MemoryCopy>();
@@ -331,45 +334,45 @@ OperationBase::create(const std::vector<grammar::Instruction>& instructions,
         // Atomic Memory Instructions
         case grammar::AtomicIntstructionBase::OPCODE: {
             const grammar::AtomicIntstructionBase& atomic_inst =
-                instruction->as<grammar::AtomicIntstructionBase>();
+                inst->as<grammar::AtomicIntstructionBase>();
             uint32_t atomic_opcode = atomic_inst.getAtomicOpcode();
 
             switch (atomic_opcode) {
             case grammar::AtomicNotify::ATOMIC_OPCODE:
                 next = std::make_shared<AtomicNotify>(
-                    instruction->as<grammar::AtomicNotify>());
+                    inst->as<grammar::AtomicNotify>());
                 break;
             case grammar::AtomicWait32::ATOMIC_OPCODE:
                 next = std::make_shared<AtomicWait32>(
-                    instruction->as<grammar::AtomicWait32>());
+                    inst->as<grammar::AtomicWait32>());
                 break;
             case grammar::AtomicLoad::ATOMIC_OPCODE:
                 next = std::make_shared<AtomicLoad>(
-                    instruction->as<grammar::AtomicLoad>());
+                    inst->as<grammar::AtomicLoad>());
                 break;
             case grammar::AtomicLoad8Unsigned::ATOMIC_OPCODE:
                 next = std::make_shared<AtomicLoad8Unsigned>(
-                    instruction->as<grammar::AtomicLoad8Unsigned>());
+                    inst->as<grammar::AtomicLoad8Unsigned>());
                 break;
             case grammar::AtomicStore::ATOMIC_OPCODE:
                 next = std::make_shared<AtomicStore>(
-                    instruction->as<grammar::AtomicStore>());
+                    inst->as<grammar::AtomicStore>());
                 break;
             case grammar::AtomicStore8::ATOMIC_OPCODE:
                 next = std::make_shared<AtomicStore8>(
-                    instruction->as<grammar::AtomicStore8>());
+                    inst->as<grammar::AtomicStore8>());
                 break;
             case grammar::AtomicAdd::ATOMIC_OPCODE:
-                next = std::make_shared<AtomicAdd>(
-                    instruction->as<grammar::AtomicAdd>());
+                next =
+                    std::make_shared<AtomicAdd>(inst->as<grammar::AtomicAdd>());
                 break;
             case grammar::AtomicExchange8Unsigned::ATOMIC_OPCODE:
                 next = std::make_shared<AtomicExchange8Unsigned>(
-                    instruction->as<grammar::AtomicExchange8Unsigned>());
+                    inst->as<grammar::AtomicExchange8Unsigned>());
                 break;
             case grammar::AtomicCompareExchange::ATOMIC_OPCODE:
                 next = std::make_shared<AtomicCompareExchange>(
-                    instruction->as<grammar::AtomicCompareExchange>());
+                    inst->as<grammar::AtomicCompareExchange>());
                 break;
             default:
                 fmt::println("unknown atomic opcode 0xFE 0x{:02X}",
@@ -384,12 +387,30 @@ OperationBase::create(const std::vector<grammar::Instruction>& instructions,
         }
 
         if (op)
-            op->addNext(next);
+            op = op->addNext(next);
         else
             op = next;
     }
 
     return op;
+}
+
+Operation OperationBase::addNext(Operation op) {
+    assert(!successor_ || (successor_.get() != op.get()));
+
+    if (successor_) {
+        successor_ = successor_->addNext(op);
+    } else {
+        /* optimization possible */
+        if (isProducer() && op->isConsumer()) {
+            return std::make_shared<Composite>(shared_from_this(), op);
+        }
+
+        successor_ = op;
+    }
+
+    next_ = successor_.get();
+    return shared_from_this();
 }
 
 Continuation OperationBase::trap(Instance& instance, std::string msg,
@@ -401,6 +422,10 @@ Continuation OperationBase::trap(Instance& instance, std::string msg,
     return nullptr;
 }
 
+std::string OperationBase::getFormattedAddres(Instance& instance) const {
+    return instance.getGlobalState().getDebugInfo().getFormattedLocation(addr_);
+}
+
 /*********************/
 /* Helper Operations */
 /*********************/
@@ -409,17 +434,18 @@ Continuation Tick::action(Instance& instance) {
     const Operation& epilogue = createEpilogue(instance);
 
     instance.switchToKernel();
-    instance.getKernel().getActiveContext().pushReturn(epilogue.get());
+    instance.getKernel().getActiveContext().getEpilogues().push(epilogue.get());
 
     return instance.tick();
 }
 
-Tick::Epilogue::Epilogue(size_t idx, Instance& suspended_instance, Tick& parent)
-    : idx_(idx), suspended_instance_(suspended_instance), parent_(parent) {}
+Tick::Epilogue::Epilogue(size_t idx, Instance& suspended, Tick& parent)
+    : idx_(idx), suspended_(&suspended), parent_(&parent) {}
 
 Continuation Tick::Epilogue::action(Instance& instance) {
-    instance.switchToInstance(suspended_instance_);
-    return parent_.next_.get();
+    instance.switchToInstance(*suspended_);
+    parent_->destroyEpilogue(idx_);
+    return parent_->next_;
 }
 
 const Operation& Tick::createEpilogue(Instance& instance) {
@@ -431,16 +457,14 @@ const Operation& Tick::createEpilogue(Instance& instance) {
     } else {
         idx = free_list_.top();
         free_list_.pop();
-        epilogues_[idx] = std::make_shared<Epilogue>(idx, instance, *this);
+        Epilogue& epilogue = epilogues_[idx]->as<Epilogue>();
+        epilogue = Epilogue(idx, instance, *this);
     }
 
     return epilogues_[idx];
 }
 
-void Tick::destroyEpilogue(size_t idx) {
-    epilogues_[idx] = nullptr;
-    free_list_.push(idx);
-}
+void Tick::destroyEpilogue(size_t idx) { free_list_.push(idx); }
 
 /**********************/
 /* Control Operations */
@@ -474,7 +498,8 @@ Continuation Block::action(Instance& instance) {
 
 Loop::Loop(const grammar::Loop& loop,
            const std::vector<FunctionType>& func_types,
-           std::vector<Operation>& targets) {
+           std::vector<Operation>& targets)
+    : OperationBase(loop.getAddress()) {
     targets.insert(targets.begin(), start_);
 
     const std::vector<grammar::Instruction>& instructions =
@@ -488,8 +513,62 @@ Loop::Loop(const grammar::Loop& loop,
 }
 
 Continuation Loop::action(Instance& instance) {
-    TRACE_VERBOSE("loop[{}]", (void*)start_.get());
+    TRACE_VERBOSE("{}: loop", getFormattedAddres(instance));
     return start_.get();
+}
+
+IfThen::IfThen(const grammar::IfElse& if_else,
+               const std::vector<FunctionType>& func_types,
+               std::vector<Operation>& branch_targets)
+    : OperationBase(if_else.getAddress()),
+      then_(OperationBase::create(if_else.getThenExpr().getInstructions(),
+                                  func_types, branch_targets)) {}
+
+Continuation IfThen::action(Instance& instance) {
+    Context& ctxt = instance.getActiveContext();
+    ctxt.getEpilogues().push(next_);
+
+    int32_t cond = ctxt.pop().i32;
+    if (cond) {
+        TRACE_VERBOSE(
+            "{}: if --> cond=true",
+            instance.getGlobalState().getDebugInfo().getFormattedLocation(
+                addr_));
+        return then_.get();
+    }
+
+    TRACE_VERBOSE(
+        "{}: if --> cond=false",
+        instance.getGlobalState().getDebugInfo().getFormattedLocation(addr_));
+    return next_;
+}
+
+IfElse::IfElse(const grammar::IfElse& if_else,
+               const std::vector<FunctionType>& func_types,
+               std::vector<Operation>& branch_targets)
+    : OperationBase(if_else.getAddress()),
+      then_(OperationBase::create(if_else.getThenExpr().getInstructions(),
+                                  func_types, branch_targets)),
+      else_(OperationBase::create(if_else.getElseExpr().getInstructions(),
+                                  func_types, branch_targets)) {}
+
+Continuation IfElse::action(Instance& instance) {
+    Context& ctxt = instance.getActiveContext();
+    ctxt.getEpilogues().push(next_);
+
+    int32_t cond = ctxt.pop().i32;
+    if (cond) {
+        TRACE_VERBOSE(
+            "{}: if else --> cond=true",
+            instance.getGlobalState().getDebugInfo().getFormattedLocation(
+                addr_));
+        return then_.get();
+    }
+
+    TRACE_VERBOSE(
+        "{}: if else --> cond=false",
+        instance.getGlobalState().getDebugInfo().getFormattedLocation(addr_));
+    return else_.get();
 }
 
 Branch::Branch(const grammar::Branch& branch, std::vector<Operation>& targets)
@@ -502,16 +581,19 @@ Continuation Branch::action(Instance& instance) {
 
 BranchIf::BranchIf(const grammar::BranchIf& br_if,
                    std::vector<Operation>& targets)
-    : target_(targets[br_if.getLabelIdx()]) {}
+    : OperationBase(br_if.getAddress()), target_(targets[br_if.getLabelIdx()]) {
+}
 
 Continuation BranchIf::action(Instance& instance) {
-    int32_t cond = instance.getActiveContext().popI32();
-    TRACE_VERBOSE("br_if --> {}: (cond={}) -> ()", (void*)target_.get(), cond);
+    int32_t cond = instance.getActiveContext().pop().i32;
+    TRACE_VERBOSE("{}: br_if --> {}: (cond={}) -> ()",
+                  getFormattedAddres(instance),
+                  target_->getFormattedAddres(instance), cond);
 
     if (cond)
         return target_.get();
 
-    return next_.get();
+    return next_;
 }
 
 BranchTable::BranchTable(const grammar::BranchTable& br_table,
@@ -519,7 +601,7 @@ BranchTable::BranchTable(const grammar::BranchTable& br_table,
     : label_indices_(br_table.getLabelIndices()), containers_(containers) {}
 
 Continuation BranchTable::action(Instance& instance) {
-    uint32_t idx = instance.getActiveContext().popI32();
+    uint32_t idx = instance.getActiveContext().pop().i32;
     if (idx >= label_indices_.size())
         idx = label_indices_.size() - 1;
 
@@ -539,12 +621,11 @@ Call::Call(uint32_t func_idx, size_t addr)
 Continuation Call::action(Instance& instance) {
     Function& func = instance.getGlobalState().getFunction(func_idx_);
 
-    instance.getActiveContext().pushReturn(epilogue_.get());
+    instance.getActiveContext().getEpilogues().push(epilogue_.get());
 
-    TRACE(
-        "{}: call {}",
-        instance.getGlobalState().getDebugInfo().getFormattedLocation(addr_),
-        func_idx_);
+    TRACE("{}: call {}",
+          instance.getGlobalState().getDebugInfo().getFormattedLocation(addr_),
+          func_idx_);
     return func.enterFrame(instance.getActiveContext());
 }
 
@@ -553,12 +634,13 @@ Call::Epilogue::Epilogue(uint32_t func_idx) : func_idx_(func_idx) {}
 Continuation Call::Epilogue::action(Instance& instance) {
     Function& func = instance.getGlobalState().getFunction(func_idx_);
     func.leaveFrame(instance.getActiveContext());
-    return next_.get();
+    return next_;
 }
 
 CallIndirect::CallIndirect(const grammar::CallIndirect& call_indirect,
                            const std::vector<FunctionType>& func_types)
-    : signature_(func_types[call_indirect.getTypeIdx()].getSignature()) {
+    : OperationBase(call_indirect.getAddress()),
+      signature_(func_types[call_indirect.getTypeIdx()].getSignature()) {
     assert(call_indirect.getTableIdx() == 0);
 }
 
@@ -567,17 +649,28 @@ CallIndirect::CallIndirect(size_t signature) : signature_(signature) {}
 Continuation CallIndirect::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    uint32_t element_idx = static_cast<uint32_t>(context.popI32());
-    Function& func = instance.getGlobalState().getFunctionIndirect(element_idx);
+    uint32_t element_idx = static_cast<uint32_t>(context.pop().i32);
+    
+    std::vector<Function>& functions = instance.getGlobalState().getFunctions();
+    std::vector<uint32_t>& indirections = instance.getGlobalState().getIndirections();
 
+    if (functions.size() < indirections[element_idx]) {
+        return trap(instance,
+                     fmt::format("call_indirect index '{}' out of bounds",
+                    indirections[element_idx]),
+                    addr_);
+    }
+
+    Function& func = functions[indirections[element_idx]];
     if (signature_ != func.getSignature())
         return trap(instance,
-                    "call_indirect type mismatch: expected {} but found {} at "
-                    "element {}",
+                     fmt::format("call_indirect type mismatch: expected '{}' but found '{}' at element {}",
+                    
+                    func.getFormattedType(), signature_, element_idx),
                     addr_);
 
     Operation epilogue = createEpilogue(func);
-    instance.getActiveContext().pushReturn(epilogue.get());
+    instance.getActiveContext().getEpilogues().push(epilogue.get());
 
     TRACE_VERBOSE("call_indirect: (element_idx={}) -> ()", element_idx);
     return func.enterFrame(context);
@@ -610,7 +703,7 @@ CallIndirect::Epilogue::Epilogue(size_t idx, Function& func,
 Continuation CallIndirect::Epilogue::action(Instance& instance) {
     func_.leaveFrame(instance.getActiveContext());
     parent_.destroyEpilogue(idx_);
-    return parent_.next_.get();
+    return parent_.next_;
 }
 
 Continuation Return::action(Instance& instance) {
@@ -627,25 +720,21 @@ Drop::Drop(const grammar::Drop& drop) : OperationBase(drop.getAddress()) {}
 Continuation Drop::action(Instance& instance) {
     instance.getActiveContext().drop();
     TRACE_VERBOSE("drop");
-    return next_.get();
+    return next_;
 }
 
 Continuation Select::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    int32_t cond = context.popI32();
+    int32_t cond = context.pop().i32;
     Value b = context.pop();
     Value a = context.pop();
     Value result = cond ? a : b;
     context.push(result);
 
-    TRACE_VERBOSE("select: (a={}, b={}, cond={}) -> ({})",
-              (a.index() == 0) ? std::get<int32_t>(a) : std::get<int64_t>(a),
-              (b.index() == 0) ? std::get<int32_t>(b) : std::get<int64_t>(b),
-              cond,
-              (result.index() == 0) ? std::get<int32_t>(result)
-                                    : std::get<int64_t>(result));
-    return next_.get();
+    TRACE_VERBOSE("select: (a={}, b={}, cond={}) -> ({})", a.i64, b.i64, cond,
+                  cond ? a.i64 : b.i64);
+    return next_;
 }
 
 /*************************/
@@ -664,22 +753,41 @@ Continuation LocalGet::action(Instance& instance) {
     TRACE_VERBOSE(
         "{}: local.get {}: () -> ({})",
         instance.getGlobalState().getDebugInfo().getFormattedLocation(addr_),
-        local_idx_,
-        i.index() == 0 ? std::get<int32_t>(i) : std::get<int64_t>(i));
-    return next_.get();
+        local_idx_, i.i64);
+    return next_;
 }
 
 LocalSet::LocalSet(const grammar::LocalSet& local_set)
-    : local_idx_(local_set.getLocalIdx()) {}
+    : OperationBase(local_set.getAddress()),
+      local_idx_(local_set.getLocalIdx()) {}
 
 Continuation LocalSet::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
     Value i = context.pop();
     context.setLocal(local_idx_, i);
-    TRACE_VERBOSE("local.set {}: ({}) -> ()", local_idx_,
-              i.index() == 0 ? std::get<int32_t>(i) : std::get<int64_t>(i));
-    return next_.get();
+    TRACE_VERBOSE(
+        "{}: local.set {}: ({}) -> ()",
+        instance.getGlobalState().getDebugInfo().getFormattedLocation(addr_),
+        local_idx_, i.i64);
+    return next_;
+}
+
+LocalTee::LocalTee(const grammar::LocalTee& local_tee)
+    : OperationBase(local_tee.getAddress()),
+      local_idx_(local_tee.getLocalIdx()) {}
+
+Continuation LocalTee::action(Instance& instance) {
+    Context& context = instance.getActiveContext();
+
+    Value i = context.getStack().peek();
+    context.setLocal(local_idx_, i);
+
+    TRACE_VERBOSE(
+        "{}: local.tee {}: ({}) -> ({})",
+        instance.getGlobalState().getDebugInfo().getFormattedLocation(addr_),
+        local_idx_, i.i32, i.i32);
+    return next_;
 }
 
 GlobalGet::GlobalGet(const grammar::GlobalGet& global_get)
@@ -688,9 +796,8 @@ GlobalGet::GlobalGet(const grammar::GlobalGet& global_get)
 Continuation GlobalGet::action(Instance& instance) {
     Value i = instance.getGlobalState().getGlobal(global_idx_);
     instance.getActiveContext().push(i);
-    TRACE_VERBOSE("global.get {}: () -> ({})", global_idx_,
-              i.index() == 0 ? std::get<int32_t>(i) : std::get<int64_t>(i));
-    return next_.get();
+    TRACE_VERBOSE("global.get {}: () -> ({})", global_idx_, i.i64);
+    return next_;
 }
 
 GlobalSet::GlobalSet(const grammar::GlobalSet& global_set)
@@ -699,9 +806,8 @@ GlobalSet::GlobalSet(const grammar::GlobalSet& global_set)
 Continuation GlobalSet::action(Instance& instance) {
     Value i = instance.getActiveContext().pop();
     instance.getGlobalState().setGlobal(global_idx_, i);
-    TRACE_VERBOSE("global.set {}: ({}) -> ()", global_idx_,
-              i.index() == 0 ? std::get<int32_t>(i) : std::get<int64_t>(i));
-    return next_.get();
+    TRACE_VERBOSE("global.set {}: ({}) -> ()", global_idx_, i.i64);
+    return next_;
 }
 
 /************************/
@@ -709,282 +815,287 @@ Continuation GlobalSet::action(Instance& instance) {
 /************************/
 
 I32Const::I32Const(const grammar::I32Const& i32_const)
-    : i_(i32_const.getVal()) {}
+    : OperationBase(i32_const.getAddress()), i_(i32_const.getVal()) {}
 
 Continuation I32Const::action(Instance& instance) {
     instance.getActiveContext().pushI32(i_);
 
-    TRACE_VERBOSE("i32.const {}: () -> ({})", i_, i_);
-    return next_.get();
+    TRACE_VERBOSE(
+        "{}: i32.const {}: () -> ({})",
+        instance.getGlobalState().getDebugInfo().getFormattedLocation(addr_),
+        i_, i_);
+    return next_;
 }
 
 Expected<Continuation> I32Const::eval(Context& context) const {
     context.pushI32(i_);
-    return next_.get();
+    return next_;
 }
+
+Value I32Const::produce(Instance& instance) { return i_; }
 
 I64Const::I64Const(const grammar::I64Const& i64_const)
     : i_(i64_const.getVal()) {}
 
 Continuation I64Const::action(Instance& instance) {
     instance.getActiveContext().pushI64(i_);
-    return next_.get();
+    return next_;
 }
 
 Continuation I32EqualZero::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    int32_t val = context.popI32();
+    int32_t val = context.pop().i32;
     int32_t result = val == 0 ? 1 : 0;
     context.pushI32(result);
 
     TRACE_VERBOSE("i32.eqz: ({}) -> ({})", val, result);
-    return next_.get();
+    return next_;
 }
 
 Continuation I32Equal::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    int32_t right = context.popI32();
-    int32_t left = context.popI32();
+    int32_t right = context.pop().i32;
+    int32_t left = context.pop().i32;
     int32_t result = (left == right) ? 1 : 0;
     context.pushI32(result);
 
     TRACE_VERBOSE("i32.eq: ({}, {}) -> ({})", left, right, result);
-    return next_.get();
+    return next_;
 }
 
 Continuation I32NotEqual::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    int32_t right = context.popI32();
-    int32_t left = context.popI32();
+    int32_t right = context.pop().i32;
+    int32_t left = context.pop().i32;
     int32_t result = (left != right) ? 1 : 0;
     context.pushI32(result);
 
     TRACE_VERBOSE("i32.ne: ({}, {}) -> ({})", left, right, result);
-    return next_.get();
+    return next_;
 }
 
 Continuation I32LessThanSigned::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    int32_t right = context.popI32();
-    int32_t left = context.popI32();
+    int32_t right = context.pop().i32;
+    int32_t left = context.pop().i32;
     int32_t result = (left < right) ? 1 : 0;
     context.pushI32(result);
 
     TRACE_VERBOSE("i32.lt_s: ({}, {}) -> ({})", left, right, result);
-    return next_.get();
+    return next_;
 }
 
 Continuation I32LessThanUnsigned::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    uint32_t right = static_cast<uint32_t>(context.popI32());
-    uint32_t left = static_cast<uint32_t>(context.popI32());
+    uint32_t right = static_cast<uint32_t>(context.pop().i32);
+    uint32_t left = static_cast<uint32_t>(context.pop().i32);
     int32_t result = (left < right) ? 1 : 0;
     context.pushI32(result);
 
     TRACE_VERBOSE("i32.lt_u: ({}, {}) -> ({})", left, right, result);
-    return next_.get();
+    return next_;
 }
 
 Continuation I32GreaterThanSigned::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    int32_t right = context.popI32();
-    int32_t left = context.popI32();
+    int32_t right = context.pop().i32;
+    int32_t left = context.pop().i32;
     int32_t result = (left > right) ? 1 : 0;
     context.pushI32(result);
 
     TRACE_VERBOSE("i32.gt_s: ({}, {}) -> ({})", left, right, result);
-    return next_.get();
+    return next_;
 }
 
 Continuation I32GreaterThanUnsigned::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    uint32_t right = static_cast<uint32_t>(context.popI32());
-    uint32_t left = static_cast<uint32_t>(context.popI32());
+    uint32_t right = static_cast<uint32_t>(context.pop().i32);
+    uint32_t left = static_cast<uint32_t>(context.pop().i32);
     int32_t result = (left > right) ? 1 : 0;
     context.pushI32(result);
 
     TRACE_VERBOSE("i32.gt_u: ({}, {}) -> ({})", left, right, result);
-    return next_.get();
+    return next_;
 }
 
 Continuation I32LessEqualSigned::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    int32_t right = context.popI32();
-    int32_t left = context.popI32();
+    int32_t right = context.pop().i32;
+    int32_t left = context.pop().i32;
     int32_t result = (left <= right) ? 1 : 0;
     context.pushI32(result);
 
     TRACE_VERBOSE("i32.ge_s: ({}, {}) -> ({})", left, right, result);
-    return next_.get();
+    return next_;
 }
 
 Continuation I32LessEqualUnsigned::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    uint32_t right = static_cast<uint32_t>(context.popI32());
-    uint32_t left = static_cast<uint32_t>(context.popI32());
+    uint32_t right = static_cast<uint32_t>(context.pop().i32);
+    uint32_t left = static_cast<uint32_t>(context.pop().i32);
     int32_t result = (left <= right) ? 1 : 0;
     context.pushI32(result);
 
     TRACE_VERBOSE("i32.ge_u: ({}, {}) -> ({})", left, right, result);
-    return next_.get();
+    return next_;
 }
 
 Continuation I32GreaterEqualSigned::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    int32_t right = context.popI32();
-    int32_t left = context.popI32();
+    int32_t right = context.pop().i32;
+    int32_t left = context.pop().i32;
     int32_t result = (left >= right) ? 1 : 0;
     context.pushI32(result);
 
     TRACE_VERBOSE("i32.ge_s: ({}, {}) -> ({})", left, right, result);
-    return next_.get();
+    return next_;
 }
 
 Continuation I32GreaterEqualUnsigned::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    uint32_t right = static_cast<uint32_t>(context.popI32());
-    uint32_t left = static_cast<uint32_t>(context.popI32());
+    uint32_t right = static_cast<uint32_t>(context.pop().i32);
+    uint32_t left = static_cast<uint32_t>(context.pop().i32);
     int32_t result = (left >= right) ? 1 : 0;
     context.pushI32(result);
 
     TRACE_VERBOSE("i32.ge_u: ({}, {}) -> ({})", left, right, result);
-    return next_.get();
+    return next_;
 }
 
 Continuation I64EqualZero::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    int64_t val = context.popI64();
+    int64_t val = context.pop().i64;
     int32_t result = val == 0 ? 1 : 0;
     context.pushI32(result);
 
     TRACE_VERBOSE("i64.eqz: ({}) -> ({})", val, result);
-    return next_.get();
+    return next_;
 }
 
 Continuation I64Equal::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    int64_t right = context.popI64();
-    int64_t left = context.popI64();
+    int64_t right = context.pop().i64;
+    int64_t left = context.pop().i64;
     int32_t result = (left == right) ? 1 : 0;
     context.pushI32(result);
 
     TRACE_VERBOSE("i64.eq: ({}, {}) -> ({})", left, right, result);
-    return next_.get();
+    return next_;
 }
 
 Continuation I64NotEqual::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    int64_t right = context.popI64();
-    int64_t left = context.popI64();
+    int64_t right = context.pop().i64;
+    int64_t left = context.pop().i64;
     int32_t result = (left != right) ? 1 : 0;
     context.pushI32(result);
 
     TRACE_VERBOSE("i64.ne: ({}, {}) -> ({})", left, right, result);
-    return next_.get();
+    return next_;
 }
 
 Continuation I64LessThanSigned::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    int64_t right = context.popI64();
-    int64_t left = context.popI64();
+    int64_t right = context.pop().i64;
+    int64_t left = context.pop().i64;
     int32_t result = (left < right) ? 1 : 0;
     context.pushI32(result);
 
     TRACE_VERBOSE("i64.lt_s: ({}, {}) -> ({})", left, right, result);
-    return next_.get();
+    return next_;
 }
 
 Continuation I64LessThanUnsigned::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    uint64_t right = static_cast<uint64_t>(context.popI64());
-    uint64_t left = static_cast<uint64_t>(context.popI64());
+    uint64_t right = static_cast<uint64_t>(context.pop().i64);
+    uint64_t left = static_cast<uint64_t>(context.pop().i64);
     int32_t result = (left < right) ? 1 : 0;
     context.pushI32(result);
 
     TRACE_VERBOSE("i64.lt_u: ({}, {}) -> ({})", left, right, result);
-    return next_.get();
+    return next_;
 }
 
 Continuation I64GreaterThanSigned::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    int64_t right = context.popI64();
-    int64_t left = context.popI64();
+    int64_t right = context.pop().i64;
+    int64_t left = context.pop().i64;
     int32_t result = (left > right) ? 1 : 0;
     context.pushI32(result);
 
     TRACE_VERBOSE("i64.gt_s: ({}, {}) -> ({})", left, right, result);
-    return next_.get();
+    return next_;
 }
 
 Continuation I64GreaterThanUnsigned::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    uint64_t right = static_cast<uint64_t>(context.popI64());
-    uint64_t left = static_cast<uint64_t>(context.popI64());
+    uint64_t right = static_cast<uint64_t>(context.pop().i64);
+    uint64_t left = static_cast<uint64_t>(context.pop().i64);
     int32_t result = (left > right) ? 1 : 0;
     context.pushI32(result);
 
     TRACE_VERBOSE("i64.gt_u: ({}, {}) -> ({})", left, right, result);
-    return next_.get();
+    return next_;
 }
 
 Continuation I64LessEqualSigned::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    int64_t right = context.popI64();
-    int64_t left = context.popI64();
+    int64_t right = context.pop().i64;
+    int64_t left = context.pop().i64;
     int32_t result = (left <= right) ? 1 : 0;
     context.pushI32(result);
 
     TRACE_VERBOSE("i64.le_s: ({}, {}) -> ({})", left, right, result);
-    return next_.get();
+    return next_;
 }
 
 Continuation I64LessEqualUnsigned::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    uint64_t right = static_cast<uint64_t>(context.popI64());
-    uint64_t left = static_cast<uint64_t>(context.popI64());
+    uint64_t right = static_cast<uint64_t>(context.pop().i64);
+    uint64_t left = static_cast<uint64_t>(context.pop().i64);
     int32_t result = (left <= right) ? 1 : 0;
     context.pushI32(result);
 
     TRACE_VERBOSE("i64.le_u: ({}, {}) -> ({})", left, right, result);
-    return next_.get();
+    return next_;
 }
 
 Continuation I64GreaterEqualSigned::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    int64_t right = context.popI64();
-    int64_t left = context.popI64();
+    int64_t right = context.pop().i64;
+    int64_t left = context.pop().i64;
     int32_t result = (left >= right) ? 1 : 0;
     context.pushI32(result);
 
     TRACE_VERBOSE("i64.ge_s: ({}, {}) -> ({})", left, right, result);
-    return next_.get();
+    return next_;
 }
 
 Continuation I32CountLeadingZeros::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    uint32_t val = context.popI32();
+    uint32_t val = context.pop().i32;
     uint32_t result;
 
     if (val == 0)
@@ -995,13 +1106,13 @@ Continuation I32CountLeadingZeros::action(Instance& instance) {
     context.pushI32(result);
 
     TRACE_VERBOSE("i32.clz: ({}) -> ({})", val, result);
-    return next_.get();
+    return next_;
 }
 
 Continuation I32CountTrailingZeros::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    uint32_t val = context.popI32();
+    uint32_t val = context.pop().i32;
     uint32_t result;
 
     if (val == 0)
@@ -1012,53 +1123,69 @@ Continuation I32CountTrailingZeros::action(Instance& instance) {
     context.pushI32(result);
 
     TRACE_VERBOSE("i32.ctz: ({}) -> ({})", val, result);
-    return next_.get();
+    return next_;
 }
 
 Continuation I32Add::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    int32_t right = context.popI32();
-    int32_t left = context.popI32();
+    int32_t right = context.pop().i32;
+    int32_t left = context.pop().i32;
     int32_t result = left + right;
     context.pushI32(result);
 
-    TRACE_VERBOSE("i32.add: ({}, {}) -> ({})", left, right, result);
-    return next_.get();
+    TRACE_VERBOSE(
+        "{}: i32.add: ({}, {}) -> ({})",
+        instance.getGlobalState().getDebugInfo().getFormattedLocation(addr_),
+        left, right, result);
+    return next_;
 }
+
+void I32Add::consume(Instance& instance, Value right) {
+    Value& top = instance.getActiveContext().getStack().peek();
+    top.i32 = top.i32 + right.i32;
+};
 
 Continuation I32Sub::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    int32_t right = context.popI32();
-    int32_t left = context.popI32();
+    int32_t right = context.pop().i32;
+    int32_t left = context.pop().i32;
     int32_t result = left - right;
     context.pushI32(result);
 
-    TRACE_VERBOSE("i32.sub: ({}, {}) -> ({})", left, right, result);
-    return next_.get();
+    TRACE_VERBOSE(
+        "{}: i32.sub: ({}, {}) -> ({})",
+        instance.getGlobalState().getDebugInfo().getFormattedLocation(addr_),
+        left, right, result);
+    return next_;
 }
+
+void I32Sub::consume(Instance& instance, Value right) {
+    Value& top = instance.getActiveContext().getStack().peek();
+    top.i32 = top.i32 - right.i32;
+};
 
 Continuation I32Mul::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    int32_t right = context.popI32();
-    int32_t left = context.popI32();
+    int32_t right = context.pop().i32;
+    int32_t left = context.pop().i32;
     int32_t result = left * right;
     context.pushI32(result);
 
     TRACE_VERBOSE("i32.mul: ({}, {}) -> ({})", left, right, result);
-    return next_.get();
+    return next_;
 }
 
 Continuation I32DivideSigned::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    int32_t right = context.popI32();
+    int32_t right = context.pop().i32;
     if (right == 0)
         return trap(instance, "i32.div_s: division by zero", addr_);
 
-    int32_t left = context.popI32();
+    int32_t left = context.pop().i32;
     if (left == std::numeric_limits<int32_t>::min() && right == -1)
         return trap(instance, "i32.div_s: integer overflow (INT32_MIN / -1)",
                     addr_);
@@ -1066,131 +1193,134 @@ Continuation I32DivideSigned::action(Instance& instance) {
     int32_t result = left / right;
     context.pushI32(result);
 
-    TRACE_VERBOSE("i32.div_s: (left={}, right={}) -> ({})", left, right, result);
-    return next_.get();
+    TRACE_VERBOSE("i32.div_s: (left={}, right={}) -> ({})", left, right,
+                  result);
+    return next_;
 }
 
 Continuation I32DivideUnsigned::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    uint32_t right = static_cast<uint32_t>(context.popI32());
+    uint32_t right = static_cast<uint32_t>(context.pop().i32);
     if (right == 0)
         return trap(instance, "i32.div_u: division by zero", addr_);
 
-    uint32_t left = static_cast<uint32_t>(context.popI32());
+    uint32_t left = static_cast<uint32_t>(context.pop().i32);
     uint32_t result = left / right;
     context.pushI32(result);
 
-    TRACE_VERBOSE("i32.div_u: (left={}, right={}) -> ({})", left, right, result);
-    return next_.get();
+    TRACE_VERBOSE("i32.div_u: (left={}, right={}) -> ({})", left, right,
+                  result);
+    return next_;
 }
 
 Continuation I32RemainderSigned::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    int32_t right = context.popI32();
+    int32_t right = context.pop().i32;
     if (right == 0)
         return trap(instance, "i32.div_s: division by zero", addr_);
 
-    int32_t left = context.popI32();
+    int32_t left = context.pop().i32;
     int32_t result = left % right;
     context.pushI32(result);
 
     TRACE_VERBOSE("i32.rem_s: ({}, {}) -> ({})", left, right, result);
-    return next_.get();
+    return next_;
 }
 
 Continuation I32RemainderUnsigned::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    uint32_t right = static_cast<uint32_t>(context.popI32());
+    uint32_t right = static_cast<uint32_t>(context.pop().i32);
     if (right == 0)
         return trap(instance, "i32.div_u: division by zero", addr_);
 
-    uint32_t left = static_cast<uint32_t>(context.popI32());
+    uint32_t left = static_cast<uint32_t>(context.pop().i32);
     uint32_t result = left % right;
     context.pushI32(result);
 
-    TRACE_VERBOSE("i32.rem_u: (left={}, right={}) -> ({})", left, right, result);
-    return next_.get();
+    TRACE_VERBOSE("i32.rem_u: (left={}, right={}) -> ({})", left, right,
+                  result);
+    return next_;
 }
 
 Continuation I32And::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    int32_t right = context.popI32();
-    int32_t left = context.popI32();
+    int32_t right = context.pop().i32;
+    int32_t left = context.pop().i32;
     int32_t result = left & right;
     context.pushI32(result);
 
     TRACE_VERBOSE("i32.and: ({}, {}) -> ({})", left, right, result);
-    return next_.get();
+    return next_;
 }
 
 Continuation I32Or::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    int32_t right = context.popI32();
-    int32_t left = context.popI32();
+    int32_t right = context.pop().i32;
+    int32_t left = context.pop().i32;
     int32_t result = left | right;
     context.pushI32(result);
 
     TRACE_VERBOSE("i32.or: ({}, {}) -> ({})", left, right, result);
-    return next_.get();
+    return next_;
 }
 
 Continuation I32Xor::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    int32_t right = context.popI32();
-    int32_t left = context.popI32();
+    int32_t right = context.pop().i32;
+    int32_t left = context.pop().i32;
     int32_t result = left ^ right;
     context.pushI32(result);
 
     TRACE_VERBOSE("i32.xor: ({}, {}) -> ({})", left, right, result);
-    return next_.get();
+    return next_;
 }
 
 Continuation I32ShiftLeft::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    int32_t right = context.popI32() & 31;
-    int32_t left = context.popI32();
+    int32_t right = context.pop().i32 & 31;
+    int32_t left = context.pop().i32;
     int32_t result = left << right;
     context.pushI32(result);
 
     TRACE_VERBOSE("i32.shl: ({}, {}) -> ({})", left, right, result);
-    return next_.get();
+    return next_;
 }
 
 Continuation I32ShiftRightSigned::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    int32_t right = context.popI32() & 31;
-    int32_t left = context.popI32();
+    int32_t right = context.pop().i32 & 31;
+    int32_t left = context.pop().i32;
     int32_t result = left >> right;
     context.pushI32(result);
 
     TRACE_VERBOSE("i32.shr_s: ({}, {}) -> ({})", left, right, result);
-    return next_.get();
+    return next_;
 }
 
 Continuation I32ShiftRightUnsigned::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    int32_t right = context.popI32() & 31;
-    uint32_t left = static_cast<uint32_t>(context.popI32());
+    int32_t right = context.pop().i32 & 31;
+    uint32_t left = static_cast<uint32_t>(context.pop().i32);
     int32_t result = left >> right;
     context.pushI32(result);
 
     TRACE_VERBOSE("i32.shr_u: ({}, {}) -> ({})", left, right, result);
-    return next_.get();
+    return next_;
 }
 
 Continuation I64CountLeadingZeros::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    uint64_t val = context.popI64();
+    uint64_t val = context.pop().i64;
     uint64_t result;
 
     if (val == 0)
@@ -1201,13 +1331,13 @@ Continuation I64CountLeadingZeros::action(Instance& instance) {
     context.pushI64(result);
 
     TRACE_VERBOSE("i64.clz: ({}) -> ({})", val, result);
-    return next_.get();
+    return next_;
 }
 
 Continuation I64CountTrailingZeros::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    uint64_t val = context.popI64();
+    uint64_t val = context.pop().i64;
     uint64_t result;
 
     if (val == 0)
@@ -1218,53 +1348,53 @@ Continuation I64CountTrailingZeros::action(Instance& instance) {
     context.pushI64(result);
 
     TRACE_VERBOSE("i64.ctz: ({}) -> ({})", val, result);
-    return next_.get();
+    return next_;
 }
 
 Continuation I64Add::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    int64_t right = context.popI64();
-    int64_t left = context.popI64();
+    int64_t right = context.pop().i64;
+    int64_t left = context.pop().i64;
     int64_t result = left + right;
     context.pushI64(result);
 
     TRACE_VERBOSE("i64.add: ({}, {}) -> ({})", left, right, result);
-    return next_.get();
+    return next_;
 }
 
 Continuation I64Sub::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    int64_t right = context.popI64();
-    int64_t left = context.popI64();
+    int64_t right = context.pop().i64;
+    int64_t left = context.pop().i64;
     int64_t result = left - right;
     context.pushI64(result);
 
     TRACE_VERBOSE("i64.sub: ({}, {}) -> ({})", left, right, result);
-    return next_.get();
+    return next_;
 }
 
 Continuation I64Mul::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    int64_t right = context.popI64();
-    int64_t left = context.popI64();
+    int64_t right = context.pop().i64;
+    int64_t left = context.pop().i64;
     int64_t result = left * right;
     context.pushI64(result);
 
     TRACE_VERBOSE("i64.mul: ({}, {}) -> ({})", left, right, result);
-    return next_.get();
+    return next_;
 }
 
 Continuation I64DivideSigned::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    int64_t right = context.popI64();
+    int64_t right = context.pop().i64;
     if (right == 0)
         return trap(instance, "i64.div_s: division by zero", addr_);
 
-    int64_t left = context.popI64();
+    int64_t left = context.pop().i64;
     if (left == std::numeric_limits<int64_t>::min() && right == -1)
         return trap(instance, "i64.div_s: integer overflow (INT64_MIN / -1)",
                     addr_);
@@ -1273,155 +1403,157 @@ Continuation I64DivideSigned::action(Instance& instance) {
     context.pushI64(result);
 
     TRACE_VERBOSE("i64.div_s: ({}, {}) -> ({})", left, right, result);
-    return next_.get();
+    return next_;
 }
 
 Continuation I64DivideUnsigned::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    uint64_t right = static_cast<uint64_t>(context.popI64());
+    uint64_t right = static_cast<uint64_t>(context.pop().i64);
     if (right == 0)
         return trap(instance, "i64.div_u: division by zero", addr_);
 
-    uint64_t left = static_cast<uint64_t>(context.popI64());
+    uint64_t left = static_cast<uint64_t>(context.pop().i64);
     uint64_t result = left / right;
     context.pushI64(result);
 
-    TRACE_VERBOSE("i64.div_u: (left={}, right={}) -> ({})", left, right, result);
-    return next_.get();
+    TRACE_VERBOSE("i64.div_u: (left={}, right={}) -> ({})", left, right,
+                  result);
+    return next_;
 }
 
 Continuation I64RemainderSigned::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    int64_t right = context.popI64();
+    int64_t right = context.pop().i64;
     if (right == 0)
         return trap(instance, "i64.rem_s: division by zero", addr_);
 
-    int64_t left = context.popI64();
+    int64_t left = context.pop().i64;
     int64_t result = left % right;
     context.pushI64(result);
 
     TRACE_VERBOSE("i64.rem_s: ({}, {}) -> ({})", left, right, result);
-    return next_.get();
+    return next_;
 }
 
 Continuation I64RemainderUnsigned::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    uint64_t right = static_cast<uint64_t>(context.popI64());
+    uint64_t right = static_cast<uint64_t>(context.pop().i64);
     if (right == 0)
         return trap(instance, "i64.rem_u: division by zero", addr_);
 
-    uint64_t left = static_cast<uint64_t>(context.popI64());
+    uint64_t left = static_cast<uint64_t>(context.pop().i64);
     uint64_t result = left % right;
     context.pushI64(result);
 
-    TRACE_VERBOSE("i64.rem_u: (left={}, right={}) -> ({})", left, right, result);
-    return next_.get();
+    TRACE_VERBOSE("i64.rem_u: (left={}, right={}) -> ({})", left, right,
+                  result);
+    return next_;
 }
 
 Continuation I64And::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    int64_t right = context.popI64();
-    int64_t left = context.popI64();
+    int64_t right = context.pop().i64;
+    int64_t left = context.pop().i64;
     int64_t result = left & right;
     context.pushI64(result);
 
     TRACE_VERBOSE("i64.and: ({}, {}) -> ({})", left, right, result);
-    return next_.get();
+    return next_;
 }
 
 Continuation I64Or::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    int64_t right = context.popI64();
-    int64_t left = context.popI64();
+    int64_t right = context.pop().i64;
+    int64_t left = context.pop().i64;
     int64_t result = left | right;
     context.pushI64(result);
 
     TRACE_VERBOSE("i64.or: ({}, {}) -> ({})", left, right, result);
-    return next_.get();
+    return next_;
 }
 
 Continuation I64Xor::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    int64_t right = context.popI64();
-    int64_t left = context.popI64();
+    int64_t right = context.pop().i64;
+    int64_t left = context.pop().i64;
     int64_t result = left ^ right;
     context.pushI64(result);
 
     TRACE_VERBOSE("i64.xor: ({}, {}) -> ({})", left, right, result);
-    return next_.get();
+    return next_;
 }
 
 Continuation I64ShiftLeft::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    int64_t right = context.popI64() & 63;
-    int64_t left = context.popI64();
+    int64_t right = context.pop().i64 & 63;
+    int64_t left = context.pop().i64;
     int64_t result = left << right;
     context.pushI64(result);
 
     TRACE_VERBOSE("i64.shl: ({}, {}) -> ({})", left, right, result);
-    return next_.get();
+    return next_;
 }
 
 Continuation I64ShiftRightSigned::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    int64_t right = context.popI64() & 63;
-    int64_t left = context.popI64();
+    int64_t right = context.pop().i64 & 63;
+    int64_t left = context.pop().i64;
     int64_t result = left >> right;
     context.pushI64(result);
 
     TRACE_VERBOSE("i64.shr_s: ({}, {}) -> ({})", left, right, result);
-    return next_.get();
+    return next_;
 }
 
 Continuation I64ShiftRightUnsigned::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    int64_t right = context.popI64() & 63;
-    uint64_t left = static_cast<uint64_t>(context.popI64());
+    int64_t right = context.pop().i64 & 63;
+    uint64_t left = static_cast<uint64_t>(context.pop().i64);
     uint64_t result = left >> right;
     context.pushI64(result);
 
     TRACE_VERBOSE("i64.shr_u: ({}, {}) -> ({})", left, right, result);
-    return next_.get();
+    return next_;
 }
 
 Continuation I32WrapI64::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    int64_t val = context.popI64();
+    int64_t val = context.pop().i64;
     int32_t result = static_cast<int32_t>(val);
     context.pushI32(result);
 
     TRACE_VERBOSE("i32.wrap_i64: ({}) -> ({})", val, result);
-    return next_.get();
+    return next_;
 }
 
 Continuation I64ExtendI32Signed::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    int32_t val = context.popI32();
+    int32_t val = context.pop().i32;
     context.pushI64(val);
 
     TRACE_VERBOSE("i64.extend_i32_s: ({}) -> ({})", val, val);
-    return next_.get();
+    return next_;
 }
 
 Continuation I64ExtendI32Unsigned::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    uint32_t val = static_cast<uint32_t>(context.popI32());
+    uint32_t val = static_cast<uint32_t>(context.pop().i32);
     context.pushI64(val);
 
     TRACE_VERBOSE("extend_i32_u: ({}) -> ({})", val, val);
-    return next_.get();
+    return next_;
 }
 
 /***********************/
@@ -1429,22 +1561,25 @@ Continuation I64ExtendI32Unsigned::action(Instance& instance) {
 /***********************/
 
 I32Load::I32Load(const grammar::I32Load& i32_load)
-    : offset_(i32_load.getMemArg().getOffset()),
+    : OperationBase(i32_load.getAddress()),
+      offset_(i32_load.getMemArg().getOffset()),
       align_(i32_load.getMemArg().getAlign()) {}
 
 Continuation I32Load::action(Instance& instance) {
-    int32_t base = instance.getActiveContext().popI32();
+    Context& context = instance.getActiveContext();
 
+    int32_t base = context.pop().i32;
     uint32_t addr = base + offset_;
+
     std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
     if (addr + sizeof(int32_t) > memory.size())
-        return trap(instance, "i32.load out of bounds memory address", addr);
+        return trap(instance, "i32.load out of bounds memory address", addr_);
 
     int32_t val = *reinterpret_cast<int32_t*>(&memory[addr]);
-    instance.getActiveContext().pushI32(val);
+    context.pushI32(val);
 
     TRACE_VERBOSE("i32.load {} {}: ({}) -> ({})", align_, offset_, base, val);
-    return next_.get();
+    return next_;
 }
 
 I64Load::I64Load(const grammar::I64Load& i64_load)
@@ -1452,8 +1587,9 @@ I64Load::I64Load(const grammar::I64Load& i64_load)
       align_(i64_load.getMemArg().getAlign()) {}
 
 Continuation I64Load::action(Instance& instance) {
-    int32_t base = instance.getActiveContext().popI32();
+    Context& context = instance.getActiveContext();
 
+    int32_t base = context.pop().i32;
     uint32_t addr = base + offset_;
 
     std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
@@ -1461,10 +1597,10 @@ Continuation I64Load::action(Instance& instance) {
         return trap(instance, "i64.load out of bounds memory address", addr);
 
     int64_t val = *reinterpret_cast<int64_t*>(&memory[addr]);
-    instance.getActiveContext().pushI64(val);
+    context.pushI64(val);
 
     TRACE_VERBOSE("i64.load {} {}: ({}) -> ({})", align_, offset_, base, val);
-    return next_.get();
+    return next_;
 }
 
 I32Load8Signed::I32Load8Signed(const grammar::I32Load8Signed& i32_load8_s)
@@ -1474,7 +1610,7 @@ I32Load8Signed::I32Load8Signed(const grammar::I32Load8Signed& i32_load8_s)
 Continuation I32Load8Signed::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    int32_t base = context.popI32();
+    int32_t base = context.pop().i32;
     uint32_t addr = base + offset_;
 
     std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
@@ -1484,8 +1620,9 @@ Continuation I32Load8Signed::action(Instance& instance) {
     int8_t val = static_cast<int8_t>(memory[addr]);
     context.pushI32(val);
 
-    TRACE_VERBOSE("i32.load8_s {} {}: ({}) -> ({})", align_, offset_, base, val);
-    return next_.get();
+    TRACE_VERBOSE("i32.load8_s {} {}: ({}) -> ({})", align_, offset_, base,
+                  val);
+    return next_;
 }
 
 I32Load8Unsigned::I32Load8Unsigned(const grammar::I32Load8Unsigned& i32_load8_u)
@@ -1495,7 +1632,7 @@ I32Load8Unsigned::I32Load8Unsigned(const grammar::I32Load8Unsigned& i32_load8_u)
 Continuation I32Load8Unsigned::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    int32_t base = context.popI32();
+    int32_t base = context.pop().i32;
     uint32_t addr = base + offset_;
 
     std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
@@ -1505,8 +1642,9 @@ Continuation I32Load8Unsigned::action(Instance& instance) {
     uint8_t val = memory[addr];
     context.pushI32(val);
 
-    TRACE_VERBOSE("i32.load8_u {} {}: ({}) -> ({})", align_, offset_, base, val);
-    return next_.get();
+    TRACE_VERBOSE("i32.load8_u {} {}: ({}) -> ({})", align_, offset_, base,
+                  val);
+    return next_;
 }
 
 I32Load16Unsigned::I32Load16Unsigned(
@@ -1517,7 +1655,7 @@ I32Load16Unsigned::I32Load16Unsigned(
 Continuation I32Load16Unsigned::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    int32_t base = context.popI32();
+    int32_t base = context.pop().i32;
     uint32_t addr = base + offset_;
 
     std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
@@ -1528,9 +1666,9 @@ Continuation I32Load16Unsigned::action(Instance& instance) {
     uint16_t val = *reinterpret_cast<uint16_t*>(&memory[addr]);
     context.pushI32(val);
 
-    TRACE_VERBOSE("i32.load16_u align={} offset={}: (base={}) -> (val={})", align_,
-              offset_, base, val);
-    return next_.get();
+    TRACE_VERBOSE("i32.load16_u align={} offset={}: (base={}) -> (val={})",
+                  align_, offset_, base, val);
+    return next_;
 }
 
 I64Load32Unsigned::I64Load32Unsigned(
@@ -1540,7 +1678,7 @@ I64Load32Unsigned::I64Load32Unsigned(
 Continuation I64Load32Unsigned::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    int32_t base = context.popI32();
+    int32_t base = context.pop().i32;
     uint32_t addr = base + offset_;
 
     std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
@@ -1551,31 +1689,36 @@ Continuation I64Load32Unsigned::action(Instance& instance) {
     uint32_t val = *reinterpret_cast<uint32_t*>(&memory[addr]);
     context.pushI64(val);
 
-    TRACE_VERBOSE("i64.load32_u align={} offset={}: (base={}) -> (val={})", align_,
-              offset_, base, val);
-    return next_.get();
+    TRACE_VERBOSE("i64.load32_u align={} offset={}: (base={}) -> (val={})",
+                  align_, offset_, base, val);
+    return next_;
 }
 
 I32Store::I32Store(const grammar::I32Store& i32_store)
-    : offset_(i32_store.getMemArg().getOffset()),
+    : OperationBase(i32_store.getAddress()),
+      offset_(i32_store.getMemArg().getOffset()),
       align_(i32_store.getMemArg().getAlign()) {}
 
 Continuation I32Store::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    int32_t val = context.popI32();
-    int32_t base = context.popI32();
+    int32_t val = context.pop().i32;
+    int32_t base = context.pop().i32;
 
     uint32_t addr = base + offset_;
 
     std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
     if (addr + sizeof(int32_t) > memory.size())
-        return trap(instance, "i32.store out of bounds memory address", addr);
+        return trap(instance, "i32.store out of bounds memory address", addr_);
+
+    if (addr == 42155068)
+        fmt::println("{}: i32.store {}: {}", getFormattedAddres(instance), offset_, val);
 
     *reinterpret_cast<int32_t*>(&memory[addr]) = val;
 
-    TRACE_VERBOSE("i32.store {} {}: ({}, {}) -> ()", align_, offset_, base, val);
-    return next_.get();
+    TRACE_VERBOSE("i32.store {} {}: ({}, {}) -> ()", align_, offset_, base,
+                  val);
+    return next_;
 }
 
 I64Store::I64Store(const grammar::I64Store& i64_store)
@@ -1585,8 +1728,8 @@ I64Store::I64Store(const grammar::I64Store& i64_store)
 Continuation I64Store::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    int64_t val = context.popI64();
-    int32_t base = context.popI32();
+    int64_t val = context.pop().i64;
+    int32_t base = context.pop().i32;
 
     uint32_t addr = base + offset_;
 
@@ -1596,8 +1739,9 @@ Continuation I64Store::action(Instance& instance) {
 
     *reinterpret_cast<int64_t*>(&memory[addr]) = val;
 
-    TRACE_VERBOSE("i64.store {} {}: ({}, {}) -> ()", align_, offset_, base, val);
-    return next_.get();
+    TRACE_VERBOSE("i64.store {} {}: ({}, {}) -> ()", align_, offset_, base,
+                  val);
+    return next_;
 }
 
 F64Store::F64Store(const grammar::F64Store& f64_store)
@@ -1606,8 +1750,8 @@ F64Store::F64Store(const grammar::F64Store& f64_store)
 Continuation F64Store::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    double val = context.popF64();
-    int32_t base = context.popI32();
+    double val = context.pop().f64;
+    int32_t base = context.pop().i32;
 
     uint32_t addr = base + offset_;
 
@@ -1617,8 +1761,9 @@ Continuation F64Store::action(Instance& instance) {
 
     *reinterpret_cast<double*>(&memory[addr]) = val;
 
-    TRACE_VERBOSE("f64.store {} {}: ({}, {}) -> ()", align_, offset_, base, val);
-    return next_.get();
+    TRACE_VERBOSE("f64.store {} {}: ({}, {}) -> ()", align_, offset_, base,
+                  val);
+    return next_;
 }
 
 I32Store8::I32Store8(const grammar::I32Store8& i32_store8)
@@ -1628,8 +1773,8 @@ I32Store8::I32Store8(const grammar::I32Store8& i32_store8)
 Continuation I32Store8::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    int32_t val = context.popI32();
-    int32_t base = context.popI32();
+    int32_t val = context.pop().i32;
+    int32_t base = context.pop().i32;
 
     uint32_t addr = base + offset_;
     std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
@@ -1638,8 +1783,9 @@ Continuation I32Store8::action(Instance& instance) {
 
     memory[addr] = static_cast<uint8_t>(val & 0xFF);
 
-    TRACE_VERBOSE("i32.store8 {} {}: ({}, {}) -> ()", align_, offset_, base, val);
-    return next_.get();
+    TRACE_VERBOSE("i32.store8 {} {}: ({}, {}) -> ()", align_, offset_, base,
+                  val);
+    return next_;
 }
 
 I32Store16::I32Store16(const grammar::I32Store16& i32_store16)
@@ -1649,8 +1795,8 @@ I32Store16::I32Store16(const grammar::I32Store16& i32_store16)
 Continuation I32Store16::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    int32_t val = context.popI32();
-    int32_t base = context.popI32();
+    int32_t val = context.pop().i32;
+    int32_t base = context.pop().i32;
 
     uint32_t addr = base + offset_;
     std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
@@ -1660,9 +1806,9 @@ Continuation I32Store16::action(Instance& instance) {
     *reinterpret_cast<uint16_t*>(&memory[addr]) =
         static_cast<uint16_t>(val & 0xFFFF);
 
-    TRACE_VERBOSE("i32.store16 align={} offset={}: (base={}, val={}) -> ()", align_,
-              offset_, base, val & 0xFFFF);
-    return next_.get();
+    TRACE_VERBOSE("i32.store16 align={} offset={}: (base={}, val={}) -> ()",
+                  align_, offset_, base, val & 0xFFFF);
+    return next_;
 }
 
 MemoryGrow::MemoryGrow(const grammar::MemoryGrow& mem_grow)
@@ -1671,7 +1817,7 @@ MemoryGrow::MemoryGrow(const grammar::MemoryGrow& mem_grow)
 Continuation MemoryGrow::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    uint32_t delta = context.popI32();
+    uint32_t delta = context.pop().i32;
     std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
 
     constexpr uint32_t PAGE_SIZE = 65536;
@@ -1679,28 +1825,30 @@ Continuation MemoryGrow::action(Instance& instance) {
     uint32_t old_pages = memory.size() / PAGE_SIZE;
     if (delta == 0) {
         context.pushI32(old_pages);
-        return next_.get();
+        return next_;
     }
 
     uint64_t new_size = static_cast<uint64_t>(memory.size()) +
                         static_cast<uint64_t>(delta) * PAGE_SIZE;
-    if (new_size > UINT32_MAX) {
+    if (new_size > (UINT32_MAX >> 1)) {
         context.pushI32(-1);
-        return next_.get();
+        return next_;
     }
 
     memory.resize(new_size, 0);
     context.pushI32(old_pages);
-    return next_.get();
+    return next_;
 }
 
 MemoryInit::MemoryInit(const grammar::MemoryInit& mem_init)
     : segment_idx_(mem_init.getSegmentIdx()) {}
 
 Continuation MemoryInit::action(Instance& instance) {
-    int32_t len = instance.getActiveContext().popI32();
-    int32_t src = instance.getActiveContext().popI32();
-    int32_t dst = instance.getActiveContext().popI32();
+    Context& context = instance.getActiveContext();
+
+    int32_t len = context.pop().i32;
+    int32_t src = context.pop().i32;
+    int32_t dst = context.pop().i32;
 
     /* TODO this check should be done at instantiation */
     std::vector<uint8_t>& data_segment =
@@ -1715,7 +1863,7 @@ Continuation MemoryInit::action(Instance& instance) {
                     addr_);
 
     memcpy(&memory[dst], &data_segment[src], len);
-    return next_.get();
+    return next_;
 }
 
 DataDrop::DataDrop(const grammar::DataDrop& data_drop)
@@ -1723,15 +1871,15 @@ DataDrop::DataDrop(const grammar::DataDrop& data_drop)
 
 Continuation DataDrop::action(Instance& instance) {
     instance.getGlobalState().dropSegment(segment_idx_);
-    return next_.get();
+    return next_;
 }
 
 Continuation MemoryCopy::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    uint32_t count = static_cast<uint32_t>(context.popI32());
-    uint32_t src = static_cast<uint32_t>(context.popI32());
-    uint32_t dst = static_cast<uint32_t>(context.popI32());
+    uint32_t count = static_cast<uint32_t>(context.pop().i32);
+    uint32_t src = static_cast<uint32_t>(context.pop().i32);
+    uint32_t dst = static_cast<uint32_t>(context.pop().i32);
 
     std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
     if (src + count > memory.size() || dst + count > memory.size())
@@ -1741,15 +1889,15 @@ Continuation MemoryCopy::action(Instance& instance) {
     memmove(&memory[dst], &memory[src], count);
 
     TRACE_VERBOSE("memory.copy: (dst={}, src={}, count={})", dst, src, count);
-    return next_.get();
+    return next_;
 }
 
 Continuation MemoryFill::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    uint32_t count = static_cast<uint32_t>(context.popI32());
-    int32_t val = context.popI32();
-    uint32_t dst = static_cast<uint32_t>(context.popI32());
+    uint32_t count = static_cast<uint32_t>(context.pop().i32);
+    int32_t val = context.pop().i32;
+    uint32_t dst = static_cast<uint32_t>(context.pop().i32);
 
     std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
     if (dst + count > memory.size())
@@ -1757,7 +1905,7 @@ Continuation MemoryFill::action(Instance& instance) {
                     addr_);
 
     memset(&memory[dst], val, count);
-    return next_.get();
+    return next_;
 };
 
 /******************************/
@@ -1769,9 +1917,10 @@ AtomicNotify::AtomicNotify(const grammar::AtomicNotify& atomic_notify)
       align_(atomic_notify.getMemArg().getAlign()) {}
 
 Continuation AtomicNotify::action(Instance& instance) {
-    uint32_t waiters =
-        static_cast<uint32_t>(instance.getActiveContext().popI32());
-    uint32_t base = static_cast<uint32_t>(instance.getActiveContext().popI32());
+    Context& context = instance.getActiveContext();
+
+    uint32_t waiters = static_cast<uint32_t>(context.pop().i32);
+    uint32_t base = static_cast<uint32_t>(context.pop().i32);
 
     uint32_t addr = base + offset_;
     if (addr % align_ != 0)
@@ -1786,8 +1935,8 @@ Continuation AtomicNotify::action(Instance& instance) {
     WaitingRoom& waiting_room = instance.getWaitingRoom();
     uint32_t notified = waiting_room.notify(addr, waiters);
 
-    instance.getActiveContext().pushI32(static_cast<int32_t>(notified));
-    return next_.get();
+    context.pushI32(static_cast<int32_t>(notified));
+    return next_;
 }
 
 AtomicWait32::AtomicWait32(const grammar::AtomicWait32& atomic_wait32)
@@ -1803,26 +1952,26 @@ Continuation AtomicWait32::action(Instance& instance) {
             context.setRunState(Context::RunState::running);
             context.pushI32(0);
 
-            TRACE_VERBOSE("memory.atomic.wait32 epilogue {} {}: () -> ({})", align_,
-                      offset_, 0);
-            return next_.get();
+            TRACE_VERBOSE("memory.atomic.wait32 epilogue {} {}: () -> ({})",
+                          align_, offset_, 0);
+            return next_;
         }
 
         if (context.getRemainingTime() == 0) {
             context.setRunState(Context::RunState::running);
             context.pushI32(2);
 
-            TRACE_VERBOSE("memory.atomic.wait32 epilogue {} {}: () -> ({})", align_,
-                      offset_, 2);
-            return next_.get();
+            TRACE_VERBOSE("memory.atomic.wait32 epilogue {} {}: () -> ({})",
+                          align_, offset_, 2);
+            return next_;
         }
 
         return idle_.get();
     }
 
-    int64_t timeout = context.popI64();
-    int32_t expected = context.popI32();
-    uint32_t base = static_cast<uint32_t>(context.popI32());
+    int64_t timeout = context.pop().i64;
+    int32_t expected = context.pop().i32;
+    uint32_t base = static_cast<uint32_t>(context.pop().i32);
 
     uint32_t addr = base + offset_;
     if (addr % align_ != 0)
@@ -1837,15 +1986,15 @@ Continuation AtomicWait32::action(Instance& instance) {
     int32_t val = __atomic_load_n(reinterpret_cast<int32_t*>(&memory[addr]),
                                   __ATOMIC_SEQ_CST);
 
-    TRACE_VERBOSE("memory.atomic.wait32 prologue {} {}: ({}, {}, {}) -> ()", align_,
-              offset_, timeout, expected, base);
+    TRACE_VERBOSE("memory.atomic.wait32 prologue {} {}: ({}, {}, {}) -> ()",
+                  align_, offset_, timeout, expected, base);
 
     if (val != expected) {
         context.pushI32(1);
 
         TRACE_VERBOSE("memory.atomic.wait32 epilogue {} {}: () -> ({})", align_,
-                  offset_, 1);
-        return next_.get();
+                      offset_, 1);
+        return next_;
     } else {
         waiting_room.block(context, addr);
         context.setTimeout(addr, timeout);
@@ -1863,7 +2012,7 @@ AtomicLoad::AtomicLoad(const grammar::AtomicLoad& atomic_load)
 Continuation AtomicLoad::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    uint32_t base = static_cast<uint32_t>(context.popI32());
+    uint32_t base = static_cast<uint32_t>(context.pop().i32);
 
     uint32_t addr = base + offset_;
     if (addr % align_ != 0)
@@ -1880,9 +2029,9 @@ Continuation AtomicLoad::action(Instance& instance) {
 
     context.pushI32(val);
 
-    TRACE_VERBOSE("memory.atomic.load {} {}: ({}) -> ({})", align_, offset_, base,
-              val);
-    return next_.get();
+    TRACE_VERBOSE("memory.atomic.load {} {}: ({}) -> ({})", align_, offset_,
+                  base, val);
+    return next_;
 }
 
 AtomicLoad8Unsigned::AtomicLoad8Unsigned(
@@ -1893,7 +2042,7 @@ AtomicLoad8Unsigned::AtomicLoad8Unsigned(
 Continuation AtomicLoad8Unsigned::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    uint32_t base = static_cast<uint32_t>(context.popI32());
+    uint32_t base = static_cast<uint32_t>(context.pop().i32);
 
     uint32_t addr = base + offset_;
     if (addr % align_ != 0)
@@ -1911,8 +2060,8 @@ Continuation AtomicLoad8Unsigned::action(Instance& instance) {
     context.pushI32(val);
 
     TRACE_VERBOSE("memory.atomic.load8_u {} {}: ({}) -> ({})", align_, offset_,
-              base, val);
-    return next_.get();
+                  base, val);
+    return next_;
 }
 
 AtomicStore::AtomicStore(const grammar::AtomicStore& atomic_store)
@@ -1922,8 +2071,8 @@ AtomicStore::AtomicStore(const grammar::AtomicStore& atomic_store)
 Continuation AtomicStore::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    int32_t val = context.popI32();
-    uint32_t base = static_cast<uint32_t>(context.popI32());
+    int32_t val = context.pop().i32;
+    uint32_t base = static_cast<uint32_t>(context.pop().i32);
 
     uint32_t addr = base + offset_;
     if (addr % align_ != 0)
@@ -1938,9 +2087,9 @@ Continuation AtomicStore::action(Instance& instance) {
     int32_t* ptr = reinterpret_cast<int32_t*>(&memory[addr]);
     __atomic_store_n(ptr, val, __ATOMIC_SEQ_CST);
 
-    TRACE_VERBOSE("memory.atomic.store {} {}: ({}, {}) -> ()", align_, offset_, val,
-              base);
-    return next_.get();
+    TRACE_VERBOSE("memory.atomic.store {} {}: ({}, {}) -> ()", align_, offset_,
+                  val, base);
+    return next_;
 }
 
 AtomicStore8::AtomicStore8(const grammar::AtomicStore8& atomic_store8)
@@ -1950,8 +2099,8 @@ AtomicStore8::AtomicStore8(const grammar::AtomicStore8& atomic_store8)
 Continuation AtomicStore8::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    uint8_t val = static_cast<uint8_t>(context.popI32());
-    uint32_t base = static_cast<uint32_t>(context.popI32());
+    uint8_t val = static_cast<uint8_t>(context.pop().i32);
+    uint32_t base = static_cast<uint32_t>(context.pop().i32);
 
     uint32_t addr = base + offset_;
     if (addr % align_ != 0)
@@ -1967,8 +2116,8 @@ Continuation AtomicStore8::action(Instance& instance) {
     __atomic_store_n(ptr, val, __ATOMIC_SEQ_CST);
 
     TRACE_VERBOSE("memory.atomic.store8 {} {}: ({}, {}) -> ()", align_, offset_,
-              val, base);
-    return next_.get();
+                  val, base);
+    return next_;
 }
 
 AtomicAdd::AtomicAdd(const grammar::AtomicAdd& atomic_add)
@@ -1978,8 +2127,8 @@ AtomicAdd::AtomicAdd(const grammar::AtomicAdd& atomic_add)
 Continuation AtomicAdd::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    int32_t val = context.popI32();
-    uint32_t base = static_cast<uint32_t>(context.popI32());
+    int32_t val = context.pop().i32;
+    uint32_t base = static_cast<uint32_t>(context.pop().i32);
 
     uint32_t addr = base + offset_;
     if (addr % align_ != 0)
@@ -1997,9 +2146,9 @@ Continuation AtomicAdd::action(Instance& instance) {
 
     context.pushI32(static_cast<int32_t>(old));
 
-    TRACE_VERBOSE("i32.atomic.rmw.add {} {}: ({}, {}) -> ()", align_, offset_, base,
-              val, old);
-    return next_.get();
+    TRACE_VERBOSE("i32.atomic.rmw.add {} {}: ({}, {}) -> ()", align_, offset_,
+                  base, val, old);
+    return next_;
 }
 
 AtomicExchange8Unsigned::AtomicExchange8Unsigned(
@@ -2010,8 +2159,8 @@ AtomicExchange8Unsigned::AtomicExchange8Unsigned(
 Continuation AtomicExchange8Unsigned::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    uint8_t val = static_cast<uint8_t>(context.popI32());
-    uint32_t base = static_cast<uint32_t>(context.popI32());
+    uint8_t val = static_cast<uint8_t>(context.pop().i32);
+    uint32_t base = static_cast<uint32_t>(context.pop().i32);
 
     uint32_t addr = base + offset_;
     if (addr % align_ != 0)
@@ -2028,9 +2177,9 @@ Continuation AtomicExchange8Unsigned::action(Instance& instance) {
     uint8_t old = __atomic_exchange_n(ptr, val, __ATOMIC_SEQ_CST);
     context.pushI32(old);
 
-    TRACE_VERBOSE("i32.atomic.rmw8.xchg_u {} {}: ({}, {}) -> ({})", align_, offset_,
-              val, base, old);
-    return next_.get();
+    TRACE_VERBOSE("i32.atomic.rmw8.xchg_u {} {}: ({}, {}) -> ({})", align_,
+                  offset_, val, base, old);
+    return next_;
 }
 
 AtomicCompareExchange::AtomicCompareExchange(
@@ -2039,9 +2188,11 @@ AtomicCompareExchange::AtomicCompareExchange(
       align_(atomic_cmpxchg.getMemArg().getAlign()) {}
 
 Continuation AtomicCompareExchange::action(Instance& instance) {
-    int32_t desired = instance.getActiveContext().popI32();
-    int32_t expected = instance.getActiveContext().popI32();
-    uint32_t base = static_cast<uint32_t>(instance.getActiveContext().popI32());
+    Context& context = instance.getActiveContext();
+
+    int32_t desired = context.pop().i32;
+    int32_t expected = context.pop().i32;
+    uint32_t base = static_cast<uint32_t>(context.pop().i32);
 
     uint32_t offset = base + offset_;
     if (offset % align_ != 0)
@@ -2058,8 +2209,14 @@ Continuation AtomicCompareExchange::action(Instance& instance) {
     __atomic_compare_exchange_n(addr, &expected, desired, false,
                                 __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
 
-    instance.getActiveContext().pushI32(expected);
-    return next_.get();
+    context.pushI32(expected);
+    return next_;
 }
+
+Continuation Composite::action(Instance& instance) {
+    Value val = producer_->produce(instance);
+    consumer_->consume(instance, val);
+    return next_;
+};
 
 } // namespace runtime

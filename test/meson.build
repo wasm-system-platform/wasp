@@ -2,15 +2,17 @@ wasm_cc = find_program('clang', required: true)
 
 wasm_cflags = [
   '--target=wasm32',
+  '-O3',
   '-nostdlib',
   '-Wl,--no-entry',
   '-Wl,--export=main',
-  '-Wl,--import-memory'
+  '-Wl,--import-memory',
+  '-Wl,-z,stack-size=8388608'
 ]
 
 ackermann_wasm = custom_target(
     'ackermann_wasm',
-    input: 'programs/ackermann.c',
+    input: files('programs/ackermann.c'),
     output: 'ackermann.wasm',
     command: [wasm_cc, wasm_cflags, '-o', '@OUTPUT@', '@INPUT@'],
     build_by_default: true,
@@ -27,4 +29,4 @@ test_exe = executable(
   dependencies: [gtest_dep, gtest_main_dep, sp_dep],
 )
 
-test('test test', test_exe)
+test('GTest Testsuite', test_exe)

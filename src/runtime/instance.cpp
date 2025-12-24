@@ -56,34 +56,27 @@ Instance::createKernel(const std::string& kernel_path,
         return Unexpected(PROPAGATE(module));
 
     // Interrupts
-    std::function<void(Instance & instance)> interrupt_enable_func =
-        [](Instance& instance) -> void {
-        instance.getGlobalState().enableInterrupts();
+    std::function<int32_t(Instance & instance)> interrupts_enable_func =
+        [](Instance& instance) -> int32_t {
+        return instance.getGlobalState().enableInterrupts();
     };
-    std::function<int32_t(Instance&)> interrupt_disable_func =
+    std::function<int32_t(Instance&)> interrupts_disable_func =
         [](Instance& instance) -> int32_t {
         return instance.getGlobalState().disableInterrupts();
     };
+    std::function<int32_t(Instance&)> interrupts_enabled_func =
+        [](Instance& instance) -> int32_t {
+        return instance.getGlobalState().getInterruptsEnabled();
+    };
 
-    Function interrupt_enable = Function::createExternal(interrupt_enable_func);
-    Function interrupt_disable =
-        Function::createExternal(interrupt_disable_func);
+    Function interrupts_enable = Function::createExternal(interrupts_enable_func);
+    Function interrupts_disable =
+        Function::createExternal(interrupts_disable_func);
+    Function interrupts_enabled =
+        Function::createExternal(interrupts_enabled_func);
 
     // Terminal
     std::function<void(Instance&, int32_t, int32_t)> terminal_write_func =
-        [](Instance& instance, uint32_t offset, uint32_t len) -> void {
-        std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
-
-        if (offset + len < memory.size()) {
-            std::string_view msg(reinterpret_cast<char*>(&memory[offset]), len);
-            fmt::print("terminal: {}", msg);
-        }
-    };
-
-    Function terminal_write = Function::createExternal(terminal_write_func);
-
-    // Console
-    std::function<void(Instance&, int32_t, int32_t)> console_write_func =
         [](Instance& instance, uint32_t offset, uint32_t len) -> void {
         std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
 
@@ -93,7 +86,39 @@ Instance::createKernel(const std::string& kernel_path,
         }
     };
 
-    Function console_write = Function::createExternal(console_write_func);
+    Function terminal_write = Function::createExternal(terminal_write_func);
+
+    // Console
+    std::function<int32_t(Instance&, int32_t, int32_t, int32_t)> console_out_func =
+        [](Instance& instance, uint32_t buffer, uint32_t count, uint32_t nwritten) -> int32_t {
+        std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
+
+        if (buffer + count >= memory.size() || nwritten + sizeof(int32_t) >= memory.size()) {
+            return -1;
+        }
+
+        std::string_view msg(reinterpret_cast<char*>(&memory[buffer]), count);
+        fmt::print("{}", msg);
+
+        *reinterpret_cast<uint32_t*>(&memory[nwritten]) = count;
+
+        return 0;
+    };
+
+    Function console_out = Function::createExternal(console_out_func);
+
+    // Debug
+    std::function<void(Instance&, int32_t, int32_t, int32_t)> debug_log_func =
+        [](Instance& instance, uint32_t buffer, uint32_t count, int32_t level) -> void {
+        std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
+
+        if (buffer + count < memory.size()) {
+            std::string_view msg(reinterpret_cast<char*>(&memory[buffer]), count);
+            fmt::print("{}", msg);
+        }        
+    };
+
+    Function debug_log = Function::createExternal(debug_log_func);
 
     // Context
     std::function<int32_t(Instance&)> context_get_func =
@@ -119,29 +144,79 @@ Instance::createKernel(const std::string& kernel_path,
     Function context_switch = Function::createExternal(context_switch_func);
 
     // WasmDisk
-    Expected<WasmDisk> disk_exp = WasmDisk::create("rootfs.img");
+    Expected<WasmDisk> disk_exp = WasmDisk::create(rootfs_path);
     if (!disk_exp)
         return Unexpected(PROPAGATE(disk_exp));
 
     std::shared_ptr<WasmDisk> disk =
         std::make_shared<WasmDisk>(std::move(*disk_exp));
 
-    std::function<int32_t(Instance&)> wasmdisk_size_func =
-        [disk](Instance& instance) -> uint32_t { return disk->size(); };
-    std::function<void(Instance&, int32_t, int32_t, int32_t)>
-        wasmdisk_read_func = [disk](Instance& instance, uint32_t dst,
-                                    uint32_t offset, uint32_t count) -> void {
-        disk->read(&instance.getGlobalState().getMemory()[dst], offset, count);
+    std::function<int32_t(Instance&, int32_t, int32_t)> disk_read_func =
+        [disk](Instance& instance, uint32_t buf, uint32_t count) -> int32_t {
+            std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
+            if (memory.size() < buf + 1) {
+                return -1;
+            }
+
+            return disk->read(&instance.getGlobalState().getMemory()[buf], count);
     };
-    std::function<void(Instance&, int32_t, int32_t, int32_t)>
-        wasmdisk_write_func = [disk](Instance& instance, uint32_t src,
-                                     uint32_t offset, uint32_t count) -> void {
-        disk->write(&instance.getGlobalState().getMemory()[src], offset, count);
+    std::function<int32_t(Instance&, int32_t)>
+        disk_tellg_func = [disk](Instance& instance, uint32_t offset) -> int32_t {
+        std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
+        if (memory.size() < offset + sizeof(uint32_t)) {
+            return -1;
+        }
+
+        return disk->tellg(reinterpret_cast<uint32_t*>(&memory[offset]));
+    };
+    std::function<int32_t(Instance&, int32_t, int32_t, int32_t)>
+        disk_seekg_func = [disk](Instance& instance, uint32_t offset,
+                                     int32_t whence, uint32_t new_offset) -> int32_t {
+        std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
+        if (memory.size() < new_offset + sizeof(uint32_t)) {
+            return -1;
+        }
+
+        
+        return disk->seekg(offset, whence, reinterpret_cast<uint32_t*>(&memory[new_offset]));
     };
 
-    Function wasmdisk_size = Function::createExternal(wasmdisk_size_func);
-    Function wasmdisk_read = Function::createExternal(wasmdisk_read_func);
-    Function wasmdisk_write = Function::createExternal(wasmdisk_write_func);
+    Function disk_read = Function::createExternal(disk_read_func);
+    Function disk_tellg = Function::createExternal(disk_tellg_func);
+    Function disk_seekg = Function::createExternal(disk_seekg_func);
+
+    std::function<int32_t(Instance&, int32_t, int32_t)> disk_write_func =
+        [disk](Instance& instance, uint32_t buf, uint32_t count) -> int32_t {
+            std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
+            if (memory.size() < buf + 1) {
+                return -1;
+            }
+
+            return disk->write(&instance.getGlobalState().getMemory()[buf], count);
+    };
+    std::function<int32_t(Instance&, int32_t)>
+        disk_tellp_func = [disk](Instance& instance, uint32_t offset) -> int32_t {
+        std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
+        if (memory.size() < offset + sizeof(uint32_t)) {
+            return -1;
+        }
+
+        return disk->tellp(reinterpret_cast<uint32_t*>(&memory[offset]));
+    };
+    std::function<int32_t(Instance&, int32_t, int32_t, int32_t)>
+        disk_seekp_func = [disk](Instance& instance, uint32_t offset,
+                                     int32_t whence, uint32_t new_offset) -> int32_t {
+        std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
+        if (memory.size() < new_offset + sizeof(uint32_t)) {
+            return -1;
+        }
+
+        return disk->seekp(offset, whence, reinterpret_cast<uint32_t*>(&memory[new_offset]));
+    };
+
+    Function disk_write = Function::createExternal(disk_read_func);
+    Function disk_tellp = Function::createExternal(disk_tellg_func);
+    Function disk_seekp = Function::createExternal(disk_seekg_func);
 
     // Process
     std::function<int32_t(Instance&, int32_t, int32_t)> process_load_func =
@@ -201,31 +276,43 @@ Instance::createKernel(const std::string& kernel_path,
     Function process_read = Function::createExternal(process_read_func);
 
     // Devices
+    std::function<int64_t(Instance&)> timer_get_time_func =
+        [](Instance& instance) -> int64_t {
+        return instance.getTimer().getTime();
+    };
+
     std::function<void(Instance&, int32_t)> timer_set_interval_func =
         [](Instance& instance, uint32_t timout) -> void {
         instance.getTimer().setInterval(timout);
     };
 
+    Function timer_get_time =
+        Function::createExternal(timer_get_time_func);
     Function timer_set_interval =
         Function::createExternal(timer_set_interval_func);
 
     Expected<std::shared_ptr<Instance>> instance_exp = Instance::create(
         *module, {
-                     {"interrupt.enable", interrupt_enable},
-                     {"interrupt.disable", interrupt_disable},
-                     {"console.write", console_write},
-                     {"console.debug", terminal_write},
+                     {"interrupt.enable", interrupts_enable},
+                     {"interrupt.disable", interrupts_disable},
+                     {"interrupt.is_enabled", interrupts_enabled},
+                     {"console.out", console_out},
+                     {"debug.log", debug_log},
                      {"context.get", context_get},
                      {"context.create", context_create},
                      {"context.switch", context_switch},
-                     {"wasmdisk.size", wasmdisk_size},
-                     {"wasmdisk.read", wasmdisk_read},
-                     {"wasmdisk.write", wasmdisk_write},
+                     {"disk.read", disk_read},
+                     {"disk.tellg", disk_tellg},
+                     {"disk.seekg", disk_seekg},
+                     {"disk.write", disk_write},
+                     {"disk.tellp", disk_tellp},
+                     {"disk.seekp", disk_seekp},
                      {"process.load", process_load},
                      {"process.unload", process_unload},
                      {"process.run", process_run},
                      {"process.terminate", process_terminate},
                      {"process.read", process_read},
+                     {"timer.get_time", timer_get_time},
                      {"timer.set_interval", timer_set_interval},
                  });
     if (!instance_exp)
@@ -254,7 +341,7 @@ Instance::createKernel(const std::string& kernel_path,
     //     KEYBOARD_PORT,
     //     std::make_shared<Keyboard>(interrupt_handler.func_idx));
 
-    it = instance.exports_.find("syscall_handler");
+    it = instance.exports_.find("sys_call_handler");
     if (it == instance.exports_.end())
         return Unexpected(ERROR("no system call handler found"));
 
@@ -282,7 +369,13 @@ Instance::createUserProgram(const std::string& program, Instance& parent) {
         return Unexpected(PROPAGATE(module_exp));
 
     Instance& kernel = parent.getKernel();
-    Export& sys_call_handler = kernel.exports_.find("sys_call_handler")->second;
+    
+    auto it = kernel.exports_.find("sys_call_handler");
+    if (it == kernel.exports_.end()) {
+        return Unexpected(ERROR("kernel export 'sys_call_handler' not found"));
+    }
+
+    Export& sys_call_handler = it->second;
 
     std::shared_ptr<SysCall> sys_call_op =
         std::make_shared<SysCall>(sys_call_handler.func_idx);
@@ -340,7 +433,7 @@ Expected<int32_t> Instance::callRet(const std::string& name, int32_t a,
     if (!result)
         return Unexpected(PROPAGATE(result));
 
-    return active_context_->popI32();
+    return active_context_->pop().i32;
 }
 
 Instance::Instance(GlobalState&& store,
@@ -399,13 +492,14 @@ void Instance::invokeIndirect(uint32_t element_idx, size_t signature) {
 void Instance::run(OperationBase& operation) {
     Context::RunState old_state = active_context_->getRunState();
     active_instance_ = this;
-    active_context_->pushReturn(nullptr);
+    active_context_->getEpilogues().push(nullptr);
 
     Continuation continuation = operation.action(*active_instance_);
     while (continuation) {
         continuation = continuation->action(*active_instance_);
         if (!continuation)
-            continuation = active_instance_->active_context_->popReturn();
+            continuation =
+                active_instance_->active_context_->getEpilogues().pop();
     }
 
     active_context_->setRunState(old_state);
@@ -420,12 +514,12 @@ Instance::SysCall::SysCall(uint32_t sys_call_handler_idx)
 
 Continuation Instance::SysCall::action(Instance& instance) {
     Context& instance_ctx = instance.getActiveContext();
-    int32_t n = std::get<int32_t>(instance_ctx.getLocal(0));
-    int32_t a1 = std::get<int32_t>(instance_ctx.getLocal(1));
-    int32_t a2 = std::get<int32_t>(instance_ctx.getLocal(2));
-    int32_t a3 = std::get<int32_t>(instance_ctx.getLocal(3));
-    int32_t a4 = std::get<int32_t>(instance_ctx.getLocal(4));
-    int32_t a5 = std::get<int32_t>(instance_ctx.getLocal(5));
+    int32_t n = instance_ctx.getLocal(0).i32;
+    int32_t a1 = instance_ctx.getLocal(1).i32;
+    int32_t a2 = instance_ctx.getLocal(2).i32;
+    int32_t a3 = instance_ctx.getLocal(3).i32;
+    int32_t a4 = instance_ctx.getLocal(4).i32;
+    int32_t a5 = instance_ctx.getLocal(5).i32;
 
     Instance& kernel = instance.getKernel();
 
@@ -440,7 +534,7 @@ Continuation Instance::SysCall::action(Instance& instance) {
     instance.switchToKernel();
 
     const Operation& epilogue = createEpilogue(instance);
-    kernel_ctx.pushReturn(epilogue.get());
+    kernel_ctx.getEpilogues().push(epilogue.get());
     Function syscall_handler =
         kernel.getGlobalState().getFunction(sys_call_handler_idx_);
     return syscall_handler.enterFrame(kernel_ctx);
@@ -459,7 +553,7 @@ Continuation Instance::SysCall::Epilogue::action(Instance& kernel) {
 
     Context& proc_ctx = suspended_instance_.getActiveContext();
     if (proc_ctx.getRunState() == Context::RunState::running) {
-        int32_t result = kernel_ctx.popI32(); // else this is the exit code
+        int32_t result = kernel_ctx.pop().i32; // else this is the exit code
         proc_ctx.pushI32(result);
         kernel.switchToInstance(suspended_instance_);
     }

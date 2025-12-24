@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <vector>
+#include <fstream>
 
 #include "util/error_handling.hpp"
 
@@ -9,13 +10,18 @@ class WasmDisk {
 public:
     static Expected<WasmDisk> create(const std::string& path);
 
-    void read(void* dst, uint32_t offset, uint32_t count);
-    void write(void* src, uint32_t offset, uint32_t count);
+    // input
+    int read(void* dst, uint32_t count);
+    int tellg(uint32_t* offset);
+    int seekg(int32_t offset, int whence, uint32_t *new_offset);
 
-    uint32_t size() const { return data_.size(); }
+    // output
+    int write(void* src, uint32_t count);
+    int tellp(uint32_t* offset);
+    int seekp(int32_t offset, int whence, uint32_t *new_offset);
 
 private:
-    std::vector<uint8_t> data_;
+    std::fstream disk_;
 
-    WasmDisk(std::vector<uint8_t>&& data);
+    WasmDisk(std::fstream&& disk);
 };

@@ -67,6 +67,33 @@ private:
     explicit U64(uint64_t val) : val_(val) {}
 };
 
+/******************/
+/* Floating-Point */
+/******************/
+
+struct F32 {
+public:
+    static Expected<F32> parse(std::istream& in);
+
+    float getVal() const { return val_; }
+
+private:
+    float val_;
+
+    explicit F32(float val) : val_(val) {}
+};
+
+struct F64 {
+    static Expected<F64> parse(std::istream& in);
+
+    double getVal() const { return val_; }
+
+private:
+    double val_;
+
+    explicit F64(double val) : val_(val) {}
+};
+
 /*********/
 /* Names */
 /*********/

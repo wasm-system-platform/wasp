@@ -9,7 +9,69 @@
 
 namespace runtime {
 
-using Value = std::variant<int32_t, int64_t, float, double>;
+// using Value = std::variant<int32_t, int64_t, float, double>;
+
+class Stack {
+public:
+    size_t size() const { return top; }
+
+    Value& peek() { return data[top - 1]; }
+
+    inline Value pop() { return data[--top]; }
+
+    inline void push(Value value) { data[top++] = value; }
+
+private:
+    size_t top = 0;
+    std::array<Value, UINT16_MAX> data;
+};
+
+class Locals {
+public:
+    void pushLocals(const std::vector<Value>& locals) {
+        size_t frame_size = locals.size();
+
+        if (stack_pointer_ + frame_size > stack_.size()) {
+            stack_.resize(stack_pointer_ + frame_size);
+        }
+
+        std::memcpy(stack_.data() + stack_pointer_, locals.data(),
+                    frame_size * sizeof(Value));
+
+        frame_pointers_.push_back(frame_pointer_);
+        frame_pointer_ = stack_pointer_;
+        stack_pointer_ += frame_size;
+    }
+
+    void popLocals() {
+        stack_pointer_ = frame_pointer_;
+        frame_pointer_ = frame_pointers_.back();
+        frame_pointers_.pop_back();
+    }
+
+    Value getLocal(uint32_t idx) const { return stack_[frame_pointer_ + idx]; }
+
+    void setLocal(uint32_t idx, Value value) {
+        stack_[frame_pointer_ + idx] = value;
+    }
+
+private:
+    size_t stack_pointer_ = 0;
+    size_t frame_pointer_ = 0;
+    std::vector<size_t> frame_pointers_;
+    std::vector<Value> stack_;
+};
+
+class Epilogues {
+public:
+    void push(Continuation epilogue) { data[top++] = epilogue; }
+
+    Continuation pop() { return data[--top]; }
+
+private:
+    size_t top = 0;
+    std::array<Continuation, UINT16_MAX> data;
+};
 
 class OperationBase;
 using Continuation = OperationBase*;
@@ -22,48 +84,28 @@ public:
 
     inline size_t getId() const { return id_; }
 
-    size_t size() const { return values_.size(); }
-    inline void push(Value value) { values_.push(value); }
-    inline void pushI32(int32_t value) { values_.push(value); }
-    inline void pushI64(int64_t value) { values_.push(value); }
-    inline Value pop() {
-        Value top = values_.top();
-        values_.pop();
-        return top;
-    }
-    inline int32_t popI32() {
-        int32_t top = std::get<int32_t>(values_.top());
-        values_.pop();
-        return top;
-    }
-    inline int64_t popI64() {
-        int64_t top = std::get<int64_t>(values_.top());
-        values_.pop();
-        return top;
-    }
-    inline double popF64() {
-        double top = std::get<double>(values_.top());
-        values_.pop();
-        return top;
-    }
-    inline void drop() { values_.pop(); }
+    size_t size() const { return stack_->size(); }
+    inline void push(Value value) { stack_->push(value); }
+    inline void pushI32(int32_t value) { stack_->push(value); }
+    inline void pushI64(int64_t value) { stack_->push(value); }
 
-    inline void pushLocals(const std::vector<Value>& locals) {
-        locals_.push(locals);
+    inline Stack& getStack() { return *stack_; }
+    inline Value pop() { return stack_->pop(); }
+    inline void drop() { stack_->pop(); }
+
+    void pushLocals(const std::vector<Value>& locals) {
+        return locals_.pushLocals(locals);
     }
-    inline void popLocals() { locals_.pop(); }
-    inline Value getLocal(uint32_t idx) { return locals_.top()[idx]; }
-    inline void setLocal(uint32_t idx, Value val) { locals_.top()[idx] = val; }
+    inline void popLocals() { locals_.popLocals(); }
+    inline Value getLocal(uint32_t idx) { return locals_.getLocal(idx); }
+    inline void setLocal(uint32_t idx, Value value) {
+        locals_.setLocal(idx, value);
+    }
 
     void setRunState(RunState state) { run_state_ = state; }
     RunState getRunState() const { return run_state_; }
 
-    inline void pushReturn(Continuation ret) { ret_stack_.push(ret); }
-    inline Continuation popReturn() {
-        Continuation top = ret_stack_.top();
-        ret_stack_.pop();
-        return top;
-    }
+    Epilogues& getEpilogues() { return *epilogues_; }
 
     // waiting
     inline void setTimeout(uint32_t addr, int64_t timout) {
@@ -82,11 +124,9 @@ public:
 private:
     size_t id_;
 
-    std::stack<Value> values_;
-    std::stack<std::vector<Value>> locals_;
-    std::vector<Operation> control_stack_;
-    std::stack<Continuation> unwind_stack_;
-    std::stack<Continuation> ret_stack_;
+    Locals locals_;
+    std::unique_ptr<Stack> stack_ = std::make_unique<Stack>();
+    std::unique_ptr<Epilogues> epilogues_ = std::make_unique<Epilogues>();
 
     RunState run_state_;
 

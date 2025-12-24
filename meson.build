@@ -46,7 +46,11 @@ sp_dep = declare_dependency(
 sp = executable(
     'wasm-sp',
     sources: 'src/main.cpp',
-    dependencies: [sp_dep, fmt_dep]
+    dependencies: [
+        sp_dep, 
+        fmt_dep,
+        dependency('cxxopts')
+    ]
 )
 
 subdir('test')

@@ -87,8 +87,10 @@ public:
     static const FunctionType& ConsumerI32I32();    // (i32, i32) -> ()
     static const FunctionType& ConsumerI32I32I32(); // (i32, i32, i32) -> ()
     static const FunctionType& Producer();          // () -> (i32)
+    static const FunctionType& I64Producer();       // () -> (i64)
     static const FunctionType& ProducerI32();       // (i32) -> (i32)
     static const FunctionType& ProducerI32I32();    // (i32, i32) -> (i32)
+    static const FunctionType& I32Producer_I32_I32_I32();    // (i32, i32, i32) -> (i32)
     static const FunctionType&
     ProducerI32_I32_I32_I32(); // (i32, i32, i32, i32) -> (i32)
     static const FunctionType&

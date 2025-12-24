@@ -7,6 +7,22 @@
 
 namespace runtime {
 
+struct Value {
+    union {
+        int32_t i32;
+        int64_t i64;
+        float f32;
+        double f64;
+    };
+
+    Value() = default;
+    Value(int32_t i32) noexcept : i32(i32) {}
+    Value(int64_t i64) noexcept : i64(i64) {}
+    Value(float f32) noexcept : f32(f32) {}
+    Value(double f64) noexcept : f64(f64) {}
+};
+static_assert(std::is_trivially_copyable_v<Value>);
+
 class Instance;
 class Context;
 class GlobalState;
@@ -26,30 +42,32 @@ public:
            const std::vector<FunctionType>& func_types,
            std::vector<Operation>& targets);
 
-    virtual void addNext(Operation next) {
-        assert(!next_ || (next_.get() != next.get()));
-        if (next_)
-            next_->addNext(next);
-        else
-            next_ = next;
-    }
-    void clearNext() { next_.reset(); }
+    virtual Operation addNext(Operation op);
+    void clearNext() { successor_.reset(); }
 
-    virtual Continuation action(Instance& instance) { return next_.get(); }
+    virtual Continuation action(Instance& instance) { return successor_.get(); }
     virtual Expected<Continuation> eval(Context& context) const {
         return Unexpected(ERROR("evaluate called on non constant expression"));
     }
+    virtual Value produce(Instance& instance) { assert(false); }
+    virtual void consume(Instance& instance, Value value) { assert(false); }
+
+    virtual bool isProducer() const { return false; }
+    virtual bool isConsumer() const { return false; }
 
     template <class Derived> const Derived& as() const {
         return reinterpret_cast<const Derived&>(*this);
     }
-    template <class Derived> Derived& as() const {
-        return reinterpret_cast<const Derived&>(*this);
+    template <class Derived> Derived& as() {
+        return reinterpret_cast<Derived&>(*this);
     }
 
+    std::string getFormattedAddres(Instance& instance) const;
+
 protected:
-    Operation next_;
-    size_t addr_;
+    Operation successor_;
+    Continuation next_ = nullptr;
+    size_t addr_ = UINT32_MAX;
 
     OperationBase() = default;
     OperationBase(size_t addr) : addr_(addr) {}
@@ -63,19 +81,21 @@ protected:
 
 class Tick : public OperationBase {
 public:
+    Tick(size_t addr) : OperationBase(addr) {}
+
     Continuation action(Instance& instance) override;
 
 private:
     class Epilogue : public OperationBase {
     public:
-        Epilogue(size_t idx, Instance& suspended_instance, Tick& parent);
+        Epilogue(size_t idx, Instance& suspended, Tick& parent);
 
         Continuation action(Instance& instance) override;
 
     private:
         size_t idx_;
-        Instance& suspended_instance_;
-        Tick& parent_;
+        Instance* suspended_;
+        Tick* parent_;
     };
 
     std::vector<Operation> epilogues_;
@@ -96,7 +116,11 @@ public:
     Continuation action(Instance& instance) override;
 };
 
-class Nop : public OperationBase {};
+class Nop : public OperationBase {
+public:
+    Nop(const grammar::Nop& nop) : OperationBase(nop.getAddress()) {}
+    Nop(size_t addr) : OperationBase(addr) {}
+};
 
 class Block : public OperationBase {
 public:
@@ -104,13 +128,16 @@ public:
           const std::vector<FunctionType>& func_types,
           std::vector<Operation>& branch_targets);
 
-    void addNext(Operation next) override { end_->addNext(next); }
+    Operation addNext(Operation next) override {
+        end_->addNext(next);
+        return shared_from_this();
+    }
 
     Continuation action(Instance& instance) override;
 
 private:
     Operation start_;
-    Operation end_ = std::make_shared<Nop>();
+    Operation end_ = std::make_shared<Nop>(addr_);
 };
 
 class Loop : public OperationBase {
@@ -118,20 +145,48 @@ public:
     Loop(const grammar::Loop& loop, const std::vector<FunctionType>& func_types,
          std::vector<Operation>& branch_targets);
 
-    void addNext(Operation next) override { end_->addNext(next); }
+    Operation addNext(Operation next) override {
+        end_->addNext(next);
+        return shared_from_this();
+    }
 
     Continuation action(Instance& instance) override;
 
 private:
-    Operation start_ = std::make_shared<Tick>();
-    Operation end_ = std::make_shared<Nop>();
+    Operation start_ = std::make_shared<Tick>(addr_);
+    Operation end_ = std::make_shared<Nop>(addr_);
+};
+
+class IfThen : public OperationBase {
+public:
+    IfThen(const grammar::IfElse& if_else,
+           const std::vector<FunctionType>& func_types,
+           std::vector<Operation>& branch_targets);
+
+    Continuation action(Instance& instance) override;
+
+protected:
+    Operation then_;
+};
+
+class IfElse : public OperationBase {
+public:
+    IfElse(const grammar::IfElse& if_else,
+           const std::vector<FunctionType>& func_types,
+           std::vector<Operation>& branch_targets);
+
+    Continuation action(Instance& instance) override;
+
+private:
+    Operation then_;
+    Operation else_;
 };
 
 class Branch : public OperationBase {
 public:
     Branch(const grammar::Branch& branch, std::vector<Operation>& targets);
 
-    void addNext(Operation) override {}
+    Operation addNext(Operation) override { return shared_from_this(); }
 
     Continuation action(Instance& instance) override;
 
@@ -154,7 +209,7 @@ public:
     BranchTable(const grammar::BranchTable& br_table,
                 std::vector<Operation>& targets);
 
-    void addNext(Operation) override {}
+    Operation addNext(Operation) override { return shared_from_this(); }
 
     Continuation action(Instance& instance) override;
 
@@ -168,7 +223,10 @@ public:
     Call(const grammar::Call& call);
     Call(uint32_t func_idx, size_t addr);
 
-    void addNext(Operation next) override { epilogue_->addNext(next); }
+    Operation addNext(Operation next) override {
+        epilogue_->addNext(next);
+        return shared_from_this();
+    }
 
     Continuation action(Instance& instance) override;
 
@@ -219,12 +277,9 @@ private:
 
 class Return : public OperationBase {
 public:
-    void addNext(Operation next) override {}
+    Operation addNext(Operation next) override { return shared_from_this(); }
 
     Continuation action(Instance& instance) override;
-
-private:
-    uint32_t func_idx_;
 };
 
 /***************************/
@@ -267,6 +322,16 @@ private:
     uint32_t local_idx_;
 };
 
+class LocalTee : public OperationBase {
+public:
+    LocalTee(const grammar::LocalTee& local_tee);
+
+    Continuation action(Instance& instance) override;
+
+private:
+    uint32_t local_idx_;
+};
+
 class GlobalGet : public OperationBase {
 public:
     GlobalGet(const grammar::GlobalGet& global_get);
@@ -297,6 +362,9 @@ public:
 
     Continuation action(Instance& instance) override;
     Expected<Continuation> eval(Context& context) const override;
+    Value produce(Instance& instance) override;
+
+    bool isProducer() const override { return true; }
 
 private:
     int32_t i_;
@@ -429,12 +497,24 @@ public:
 
 class I32Add : public OperationBase {
 public:
+    I32Add(const grammar::I32Add& i32_add)
+        : OperationBase(i32_add.getAddress()) {}
+
     Continuation action(Instance& instance) override;
+    void consume(Instance& instance, Value right) override;
+
+    bool isConsumer() const override { return true; }
 };
 
 class I32Sub : public OperationBase {
 public:
+    I32Sub(const grammar::I32Sub& i32_sub)
+        : OperationBase(i32_sub.getAddress()) {}
+
     Continuation action(Instance& instance) override;
+    void consume(Instance& instance, Value right) override;
+
+    bool isConsumer() const override { return true; }
 };
 
 class I32Mul : public OperationBase {
@@ -769,7 +849,7 @@ private:
     uint32_t offset_;
     uint32_t align_;
 
-    Operation idle_ = std::make_shared<Tick>();
+    Operation idle_ = std::make_shared<Tick>(addr_);
 };
 
 class AtomicLoad : public OperationBase {
@@ -848,6 +928,20 @@ public:
 private:
     uint32_t offset_;
     uint32_t align_;
+};
+
+/* Optimized Operations */
+
+class Composite : public OperationBase {
+public:
+    Composite(const Operation& producer, const Operation& consumer)
+        : producer_(producer), consumer_(consumer) {}
+
+    Continuation action(Instance& instance) override;
+
+private:
+    Operation producer_;
+    Operation consumer_;
 };
 
 } // namespace runtime

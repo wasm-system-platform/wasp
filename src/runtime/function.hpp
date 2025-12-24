@@ -14,7 +14,7 @@ public:
     static constexpr uint32_t NULL_IDX = UINT32_MAX;
 
     Function(Operation&& body, size_t num_params, std::vector<Value>&& locals,
-             size_t signature);
+             size_t signature, std::string formatted_type = "");
 
     static Function create(const FunctionType& type,
                            const std::vector<FunctionType>& types,
@@ -22,21 +22,26 @@ public:
 
     // () -> ()
     static Function createExternal(std::function<void(Instance&)>);
-    // () -> (i32)
+    // (i32) -> ()
     static Function createExternal(std::function<void(Instance&, int32_t)>);
-    // () -> (i32, i32)
+    // (i32, i32) -> ()
     static Function
         createExternal(std::function<void(Instance&, int32_t, int32_t)>);
-    // () -> (i32, i32, i32)
+    // (i32, i32, i32) -> ()
     static Function createExternal(
         std::function<void(Instance&, int32_t, int32_t, int32_t)>);
-    // (i32) -> ()
+    // () -> (i32)
     static Function createExternal(std::function<int32_t(Instance&)>);
+    // () -> (i64)
+    static Function createExternal(std::function<int64_t(Instance&)>);
     // (i32) -> (i32)
     static Function createExternal(std::function<int32_t(Instance&, int32_t)>);
     // (i32) -> (i32, i32)
     static Function
         createExternal(std::function<int32_t(Instance&, int32_t, int32_t)>);
+    // (i32) -> (i32, i32)
+    static Function
+        createExternal(std::function<int32_t(Instance&, int32_t, int32_t, int32_t)>);
     // (i32) -> (i32, i32, i32, i32)
     static Function createExternal(
         std::function<int32_t(Instance&, int32_t, int32_t, int32_t, int32_t)>);
@@ -58,6 +63,8 @@ public:
 
     inline size_t getSignature() const { return signature_; }
 
+    const std::string& getFormattedType() const { return formatted_type_; }
+
     bool isCompatible(const FunctionType& other) const;
 
 private:
@@ -75,6 +82,7 @@ private:
     size_t num_params_;
     std::vector<Value> locals_;
     size_t signature_;
+    std::string formatted_type_;
 };
 
 } // namespace runtime

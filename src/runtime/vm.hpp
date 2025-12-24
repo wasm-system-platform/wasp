@@ -129,12 +129,20 @@ public:
         globals_.setGlobal(idx, val);
     }
 
+    inline std::vector<Function>& getFunctions() { return funcs_; }
+    inline std::vector<uint32_t>& getIndirections() { return indirect_funcs_; }
+
     inline Function& getFunction(uint32_t idx) { return funcs_[idx]; }
     inline Function& getFunctionIndirect(uint32_t idx) {
         return funcs_[indirect_funcs_[idx]];
     }
 
-    void enableInterrupts() { interrupts_enabled_ = true; }
+    bool getInterruptsEnabled() { return interrupts_enabled_; }
+    bool enableInterrupts() {
+        bool old = interrupts_enabled_;
+        interrupts_enabled_ = true;
+        return old;
+    }
     bool disableInterrupts() {
         bool old = interrupts_enabled_;
         interrupts_enabled_ = false;

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <chrono>
+
 #include "devices/device.hpp"
 
 class Timer : public DeviceBase {
@@ -15,6 +17,8 @@ public:
 
     void clear();
 
+    uint64_t getTime();
+
 private:
     struct Timout {
         uint32_t remaining_ = 0;
@@ -23,5 +27,6 @@ private:
         bool interval_mode_ = false;
     };
 
+    std::chrono::time_point<std::chrono::steady_clock> boot_time_ = std::chrono::steady_clock::now();
     Timout t_;
 };

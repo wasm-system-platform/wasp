@@ -55,11 +55,7 @@ MemoryInstances::create(const grammar::Module& module) {
         if (dummy_context.size() != 1)
             return Unexpected(ERROR("malformed constant expression"));
 
-        Value offset_val = dummy_context.pop();
-        if (!std::holds_alternative<int32_t>(offset_val))
-            return Unexpected(ERROR("malformed constant expression"));
-
-        uint32_t offset = static_cast<uint32_t>(std::get<int32_t>(offset_val));
+        uint32_t offset = dummy_context.pop().i32;
         const std::vector<uint8_t>& bytes = segment.getBytes();
 
         if (offset + bytes.size() > heap.size())
@@ -188,11 +184,7 @@ DebugInfoInstance DebugInfoInstance::create(const grammar::Module& module) {
 }
 
 std::string DebugInfoInstance::getFormattedLocation(size_t addr) const {
-    for (int i = 0; i < 32; i++) {
-        // fmt::println("{}");
-    }
-
-    std::string unknown_loc = fmt::format("<0x{:x}>", addr);
+    std::string unknown_loc = fmt::format("<0x{:06x}>", addr);
 
     if (line_info_segments_.empty())
         return unknown_loc;
@@ -328,7 +320,7 @@ GlobalState::evaluateExpressionI32(const grammar::Expression& expression) {
     if (dummy_context.size() != 1)
         return Unexpected(ERROR("malformed constant expression"));
 
-    return dummy_context.popI32();
+    return dummy_context.pop().i32;
 }
 
 } // namespace runtime

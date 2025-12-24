@@ -47,8 +47,6 @@ Expected<Module> Module::parse(std::istream& in) {
     std::vector<CustomSection> custom_sections;
 
     while (true) {
-        size_t module_start = static_cast<size_t>(in.tellg());
-
         Expected<Byte> section_id_exp = Byte::parse(in);
         if (!section_id_exp)
             return Unexpected(PROPAGATE(section_id_exp));
@@ -58,6 +56,10 @@ Expected<Module> Module::parse(std::istream& in) {
         if (!size_res)
             return Unexpected(PROPAGATE(size_res));
         uint32_t size = *size_res;
+
+        /* This needed for the debug info but i don't know which address is used
+         * by llvm as base address, maybe adjust */
+        size_t module_start = static_cast<size_t>(in.tellg());
 
         switch (section_id) {
         case CustomSection::ID: {

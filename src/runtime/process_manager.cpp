@@ -50,8 +50,8 @@ void ProcessManager::loadProgram(uint32_t pid, Instance& kernel,
     process.program_ctx = ctx;
     process.entry = std::make_shared<Call>(entry_func_idx, UINT32_MAX);
 
-    ctx->pushReturn(nullptr);
-    ctx->pushReturn(process.entry.get());
+    ctx->getEpilogues().push(nullptr);
+    ctx->getEpilogues().push(process.entry.get());
 }
 
 Instance& ProcessManager::getProcess(uint32_t pid) {

@@ -95,7 +95,7 @@ Expected<DebugLineSection> DebugLineSection::parse(std::istream& in) {
 
                 Segment s;
                 s.start_addr = a.address;
-                s.start_addr = b.address;
+                s.end_addr = b.address;
                 s.src_file_idx = src_files.size() + a.file - 1;
                 s.line = a.line;
 

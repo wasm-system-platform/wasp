@@ -20,18 +20,18 @@ size_t ContextManager::createContext() {
 void ContextManager::prepareContext(size_t id, uint32_t entry_func_idx,
                                     int32_t param1) {
     std::shared_lock lock(mutex_);
-    auto& [context, entry] = contexts_[id];
+    auto& [ctxt, entry] = contexts_[id];
 
     static const size_t entry_signature =
         std::hash<FunctionType>()(FunctionType::ConsumerI32());
     entry = std::make_shared<CallIndirect>(entry_signature);
 
-    context->pushI32(param1);
-    context->pushI32(entry_func_idx);
+    ctxt->pushI32(param1);
+    ctxt->pushI32(entry_func_idx);
 
-    context->pushReturn(nullptr);
-    context->pushReturn(entry.get());
-    context->setRunState(Context::RunState::rdy);
+    ctxt->getEpilogues().push(nullptr);
+    ctxt->getEpilogues().push(entry.get());
+    ctxt->setRunState(Context::RunState::rdy);
 }
 
 const std::shared_ptr<Context>& ContextManager::getContext(size_t id) {

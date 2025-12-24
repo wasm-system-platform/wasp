@@ -100,6 +100,34 @@ Expected<U64> U64::parse(std::istream& in) {
     return U64(result);
 }
 
+/******************/
+/* Floating-Point */
+/******************/
+
+Expected<F32> F32::parse(std::istream& in) {
+    float f;
+
+    if (!in.read(reinterpret_cast<char*>(&f), sizeof(float))) {
+        return Unexpected(ERROR("unexpected end of file"));
+    }
+
+    return F32(f);
+}
+
+Expected<F64> F64::parse(std::istream& in) {
+    double f;
+
+    if (!in.read(reinterpret_cast<char*>(&f), sizeof(double))) {
+        return Unexpected(ERROR("unexpected end of file"));
+    }
+
+    return F64(f);
+}
+
+/*********/
+/* Names */
+/*********/
+
 Expected<Name> Name::parse(std::istream& in) {
     Expected<U32> u32_exp = U32::parse(in);
     if (!u32_exp.has_value())
