@@ -68,9 +68,7 @@ private:
 
 class Epilogues {
 public:
-    void push(Continuation epilogue) {
-        if (epilogue == nullptr) fmt::println("oof");
-        data_[top++] = epilogue; }
+    void push(Continuation epilogue) { data_[top++] = epilogue; }
     Continuation pop() { return data_[--top]; }
     Continuation peek() { return data_[top - 1]; }
     void swap(Continuation epilogue) { data_[top - 1] = epilogue; }

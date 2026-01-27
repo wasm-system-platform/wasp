@@ -235,7 +235,7 @@ public:
 private:
     class Epilogue : public OperationBase {
     public:
-        Epilogue(uint32_t func_idx);
+        Epilogue(uint32_t func_idx, size_t addr);
 
         Continuation action(Instance& instance) override;
 

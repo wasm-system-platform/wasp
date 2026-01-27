@@ -7,43 +7,43 @@ MemoryManagementUnit& MemoryManagementUnit::instance() {
     return mmu;
 }
 
-size_t MemoryManagementUnit::createTable() {
-    size_t id = tables_.size();
+Errno MemoryManagementUnit::createTable(uint32_t* ptable_idx) {
+    *ptable_idx = tables_.size();
     tables_.emplace_back();
-    return id;
-}
-
-Errno MemoryManagementUnit::loadTable(size_t table_idx) {
-    if (table_idx >= tables_.size()) {
-        return Errno::INVALID_ARGUMENT;
-    }
-
-    active_idx_ = table_idx;
     return Errno::SUCCESS;
 }
 
-Errno MemoryManagementUnit::mapPage(size_t table_idx, uint32_t va, uint8_t* page, int prot) {
-    if (table_idx >= tables_.size()) {
+Errno MemoryManagementUnit::loadTable(uint32_t ptable_idx) {
+    if (ptable_idx >= tables_.size()) {
         return Errno::INVALID_ARGUMENT;
     }
 
-    return tables_[table_idx].mapPage(va, page, prot);
+    active_idx_ = ptable_idx;
+    return Errno::SUCCESS;
 }
 
-Errno MemoryManagementUnit::unmapPage(size_t table_idx, uint32_t va, uint8_t** pa, int* prot) {
-    if (table_idx >= tables_.size()) {
+Errno MemoryManagementUnit::mapPage(uint32_t ptable_idx, uint32_t virt_addr, uint32_t phys_addr, uint8_t* real_addr, int prot) {
+    if (ptable_idx >= tables_.size()) {
         return Errno::INVALID_ARGUMENT;
     }
 
-    return tables_[table_idx].unmapPage(va, pa, prot);
+    return tables_[ptable_idx].mapPage(virt_addr, phys_addr, real_addr, prot);
 }
 
-Errno MemoryManagementUnit::getPage(size_t table_idx, uint32_t va, uint8_t** pa, int* prot) {
-    if (table_idx >= tables_.size()) {
+Errno MemoryManagementUnit::unmapPage(uint32_t ptable_idx, uint32_t virt_addr, uint32_t* phys_addr, int* prot) {
+    if (ptable_idx >= tables_.size()) {
         return Errno::INVALID_ARGUMENT;
     }
 
-    return tables_[table_idx].getPage(va, pa, prot);
+    return tables_[ptable_idx].unmapPage(virt_addr, phys_addr, prot);
+}
+
+Errno MemoryManagementUnit::getPage(uint32_t ptable_idx, uint32_t virt_addr, uint32_t* phys_addr, int* prot) {
+    if (ptable_idx >= tables_.size()) {
+        return Errno::INVALID_ARGUMENT;
+    }
+
+    return tables_[ptable_idx].getPage(virt_addr, phys_addr, prot);
 }
 
 Errno MemoryManagementUnit::read(uint32_t va, std::vector<uint8_t>& dst) {
@@ -230,19 +230,19 @@ Errno MemoryManagementUnit::checkAccess(uint32_t va, AccessType access_type) {
     return tables_[active_idx_].translate(va, &pa, access_type);
 }
 
-Errno PageTable::mapPage(uint32_t va, uint8_t* page, int prot) {
-    uint16_t page_num = va >> 16;
+Errno PageTable::mapPage(uint32_t virt_addr, uint32_t phys_addr, uint8_t* real_addr, int prot) {
+    uint16_t page_num = virt_addr >> 16;
 
     if (mapping_.find(page_num) != mapping_.end()) {
         return Errno::EXIST;
     }
 
-    mapping_[page_num] = Mapping{page, prot};
+    mapping_[page_num] = Mapping{phys_addr, real_addr, prot};
     return Errno::SUCCESS;
 }
 
-Errno PageTable::unmapPage(uint32_t va, uint8_t** pa, int* prot) {
-    uint16_t page_num = va >> 16;
+Errno PageTable::unmapPage(uint32_t virt_addr, uint32_t* phys_addr, int* prot) {
+    uint16_t page_num = virt_addr >> 16;
 
     auto it = mapping_.find(page_num);
     if (it == mapping_.end()) {
@@ -250,8 +250,8 @@ Errno PageTable::unmapPage(uint32_t va, uint8_t** pa, int* prot) {
     }
 
     const Mapping& mapping = it->second;
-    if (pa) {
-        *pa = mapping.page;
+    if (phys_addr) {
+        *phys_addr = mapping.phys_addr;
     }
     if (prot) {
         *prot = mapping.prot;
@@ -261,8 +261,8 @@ Errno PageTable::unmapPage(uint32_t va, uint8_t** pa, int* prot) {
     return Errno::SUCCESS;
 }
 
-Errno PageTable::getPage(uint32_t va, uint8_t** pa, int* prot) {
-    uint16_t page_num = va >> 16;
+Errno PageTable::getPage(uint32_t virt_addr, uint32_t* phys_addr, int* prot) {
+    uint16_t page_num = virt_addr >> 16;
 
     auto it = mapping_.find(page_num);
     if (it == mapping_.end()) {
@@ -270,8 +270,8 @@ Errno PageTable::getPage(uint32_t va, uint8_t** pa, int* prot) {
     }
 
     const Mapping& mapping = it->second;
-    if (pa) {
-        *pa = mapping.page;
+    if (phys_addr) {
+        *phys_addr = mapping.phys_addr;
     }
     if (prot) {
         *prot = mapping.prot;
@@ -297,6 +297,6 @@ Errno PageTable::translate(uint32_t va, uint8_t** pa, AccessType access_type) {
         return Errno::PERMISSION_DENIED;
     }
 
-    *pa = mapping.page + offset;
+    *pa = mapping.real_addr + offset;
     return Errno::SUCCESS;
 }

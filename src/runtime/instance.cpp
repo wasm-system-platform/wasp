@@ -317,41 +317,60 @@ Instance::createKernel(const std::string& kernel_path,
         [](Instance& instance) -> int32_t {
         return MemoryManagementUnit::instance().activeTable();
     };
-    std::function<int32_t(Instance&, int32_t, int32_t, int32_t, int32_t)> mmu_map_page_func =
-        [](Instance& instance, int32_t table_idx, uint32_t va, uint32_t pa, int32_t prot) -> int32_t {
+    std::function<int32_t(Instance&, int32_t)> mmu_create_table_func =
+        [](Instance& instance, uint32_t ptable_idx_ptr) -> int32_t {
         std::vector<uint8_t>& mem = instance.getGlobalState().getMemory();
-        if (pa > mem.size()) {
+        if (ptable_idx_ptr + sizeof(uint32_t) > mem.size()) {
+            return static_cast<uint32_t>(Errno::BAD_ADDRESS);
+        }
+
+        uint32_t* ptable_idx = reinterpret_cast<uint32_t*>(&mem[ptable_idx_ptr]);
+        return static_cast<int32_t>(MemoryManagementUnit::instance().createTable(ptable_idx));
+    };
+    std::function<int32_t(Instance&, int32_t)> mmu_switch_table_func =
+        [](Instance& instance, int32_t table_idx) -> int32_t {
+            fmt::println("switch_table: table_idx={}", table_idx);
+        return static_cast<int32_t>(MemoryManagementUnit::instance().loadTable(table_idx));
+    };
+    std::function<int32_t(Instance&, int32_t, int32_t, int32_t, int32_t)> mmu_map_page_func =
+        [](Instance& instance, int32_t table_idx, uint32_t virt_addr, uint32_t phys_addr, int32_t prot) -> int32_t {
+        std::vector<uint8_t>& mem = instance.getGlobalState().getMemory();
+        if (phys_addr > mem.size()) {
             return static_cast<int32_t>(Errno::BAD_ADDRESS);
         }
-        uint8_t* page = &mem[pa];
+        uint8_t* real_addr = &mem[phys_addr];
 
-        return static_cast<int32_t>(MemoryManagementUnit::instance().mapPage(table_idx, va, page, prot));
+        return static_cast<int32_t>(MemoryManagementUnit::instance().mapPage(table_idx, virt_addr, phys_addr, real_addr, prot));
     };
     std::function<int32_t(Instance&, int32_t, int32_t, int32_t, int32_t)> mmu_unmap_page_func =
-        [](Instance& instance, int32_t table_idx, uint32_t va, uint32_t pa_ptr, int32_t prot_ptr) -> int32_t {
+        [](Instance& instance, int32_t table_idx, uint32_t virt_addr, uint32_t phys_addr_ptr, int32_t prot_ptr) -> int32_t {
         std::vector<uint8_t>& mem = instance.getGlobalState().getMemory();
-        if (pa_ptr > mem.size() || prot_ptr > mem.size()) {
+        if (phys_addr_ptr > mem.size() || prot_ptr > mem.size()) {
             return static_cast<int32_t>(Errno::BAD_ADDRESS);
         }
-        uint8_t** pa = reinterpret_cast<uint8_t**>(&mem[pa_ptr]);
+        uint32_t* phys_addr = reinterpret_cast<uint32_t*>(&mem[phys_addr_ptr]);
         int* prot = reinterpret_cast<int32_t*>(&mem[prot_ptr]);
 
-        return static_cast<int32_t>(MemoryManagementUnit::instance().unmapPage(table_idx, va, pa, prot));
+        return static_cast<int32_t>(MemoryManagementUnit::instance().unmapPage(table_idx, virt_addr, phys_addr, prot));
     };
     std::function<int32_t(Instance&, int32_t, int32_t, int32_t, int32_t)> mmu_get_page_func =
-        [](Instance& instance, int32_t table_idx, uint32_t va, uint32_t pa_ptr, int32_t prot_ptr) -> int32_t {
+        [](Instance& instance, int32_t table_idx, uint32_t virt_addr, uint32_t phys_addr_ptr, int32_t prot_ptr) -> int32_t {
         std::vector<uint8_t>& mem = instance.getGlobalState().getMemory();
-        if (pa_ptr > mem.size() || prot_ptr > mem.size()) {
+        if (phys_addr_ptr > mem.size() || prot_ptr > mem.size()) {
             return static_cast<int32_t>(Errno::BAD_ADDRESS);
         }
-        uint8_t** pa = reinterpret_cast<uint8_t**>(&mem[pa_ptr]);
+        uint32_t* phys_addr = reinterpret_cast<uint32_t*>(&mem[phys_addr_ptr]);
         int* prot = reinterpret_cast<int32_t*>(&mem[prot_ptr]);
 
-        return static_cast<int32_t>(MemoryManagementUnit::instance().getPage(table_idx, va, pa, prot));
+        return static_cast<int32_t>(MemoryManagementUnit::instance().getPage(table_idx, virt_addr, phys_addr, prot));
     };
 
     Function mmu_active_table =
         Function::createExternal(mmu_active_table_func);
+    Function mmu_create_table =
+        Function::createExternal(mmu_create_table_func);
+    Function mmu_switch_table =
+        Function::createExternal(mmu_switch_table_func);
     Function mmu_map_page =
         Function::createExternal(mmu_map_page_func);
     Function mmu_unmap_page =
@@ -385,6 +404,8 @@ Instance::createKernel(const std::string& kernel_path,
                      {"timer.get_time", timer_get_time},
                      {"timer.set_interval", timer_set_interval},
                      {"mmu.active_table", mmu_active_table},
+                     {"mmu.create_table", mmu_create_table},
+                     {"mmu.switch_table", mmu_switch_table},
                      {"mmu.map_page", mmu_map_page},
                      {"mmu.unmap_page", mmu_unmap_page},
                      {"mmu.get_page", mmu_get_page},
@@ -511,7 +532,6 @@ Instance::createUserProgram(const std::string& program, Instance& parent) {
         size_t sigsetjmp_prologue_sig = FunctionType::ConsumerI32x2().getSignature();
 
         if (sigsetjmp_prologue_sig == sigsetjmp_prologue.signature) {
-            fmt::println("set sigsetjmp prologue");
             sigsetjmp.setPrologueFuncIdx(sigsetjmp_prologue.func_idx);
         } else {
             fmt::println("warning: sigsetjmp prologue has a wrong signature; "
@@ -527,7 +547,6 @@ Instance::createUserProgram(const std::string& program, Instance& parent) {
         size_t sigsetjmp_epilogue_sig = FunctionType::ConsumerI32x2().getSignature();
 
         if (sigsetjmp_epilogue_sig == sigsetjmp_epilogue.signature) {
-            fmt::println("set sigsetjmp epilogue");
             sigsetjmp.setEpilogueFuncIdx(sigsetjmp_epilogue.func_idx);
         } else {
             fmt::println("warning: sigsetjmp epilogue has a wrong signature; "

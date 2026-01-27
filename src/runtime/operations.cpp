@@ -571,7 +571,16 @@ Continuation OperationBase::trap(Instance& instance, std::string msg,
                                  size_t addr) const {
     std::string fmt_loc =
         instance.getGlobalState().getDebugInfo().getFormattedLocation(addr);
-    fmt::println("trap: {} (at {})", msg, fmt_loc);
+    fmt::println("trap: {}: at {}", msg, fmt_loc);
+    
+    Context& ctxt = instance.getActiveContext();
+    const Continuation* epilogues = ctxt.getEpilogues().data();
+    for (size_t i = ctxt.getEpilogues().size() - 1; i > 0; i--) {
+        const Continuation& epilogue = epilogues[i];
+        if (epilogue == nullptr) break;
+        fmt::println("  {}: at {}", i, epilogue->getFormattedAddres(instance));
+    }
+
     std::exit(1);
     return nullptr;
 }
@@ -786,7 +795,7 @@ Call::Call(const grammar::Call& call)
     : Call(call.getFuncIdx(), call.getAddress()) {}
 Call::Call(uint32_t func_idx, size_t addr)
     : OperationBase(addr), func_idx_(func_idx),
-      epilogue_(std::make_shared<Epilogue>(func_idx)) {}
+      epilogue_(std::make_shared<Epilogue>(func_idx, addr)) {}
 
 Continuation Call::action(Instance& instance) {
     Function& func = instance.getGlobalState().getFunction(func_idx_);
@@ -802,7 +811,7 @@ Continuation Call::action(Instance& instance) {
     return func.enterFrame(instance.getActiveContext());
 }
 
-Call::Epilogue::Epilogue(uint32_t func_idx) : func_idx_(func_idx) {}
+Call::Epilogue::Epilogue(uint32_t func_idx, size_t addr) : OperationBase(addr), func_idx_(func_idx) {}
 
 Continuation Call::Epilogue::action(Instance& instance) {
     Function& func = instance.getGlobalState().getFunction(func_idx_);
@@ -2234,13 +2243,22 @@ Continuation I32Load8Signed::action(Instance& instance) {
     int32_t base = context.pop().i32;
     uint32_t addr = base + offset_;
 
-    std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
-    if (addr + sizeof(int8_t) > memory.size())
-        return trap(instance, "i32.load8_s out of bounds memory address", addr);
+    int8_t val;
+    if (addr < VIRT_MEMORY) {
+        std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
 
-    int8_t val = static_cast<int8_t>(memory[addr]);
+        if (addr + sizeof(int8_t) > memory.size())
+            return trap(instance, "i32.load8_s out of bounds memory address", addr_);
+
+        val = static_cast<int8_t>(memory[addr]);
+    } else {
+        MemoryManagementUnit& mmu = MemoryManagementUnit::instance();
+        if (mmu.readI8(addr, reinterpret_cast<int8_t*>(&val)) != Errno::SUCCESS) {
+            return trap(instance, "i32.load8_s invalid memory access", addr_);
+        }
+    }
+
     context.pushI32(val);
-
     TRACE_VERBOSE("i32.load8_s {} {}: ({}) -> ({})", align_, offset_, base,
                   val);
     return next_;
@@ -2260,14 +2278,14 @@ Continuation I32Load8Unsigned::action(Instance& instance) {
     if (addr < VIRT_MEMORY) {
         std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
 
-        if (addr + sizeof(int32_t) > memory.size())
-            return trap(instance, "i32.load out of bounds memory address", addr_);
+        if (addr + sizeof(uint8_t) > memory.size())
+            return trap(instance, "i32.load8_u out of bounds memory address", addr_);
 
         val = memory[addr];
     } else {
         MemoryManagementUnit& mmu = MemoryManagementUnit::instance();
         if (mmu.readI8(addr, reinterpret_cast<int8_t*>(&val)) != Errno::SUCCESS) {
-            return trap(instance, "i32.load invalid memory access", addr_);
+            return trap(instance, "i32.load8_u invalid memory access", addr_);
         }
     }
 

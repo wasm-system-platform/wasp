@@ -99,9 +99,8 @@ Continuation Sigsetjmp::Epilogue::action(Instance& instance) {
     jb->frames_size = context.getLocals().getFramePointersSize();
     jb->epilogues_size = context.getEpilogues().size();
     jb->setjmp_epilogue = epilogue_call_.get();
+    jb->return_epilogue = context.getEpilogues().peek();
     jb->computeValidator(context);
-
-    fmt::print("sigsetjmp action: stack_size={}, frames_size={}, epilogues_size={}", jb->stack_size, jb->frames_size, jb->epilogues_size);
 
     context.pushI32(0);
     context.pushI32(jb_addr);
@@ -114,7 +113,6 @@ Continuation Sigsetjmp::Epilogue::action(Instance& instance) {
 /***********/
 
 Continuation Longjmp::action(Instance& instance) {
-    fmt::println("longjmp action");
     Context& context = instance.getActiveContext();
 
     uint32_t jb_addr = context.getLocal(0).i32;
@@ -125,13 +123,8 @@ Continuation Longjmp::action(Instance& instance) {
         return trap(instance, "longjmp out of bounds memory address", addr_);
 
     JumpBuffer* jb = reinterpret_cast<JumpBuffer*>(&memory[jb_addr]);
-    fmt::println("longjmp action: stack_size={}, frames_size={}, epilogues_size={}", jb->stack_size, jb->frames_size, jb->epilogues_size);
-
-
     if (jb->stack_size != context.getStack().size())
         return trap(instance, "longjmp invalid program state: handle me", addr_);
-
-    fmt::println("longjmp action: frames_size={}", context.getLocals().getFramePointersSize());
 
     if (context.getLocals().getFramePointersSize() < jb->frames_size)
         return trap(instance, "longjmp invalid program state: frame stack is too small", addr_);
@@ -150,6 +143,7 @@ Continuation Longjmp::action(Instance& instance) {
         return trap(instance, "longjmp invalid program state: corrupt jump buffer", addr_);
 
     uint32_t ub_addr = jb_addr + offsetof(JumpBuffer, user_buffer);
+    context.pushI32(status ? status : 1);
     context.pushI32(ub_addr);
     context.pushI32(status ? status : 1);
     return jb->setjmp_epilogue;

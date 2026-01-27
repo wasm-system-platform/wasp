@@ -184,7 +184,7 @@ DebugInfoInstance DebugInfoInstance::create(const grammar::Module& module) {
 }
 
 std::string DebugInfoInstance::getFormattedLocation(size_t addr) const {
-    std::string unknown_loc = fmt::format("<0x{:06x}>", addr);
+    std::string unknown_loc = addr == (uint32_t)-1 ? "<?>" : fmt::format("<0x{:06x}>", addr);
 
     if (line_info_segments_.empty())
         return unknown_loc;
