@@ -35,7 +35,8 @@ Expected<DebugLineSection> DebugLineSection::parse(std::istream& in) {
 
         if (header.version != 2)
             return Unexpected(
-                ERROR("only DWARF version 2 is currently supported"));
+                ERROR(fmt::format("only DWARF version 2 is currently supported (found: {})",
+                                  header.version)));
 
         Expected<std::vector<std::string>> include_dirs_exp =
             parse_include_dirs(in);

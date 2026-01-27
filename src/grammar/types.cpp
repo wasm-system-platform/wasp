@@ -120,7 +120,7 @@ const FunctionType& FunctionType::ConsumerI32() {
     return TYPE;
 }
 
-const FunctionType& FunctionType::ConsumerI32I32() {
+const FunctionType& FunctionType::ConsumerI32x2() {
     static const FunctionType TYPE(
         ExpectedType({ValueType::Type::i32, ValueType::Type::i32}),
         ExpectedType({}));
@@ -128,7 +128,7 @@ const FunctionType& FunctionType::ConsumerI32I32() {
     return TYPE;
 }
 
-const FunctionType& FunctionType::ConsumerI32I32I32() {
+const FunctionType& FunctionType::ConsumerI32x3() {
     static const FunctionType TYPE(
         ExpectedType(
             {ValueType::Type::i32, ValueType::Type::i32, ValueType::Type::i32}),
@@ -158,7 +158,7 @@ const FunctionType& FunctionType::ProducerI32() {
     return TYPE;
 }
 
-const FunctionType& FunctionType::ProducerI32I32() {
+const FunctionType& FunctionType::ProducerI32x2() {
     static const FunctionType TYPE(
         ExpectedType({ValueType::Type::i32, ValueType::Type::i32}),
         ExpectedType({ValueType::Type::i32}));
@@ -168,8 +168,8 @@ const FunctionType& FunctionType::ProducerI32I32() {
 
 const FunctionType& FunctionType::I32Producer_I32_I32_I32() {
     static const FunctionType TYPE(
-        ExpectedType({ValueType::Type::i32, ValueType::Type::i32,
-                      ValueType::Type::i32}),
+        ExpectedType(
+            {ValueType::Type::i32, ValueType::Type::i32, ValueType::Type::i32}),
         ExpectedType({ValueType::Type::i32}));
 
     return TYPE;
@@ -187,6 +187,28 @@ const FunctionType& FunctionType::ProducerI32_I32_I32_I32() {
 const FunctionType& FunctionType::ProducerI32_I32_I32_I32_I32_I32() {
     static const FunctionType TYPE(
         ExpectedType({ValueType::Type::i32, ValueType::Type::i32,
+                      ValueType::Type::i32, ValueType::Type::i32,
+                      ValueType::Type::i32, ValueType::Type::i32}),
+        ExpectedType({ValueType::Type::i32}));
+
+    return TYPE;
+}
+
+const FunctionType& FunctionType::ProducerI32x7() {
+    static const FunctionType TYPE(
+        ExpectedType({ValueType::Type::i32, ValueType::Type::i32,
+                      ValueType::Type::i32, ValueType::Type::i32,
+                      ValueType::Type::i32, ValueType::Type::i32,
+                      ValueType::Type::i32}),
+        ExpectedType({ValueType::Type::i32}));
+
+    return TYPE;
+}
+
+const FunctionType& FunctionType::ProducerI32x8() {
+    static const FunctionType TYPE(
+        ExpectedType({ValueType::Type::i32, ValueType::Type::i32,
+                      ValueType::Type::i32, ValueType::Type::i32,
                       ValueType::Type::i32, ValueType::Type::i32,
                       ValueType::Type::i32, ValueType::Type::i32}),
         ExpectedType({ValueType::Type::i32}));

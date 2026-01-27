@@ -10,10 +10,12 @@ Expected<WasmDisk> WasmDisk::create(const std::string& path) {
     disk.seekg(0, std::ios_base::end);
     std::streampos size = disk.tellg();
     if (size == std::streampos(-1))
-        return Unexpected(ERROR(fmt::format("Failed to get file size: {}", path)));
+        return Unexpected(
+            ERROR(fmt::format("Failed to get file size: {}", path)));
 
     if (size > 0xFFFFFFFF)
-        return Unexpected(ERROR(fmt::format("File too large (>4GB): {}", path)));
+        return Unexpected(
+            ERROR(fmt::format("File too large (>4GB): {}", path)));
 
     disk.seekg(0, std::ios_base::beg);
 
@@ -44,21 +46,21 @@ int WasmDisk::tellg(uint32_t* offset) {
     return 0;
 }
 
-int WasmDisk::seekg(int32_t offset, int whence, uint32_t *new_offset) {
+int WasmDisk::seekg(int32_t offset, int whence, uint32_t* new_offset) {
     std::streampos old_pos = disk_.tellg();
 
     switch (whence) {
-        case SEEK_SET:
-            disk_.seekg(offset, std::ios_base::beg);
-            break;
-        case SEEK_CUR:
-            disk_.seekg(offset, std::ios_base::cur);
-            break;
-        case SEEK_END:
-            disk_.seekg(offset, std::ios_base::end);
-            break;
-        default:
-            return -1;
+    case SEEK_SET:
+        disk_.seekg(offset, std::ios_base::beg);
+        break;
+    case SEEK_CUR:
+        disk_.seekg(offset, std::ios_base::cur);
+        break;
+    case SEEK_END:
+        disk_.seekg(offset, std::ios_base::end);
+        break;
+    default:
+        return -1;
     }
 
     if (!disk_) {
@@ -95,21 +97,21 @@ int WasmDisk::tellp(uint32_t* offset) {
     return 0;
 }
 
-int WasmDisk::seekp(int32_t offset, int whence, uint32_t *new_offset) {
+int WasmDisk::seekp(int32_t offset, int whence, uint32_t* new_offset) {
     std::streampos old_pos = disk_.tellp();
 
     switch (whence) {
-        case 0:
-            disk_.seekp(offset, std::ios_base::beg);
-            break;
-        case 1:
-            disk_.seekp(offset, std::ios_base::cur);
-            break;
-        case 2:
-            disk_.seekp(offset, std::ios_base::end);
-            break;
-        default:
-            return -1;
+    case 0:
+        disk_.seekp(offset, std::ios_base::beg);
+        break;
+    case 1:
+        disk_.seekp(offset, std::ios_base::cur);
+        break;
+    case 2:
+        disk_.seekp(offset, std::ios_base::end);
+        break;
+    default:
+        return -1;
     }
 
     if (!disk_) {

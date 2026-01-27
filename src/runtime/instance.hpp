@@ -64,41 +64,18 @@ public:
         Instance& kernel = getKernel();
         kernel.active_instance_ = &instance;
     }
+    inline Continuation pageFault(Instance& instance) {
+        return page_fault_->action(instance);
+    }
 
 private:
-    class SysCall : public OperationBase {
-    public:
-        SysCall(uint32_t sys_call_handler_idx);
-
-        Continuation action(Instance& instance) override;
-
-    private:
-        class Epilogue : public OperationBase {
-        public:
-            Epilogue(size_t id, Instance& suspended_instance, SysCall& parent);
-
-            Continuation action(Instance& instance) override;
-
-        private:
-            size_t id_;
-            Instance& suspended_instance_;
-            SysCall& parent_;
-        };
-
-        uint32_t sys_call_handler_idx_;
-
-        std::vector<Operation> epilogues_;
-        std::stack<size_t> free_list_;
-
-        const Operation& createEpilogue(Instance& instance);
-        void destroyEpilogue(size_t id);
-    };
-
     Instance* parent_ = nullptr;
 
     Instance* active_instance_;
     GlobalState state_;
     Context* active_context_;
+
+    Operation page_fault_;
 
     std::unordered_map<std::string, Export> exports_;
     std::unordered_map<uint32_t, Device> devices_;

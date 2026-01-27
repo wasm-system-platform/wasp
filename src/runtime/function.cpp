@@ -5,7 +5,8 @@
 namespace runtime {
 
 Function::Function(Operation&& body, size_t num_params,
-                   std::vector<Value>&& locals, size_t signature, std::string formatted_type)
+                   std::vector<Value>&& locals, size_t signature,
+                   std::string formatted_type)
     : body_(body), num_params_(num_params), locals_(std::move(locals)),
       signature_(signature), formatted_type_(formatted_type) {}
 
@@ -30,7 +31,8 @@ Function Function::create(const FunctionType& type,
     };
 
     size_t signature = std::hash<FunctionType>()(type);
-    return Function(std::move(body), num_params, std::move(locals), signature, type.toString());
+    return Function(std::move(body), num_params, std::move(locals), signature,
+                    type.toString());
 }
 
 /*******************/
@@ -72,7 +74,7 @@ Function Function::createExternal(
         });
 
     size_t signature =
-        std::hash<FunctionType>()(FunctionType::ConsumerI32I32());
+        std::hash<FunctionType>()(FunctionType::ConsumerI32x2());
     return Function(std::move(body), 2, {int32_t(0), int32_t(0)}, signature);
 }
 
@@ -89,7 +91,7 @@ Function Function::createExternal(
         });
 
     size_t signature =
-        std::hash<FunctionType>()(FunctionType::ConsumerI32I32I32());
+        std::hash<FunctionType>()(FunctionType::ConsumerI32x3());
     return Function(std::move(body), 3, {int32_t(0), int32_t(0), int32_t(0)},
                     signature);
 }
@@ -103,7 +105,6 @@ Function::createExternal(std::function<int32_t(Instance&)> external_func) {
             instance.getActiveContext().pushI32(result);
         });
 
-    
     size_t signature = std::hash<FunctionType>()(FunctionType::Producer());
     return Function(std::move(body), 0, {}, signature);
 }
@@ -151,13 +152,14 @@ Function Function::createExternal(
         });
 
     size_t signature =
-        std::hash<FunctionType>()(FunctionType::ProducerI32I32());
+        std::hash<FunctionType>()(FunctionType::ProducerI32x2());
     return Function(std::move(body), 2, {int32_t(0), int32_t(0)}, signature);
 }
 
 // (i32) -> (i32, i32, i32)
 Function Function::createExternal(
-    std::function<int32_t(Instance&, int32_t, int32_t, int32_t)> external_func) {
+    std::function<int32_t(Instance&, int32_t, int32_t, int32_t)>
+        external_func) {
     Operation body =
         std::make_shared<Wrapper>([external_func](Instance& instance) {
             Context& context = instance.getActiveContext();
@@ -171,7 +173,8 @@ Function Function::createExternal(
 
     size_t signature =
         std::hash<FunctionType>()(FunctionType::I32Producer_I32_I32_I32());
-    return Function(std::move(body), 3, {int32_t(0), int32_t(0), int32_t(0)}, signature);
+    return Function(std::move(body), 3, {int32_t(0), int32_t(0), int32_t(0)},
+                    signature);
 }
 
 // (i32) -> (i32, i32, i32, i32)

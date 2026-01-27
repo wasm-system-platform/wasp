@@ -7,12 +7,10 @@
 int main(int argc, char** argv) {
     cxxopts::Options options("wasm-sp");
 
-    options.add_options()
-        ("k,kernel", "Path to kernel WASM file",
-                cxxopts::value<std::string>())
-            ("r,rootfs", "Path to rootfs image",
-                cxxopts::value<std::string>())
-            ("h,help", "Show help");
+    options.add_options()("k,kernel", "Path to kernel WASM file",
+                          cxxopts::value<std::string>())(
+        "r,rootfs", "Path to rootfs image",
+        cxxopts::value<std::string>())("h,help", "Show help");
 
     auto args = options.parse(argc, argv);
 
@@ -24,17 +22,19 @@ int main(int argc, char** argv) {
     }
 
     if (args.count("kernel") == 0) {
-        std::cout << "Option 'kernel' is required but not present\n" << options.help() << std::endl;
+        std::cout << "Option 'kernel' is required but not present\n"
+                  << options.help() << std::endl;
         exit(1);
     }
 
     if (args.count("rootfs") == 0) {
-        std::cout << "Option 'rootfs' is required but not present\n" << options.help() << std::endl;
+        std::cout << "Option 'rootfs' is required but not present\n"
+                  << options.help() << std::endl;
         exit(1);
     }
 
-    auto kernel_exp =
-        runtime::Instance::createKernel(args["kernel"].as<std::string>(), args["rootfs"].as<std::string>());
+    auto kernel_exp = runtime::Instance::createKernel(
+        args["kernel"].as<std::string>(), args["rootfs"].as<std::string>());
     if (!kernel_exp) {
         std::cout << kernel_exp.error().toString() << std::endl;
         return -1;

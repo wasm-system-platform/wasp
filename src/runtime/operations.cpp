@@ -1,5 +1,6 @@
 #include <fmt/base.h>
 
+#include "hw/mmu.hpp"
 #include "runtime/context.hpp"
 #include "runtime/instance.hpp"
 #include "runtime/operations.hpp"
@@ -100,6 +101,12 @@ OperationBase::create(const std::vector<grammar::Instruction>& instructions,
         case grammar::I64Const::OPCODE:
             next = std::make_shared<I64Const>(inst->as<grammar::I64Const>());
             break;
+        case grammar::F32Const::OPCODE:
+            next = std::make_shared<F32Const>(inst->as<grammar::F32Const>());
+            break;
+        case grammar::F64Const::OPCODE:
+            next = std::make_shared<F64Const>(inst->as<grammar::F64Const>());
+            break;
         case grammar::I32EqualZero::OPCODE:
             next = std::make_shared<I32EqualZero>();
             break;
@@ -163,11 +170,53 @@ OperationBase::create(const std::vector<grammar::Instruction>& instructions,
         case grammar::I64GreaterEqualSigned::OPCODE:
             next = std::make_shared<I64GreaterEqualSigned>();
             break;
+        case grammar::I64GreaterEqualUnsigned::OPCODE:
+            next = std::make_shared<I64GreaterEqualUnsigned>();
+            break;
+        case grammar::F32Equal::OPCODE:
+            next = std::make_shared<F32Equal>();
+            break;
+        case grammar::F32NotEqual::OPCODE:
+            next = std::make_shared<F32NotEqual>();
+            break;
+        case grammar::F32LessThan::OPCODE:
+            next = std::make_shared<F32LessThan>();
+            break;
+        case grammar::F32GreaterThan::OPCODE:
+            next = std::make_shared<F32GreaterThan>();
+            break;
+        case grammar::F32LessEqual::OPCODE:
+            next = std::make_shared<F32LessEqual>();
+            break;
+        case grammar::F32GreaterEqual::OPCODE:
+            next = std::make_shared<F32GreaterEqual>();
+            break;
+        case grammar::F64Equal::OPCODE:
+            next = std::make_shared<F64Equal>();
+            break;
+        case grammar::F64NotEqual::OPCODE:
+            next = std::make_shared<F64NotEqual>();
+            break;
+        case grammar::F64LessThan::OPCODE:
+            next = std::make_shared<F64LessThan>();
+            break;
+        case grammar::F64GreaterThan::OPCODE:
+            next = std::make_shared<F64GreaterThan>();
+            break;
+        case grammar::F64LessEqual::OPCODE:
+            next = std::make_shared<F64LessEqual>();
+            break;
+        case grammar::F64GreaterEqual::OPCODE:
+            next = std::make_shared<F64GreaterEqual>();
+            break;
         case grammar::I32CountLeadingZeros::OPCODE:
             next = std::make_shared<I32CountLeadingZeros>();
             break;
         case grammar::I32CountTrailingZeros::OPCODE:
             next = std::make_shared<I32CountTrailingZeros>();
+            break;
+        case grammar::I32PopCount::OPCODE:
+            next = std::make_shared<I32PopCount>();
             break;
         case grammar::I32Add::OPCODE:
             next = std::make_shared<I32Add>(inst->as<grammar::I32Add>());
@@ -253,6 +302,27 @@ OperationBase::create(const std::vector<grammar::Instruction>& instructions,
         case grammar::I64ShiftRightUnsigned::OPCODE:
             next = std::make_shared<I64ShiftRightUnsigned>();
             break;
+        case grammar::I64RotateLeft::OPCODE:
+            next = std::make_shared<I64RotateLeft>();
+            break;
+        case grammar::I64RotateRight::OPCODE:
+            next = std::make_shared<I64RotateRight>();
+            break;
+        case grammar::F32Mul::OPCODE:
+            next = std::make_shared<F32Mul>();
+            break;
+        case grammar::F32Div::OPCODE:
+            next = std::make_shared<F32Div>();
+            break;
+        case grammar::F64Mul::OPCODE:
+            next = std::make_shared<F64Mul>();
+            break;
+        case grammar::F64Div::OPCODE:
+            next = std::make_shared<F64Div>();
+            break;
+        case grammar::F64CopySign::OPCODE:
+            next = std::make_shared<F64CopySign>();
+            break;
         case grammar::I32WrapI64::OPCODE:
             next = std::make_shared<I32WrapI64>();
             break;
@@ -262,12 +332,57 @@ OperationBase::create(const std::vector<grammar::Instruction>& instructions,
         case grammar::I64ExtendI32Unsigned::OPCODE:
             next = std::make_shared<I64ExtendI32Unsigned>();
             break;
+        case grammar::F32ConvertI32Signed::OPCODE:
+            next = std::make_shared<F32ConvertI32Signed>();
+            break;
+        case grammar::F32DemoteF64::OPCODE:
+            next = std::make_shared<F32DemoteF64>();
+            break;
+        case grammar::F64ConvertI32Signed::OPCODE:
+            next = std::make_shared<F64ConvertI32Signed>();
+            break;
+        case grammar::F64PromoteF32::OPCODE:
+            next = std::make_shared<F64PromoteF32>();
+            break;
+        case grammar::I32ReinterpretF32::OPCODE:
+            next = std::make_shared<I32ReinterpretF32>();
+            break;
+        case grammar::I64ReinterpretF64::OPCODE:
+            next = std::make_shared<I64ReinterpretF64>();
+            break;
+        case grammar::F32ReinterpretI32::OPCODE:
+            next = std::make_shared<F32ReinterpretI32>();
+            break;
+        case grammar::F64ReinterpretI64::OPCODE:
+            next = std::make_shared<F64ReinterpretI64>();
+            break;
+        case grammar::I32Extend8Signed::OPCODE:
+            next = std::make_shared<I32Extend8Signed>();
+            break;
+        case grammar::I32Extend16Signed::OPCODE:
+            next = std::make_shared<I32Extend16Signed>();
+            break;
+        case grammar::I64Extend8Signed::OPCODE:
+            next = std::make_shared<I64Extend8Signed>();
+            break;
+        case grammar::I64Extend16Signed::OPCODE:
+            next = std::make_shared<I64Extend16Signed>();
+            break;
+        case grammar::I64Extend32Signed::OPCODE:
+            next = std::make_shared<I64Extend32Signed>();
+            break;
         // Memory Instructions
         case grammar::I32Load::OPCODE:
             next = std::make_shared<I32Load>(inst->as<grammar::I32Load>());
             break;
         case grammar::I64Load::OPCODE:
             next = std::make_shared<I64Load>(inst->as<grammar::I64Load>());
+            break;
+        case grammar::F32Load::OPCODE:
+            next = std::make_shared<F32Load>(inst->as<grammar::F32Load>());
+            break;
+        case grammar::F64Load::OPCODE:
+            next = std::make_shared<F64Load>(inst->as<grammar::F64Load>());
             break;
         case grammar::I32Load8Signed::OPCODE:
             next = std::make_shared<I32Load8Signed>(
@@ -277,9 +392,33 @@ OperationBase::create(const std::vector<grammar::Instruction>& instructions,
             next = std::make_shared<I32Load8Unsigned>(
                 inst->as<grammar::I32Load8Unsigned>());
             break;
+        case grammar::I32Load16Signed::OPCODE:
+            next = std::make_shared<I32Load16Signed>(
+                inst->as<grammar::I32Load16Signed>());
+            break;
         case grammar::I32Load16Unsigned::OPCODE:
             next = std::make_shared<I32Load16Unsigned>(
                 inst->as<grammar::I32Load16Unsigned>());
+            break;
+        case grammar::I64Load8Signed::OPCODE:
+            next = std::make_shared<I64Load8Signed>(
+                inst->as<grammar::I64Load8Signed>());
+            break;
+        case grammar::I64Load8Unsigned::OPCODE:
+            next = std::make_shared<I64Load8Unsigned>(
+                inst->as<grammar::I64Load8Unsigned>());
+            break;
+        case grammar::I64Load16Signed::OPCODE:
+            next = std::make_shared<I64Load16Signed>(
+                inst->as<grammar::I64Load16Signed>());
+            break;
+        case grammar::I64Load16Unsigned::OPCODE:
+            next = std::make_shared<I64Load16Unsigned>(
+                inst->as<grammar::I64Load16Unsigned>());
+            break;
+        case grammar::I64Load32Signed::OPCODE:
+            next = std::make_shared<I64Load32Signed>(
+                inst->as<grammar::I64Load32Signed>());
             break;
         case grammar::I64Load32Unsigned::OPCODE:
             next = std::make_shared<I64Load32Unsigned>(
@@ -291,6 +430,9 @@ OperationBase::create(const std::vector<grammar::Instruction>& instructions,
         case grammar::I64Store::OPCODE:
             next = std::make_shared<I64Store>(inst->as<grammar::I64Store>());
             break;
+        case grammar::F32Store::OPCODE:
+            next = std::make_shared<F32Store>(inst->as<grammar::F32Store>());
+            break;
         case grammar::F64Store::OPCODE:
             next = std::make_shared<F64Store>(inst->as<grammar::F64Store>());
             break;
@@ -300,6 +442,18 @@ OperationBase::create(const std::vector<grammar::Instruction>& instructions,
         case grammar::I32Store16::OPCODE:
             next =
                 std::make_shared<I32Store16>(inst->as<grammar::I32Store16>());
+            break;
+        case grammar::I64Store8::OPCODE:
+            next =
+                std::make_shared<I64Store8>(inst->as<grammar::I64Store8>());
+            break;
+        case grammar::I64Store16::OPCODE:
+            next =
+                std::make_shared<I64Store16>(inst->as<grammar::I64Store16>());
+            break;
+        case grammar::I64Store32::OPCODE:
+            next =
+                std::make_shared<I64Store32>(inst->as<grammar::I64Store32>());
             break;
         case grammar::MemoryGrow::OPCODE:
             next =
@@ -323,7 +477,7 @@ OperationBase::create(const std::vector<grammar::Instruction>& instructions,
                 next = std::make_shared<MemoryCopy>();
                 break;
             case grammar::MemoryFill::MEM_OPCODE:
-                next = std::make_shared<MemoryFill>();
+                next = std::make_shared<MemoryFill>(inst->as<grammar::MemoryFill>());
                 break;
             default:
                 fmt::println("unknown memory opcode 0xFC 0x{:02X}", mem_opcode);
@@ -520,13 +674,20 @@ Continuation Loop::action(Instance& instance) {
 IfThen::IfThen(const grammar::IfElse& if_else,
                const std::vector<FunctionType>& func_types,
                std::vector<Operation>& branch_targets)
-    : OperationBase(if_else.getAddress()),
-      then_(OperationBase::create(if_else.getThenExpr().getInstructions(),
-                                  func_types, branch_targets)) {}
+    : OperationBase(if_else.getAddress()) {
+    branch_targets.insert(branch_targets.begin(), end_);
+    
+    then_ = OperationBase::create(if_else.getThenExpr().getInstructions(),
+                                  func_types, branch_targets);
+    then_->addNext(end_);
+
+    branch_targets.erase(branch_targets.begin());
+}
 
 Continuation IfThen::action(Instance& instance) {
     Context& ctxt = instance.getActiveContext();
-    ctxt.getEpilogues().push(next_);
+    if (next_)
+        ctxt.getEpilogues().push(next_);
 
     int32_t cond = ctxt.pop().i32;
     if (cond) {
@@ -546,15 +707,24 @@ Continuation IfThen::action(Instance& instance) {
 IfElse::IfElse(const grammar::IfElse& if_else,
                const std::vector<FunctionType>& func_types,
                std::vector<Operation>& branch_targets)
-    : OperationBase(if_else.getAddress()),
-      then_(OperationBase::create(if_else.getThenExpr().getInstructions(),
-                                  func_types, branch_targets)),
-      else_(OperationBase::create(if_else.getElseExpr().getInstructions(),
-                                  func_types, branch_targets)) {}
+    : OperationBase(if_else.getAddress()) {
+    branch_targets.insert(branch_targets.begin(), end_);
+    
+    then_ = OperationBase::create(if_else.getThenExpr().getInstructions(),
+                                  func_types, branch_targets);
+    then_->addNext(end_);
+
+    else_ = OperationBase::create(if_else.getElseExpr().getInstructions(),
+                                  func_types, branch_targets);
+    else_->addNext(end_);
+
+    branch_targets.erase(branch_targets.begin());
+}
 
 Continuation IfElse::action(Instance& instance) {
     Context& ctxt = instance.getActiveContext();
-    ctxt.getEpilogues().push(next_);
+    if (next_)
+        ctxt.getEpilogues().push(next_);
 
     int32_t cond = ctxt.pop().i32;
     if (cond) {
@@ -623,9 +793,12 @@ Continuation Call::action(Instance& instance) {
 
     instance.getActiveContext().getEpilogues().push(epilogue_.get());
 
-    TRACE("{}: call {}",
+    if (instance.getActiveContext().getPid() == 0) {
+        TRACE("{:{}}{}: call {}",
+          "", instance.getActiveContext().getEpilogues().size(),
           instance.getGlobalState().getDebugInfo().getFormattedLocation(addr_),
           func_idx_);
+    }
     return func.enterFrame(instance.getActiveContext());
 }
 
@@ -650,29 +823,38 @@ Continuation CallIndirect::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
     uint32_t element_idx = static_cast<uint32_t>(context.pop().i32);
-    
+
     std::vector<Function>& functions = instance.getGlobalState().getFunctions();
-    std::vector<uint32_t>& indirections = instance.getGlobalState().getIndirections();
+    std::vector<uint32_t>& indirections =
+        instance.getGlobalState().getIndirections();
 
     if (functions.size() < indirections[element_idx]) {
         return trap(instance,
-                     fmt::format("call_indirect index '{}' out of bounds",
-                    indirections[element_idx]),
+                    fmt::format("call_indirect index '{}' out of bounds",
+                                indirections[element_idx]),
                     addr_);
     }
 
     Function& func = functions[indirections[element_idx]];
     if (signature_ != func.getSignature())
         return trap(instance,
-                     fmt::format("call_indirect type mismatch: expected '{}' but found '{}' at element {}",
-                    
-                    func.getFormattedType(), signature_, element_idx),
+                    fmt::format("call_indirect type mismatch: expected '{}' "
+                                "but found '{}' at element {}",
+
+                                func.getFormattedType(), signature_,
+                                element_idx),
                     addr_);
 
     Operation epilogue = createEpilogue(func);
     instance.getActiveContext().getEpilogues().push(epilogue.get());
 
-    TRACE_VERBOSE("call_indirect: (element_idx={}) -> ()", element_idx);
+    if (instance.getActiveContext().getPid() == 0) {
+        TRACE("{:{}}{}: call_indirect: (element_idx={}) -> ()",
+          "", instance.getActiveContext().getEpilogues().size(),
+          instance.getGlobalState().getDebugInfo().getFormattedLocation(addr_),
+          element_idx);
+    }
+
     return func.enterFrame(context);
 }
 
@@ -839,6 +1021,22 @@ I64Const::I64Const(const grammar::I64Const& i64_const)
 
 Continuation I64Const::action(Instance& instance) {
     instance.getActiveContext().pushI64(i_);
+    return next_;
+}
+
+F32Const::F32Const(const grammar::F32Const& f32_const)
+    : f_(f32_const.getVal()) {}
+
+Continuation F32Const::action(Instance& instance) {
+    instance.getActiveContext().push(f_);
+    return next_;
+}
+
+F64Const::F64Const(const grammar::F64Const& f64_const)
+    : f_(f64_const.getVal()) {}
+
+Continuation F64Const::action(Instance& instance) {
+    instance.getActiveContext().push(f_);
     return next_;
 }
 
@@ -1092,17 +1290,167 @@ Continuation I64GreaterEqualSigned::action(Instance& instance) {
     return next_;
 }
 
+Continuation I64GreaterEqualUnsigned::action(Instance& instance) {
+    Context& context = instance.getActiveContext();
+
+    uint64_t right = static_cast<uint64_t>(context.pop().i64);
+    uint64_t left = static_cast<uint64_t>(context.pop().i64);
+    int32_t result = (left >= right) ? 1 : 0;
+    context.pushI32(result);
+
+    TRACE_VERBOSE("i64.ge_u: ({}, {}) -> ({})", left, right, result);
+    return next_;
+}
+
+Continuation F32Equal::action(Instance& instance) {
+    Context& context = instance.getActiveContext();
+
+    float right = context.pop().f32;
+    float left = context.pop().f32;
+    int32_t result = (left == right) ? 1 : 0;
+    context.pushI32(result);
+
+    TRACE_VERBOSE("f32.eq: ({}, {}) -> ({})", left, right, result);
+    return next_;
+}
+
+Continuation F32NotEqual::action(Instance& instance) {
+    Context& context = instance.getActiveContext();
+
+    float right = context.pop().f32;
+    float left = context.pop().f32;
+    int32_t result = (left != right) ? 1 : 0;
+    context.pushI32(result);
+
+    TRACE_VERBOSE("f32.ne: ({}, {}) -> ({})", left, right, result);
+    return next_;
+}
+
+Continuation F32LessThan::action(Instance& instance) {
+    Context& context = instance.getActiveContext();
+
+    float right = context.pop().f32;
+    float left = context.pop().f32;
+    int32_t result = (left < right) ? 1 : 0;
+    context.pushI32(result);
+
+    TRACE_VERBOSE("f32.lt: ({}, {}) -> ({})", left, right, result);
+    return next_;
+}
+
+Continuation F32GreaterThan::action(Instance& instance) {
+    Context& context = instance.getActiveContext();
+
+    float right = context.pop().f32;
+    float left = context.pop().f32;
+    int32_t result = (left > right) ? 1 : 0;
+    context.pushI32(result);
+
+    TRACE_VERBOSE("f32.gt: ({}, {}) -> ({})", left, right, result);
+    return next_;
+}
+
+Continuation F32LessEqual::action(Instance& instance) {
+    Context& context = instance.getActiveContext();
+
+    float right = context.pop().f32;
+    float left = context.pop().f32;
+    int32_t result = (left <= right) ? 1 : 0;
+    context.pushI32(result);
+
+    TRACE_VERBOSE("f32.le: ({}, {}) -> ({})", left, right, result);
+    return next_;
+}
+
+Continuation F32GreaterEqual::action(Instance& instance) {
+    Context& context = instance.getActiveContext();
+
+    float right = context.pop().f32;
+    float left = context.pop().f32;
+    int32_t result = (left >= right) ? 1 : 0;
+    context.pushI32(result);
+
+    TRACE_VERBOSE("f32.ge: ({}, {}) -> ({})", left, right, result);
+    return next_;
+}
+
+Continuation F64Equal::action(Instance& instance) {
+    Context& context = instance.getActiveContext();
+
+    double right = context.pop().f64;
+    double left = context.pop().f64;
+    int32_t result = (left == right) ? 1 : 0;
+    context.pushI32(result);
+
+    TRACE_VERBOSE("f64.eq: ({}, {}) -> ({})", left, right, result);
+    return next_;
+}
+
+Continuation F64NotEqual::action(Instance& instance) {
+    Context& context = instance.getActiveContext();
+
+    double right = context.pop().f64;
+    double left = context.pop().f64;
+    int32_t result = (left != right) ? 1 : 0;
+    context.pushI32(result);
+
+    TRACE_VERBOSE("f64.ne: ({}, {}) -> ({})", left, right, result);
+    return next_;
+}
+
+Continuation F64LessThan::action(Instance& instance) {
+    Context& context = instance.getActiveContext();
+
+    double right = context.pop().f64;
+    double left = context.pop().f64;
+    int32_t result = (left < right) ? 1 : 0;
+    context.pushI32(result);
+
+    TRACE_VERBOSE("f64.lt: ({}, {}) -> ({})", left, right, result);
+    return next_;
+}
+
+Continuation F64GreaterThan::action(Instance& instance) {
+    Context& context = instance.getActiveContext();
+
+    double right = context.pop().f64;
+    double left = context.pop().f64;
+    int32_t result = (left > right) ? 1 : 0;
+    context.pushI32(result);
+
+    TRACE_VERBOSE("f64.gt: ({}, {}) -> ({})", left, right, result);
+    return next_;
+}
+
+Continuation F64LessEqual::action(Instance& instance) {
+    Context& context = instance.getActiveContext();
+
+    double right = context.pop().f64;
+    double left = context.pop().f64;
+    int32_t result = (left <= right) ? 1 : 0;
+    context.pushI32(result);
+
+    TRACE_VERBOSE("f64.le: ({}, {}) -> ({})", left, right, result);
+    return next_;
+}
+
+Continuation F64GreaterEqual::action(Instance& instance) {
+    Context& context = instance.getActiveContext();
+
+    double right = context.pop().f64;
+    double left = context.pop().f64;
+    int32_t result = (left >= right) ? 1 : 0;
+    context.pushI32(result);
+
+    TRACE_VERBOSE("f64.ge: ({}, {}) -> ({})", left, right, result);
+    return next_;
+}
+
 Continuation I32CountLeadingZeros::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    uint32_t val = context.pop().i32;
-    uint32_t result;
-
-    if (val == 0)
-        result = 32;
-    else
-        result = __builtin_clz(val);
-
+    uint32_t val = static_cast<uint32_t>(context.pop().i32);
+    int32_t result = std::countl_zero(val);
     context.pushI32(result);
 
     TRACE_VERBOSE("i32.clz: ({}) -> ({})", val, result);
@@ -1112,17 +1460,22 @@ Continuation I32CountLeadingZeros::action(Instance& instance) {
 Continuation I32CountTrailingZeros::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    uint32_t val = context.pop().i32;
-    uint32_t result;
-
-    if (val == 0)
-        result = 32;
-    else
-        result = __builtin_ctz(val);
-
+    uint32_t val = static_cast<uint32_t>(context.pop().i32);
+    int32_t result = std::countr_zero(val);
     context.pushI32(result);
 
     TRACE_VERBOSE("i32.ctz: ({}) -> ({})", val, result);
+    return next_;
+}
+
+Continuation I32PopCount::action(Instance& instance) {
+    Context& context = instance.getActiveContext();
+
+    uint32_t val = static_cast<uint32_t>(context.pop().i32);
+    int32_t result = std::popcount(val);
+    context.pushI32(result);
+
+    TRACE_VERBOSE("i32.popcnt: ({}) -> ({})", val, result);
     return next_;
 }
 
@@ -1525,6 +1878,90 @@ Continuation I64ShiftRightUnsigned::action(Instance& instance) {
     return next_;
 }
 
+Continuation I64RotateLeft::action(Instance& instance) {
+    Context& context = instance.getActiveContext();
+
+    uint64_t y = static_cast<uint64_t>(context.pop().i64) & 63;
+    uint64_t x = static_cast<uint64_t>(context.pop().i64);
+    uint64_t result = __builtin_rotateleft64(x, y);
+    context.pushI64(static_cast<int64_t>(result));
+
+    TRACE_VERBOSE("i64.rotl: ({}, {}) -> ({})", x, y, result);
+    return next_;
+}
+
+Continuation I64RotateRight::action(Instance& instance) {
+    Context& context = instance.getActiveContext();
+
+    uint64_t y = static_cast<uint64_t>(context.pop().i64) & 63;
+    uint64_t x = static_cast<uint64_t>(context.pop().i64);
+    uint64_t result = __builtin_rotateright64(x, y);
+    context.pushI64(static_cast<int64_t>(result));
+
+    TRACE_VERBOSE("i64.rotr: ({}, {}) -> ({})", x, y, result);
+    return next_;
+}
+
+Continuation F32Mul::action(Instance& instance) {
+    Context& context = instance.getActiveContext();
+
+    float right = context.pop().f32;
+    float left = context.pop().f32;
+    float result = left * right;
+    context.push(result);
+
+    TRACE_VERBOSE("f32.mul: ({}, {}) -> ({})", left, right, result);
+    return next_;
+}
+
+Continuation F32Div::action(Instance& instance) {
+    Context& context = instance.getActiveContext();
+
+    float right = context.pop().f32;
+    float left = context.pop().f32;
+    float result = left / right;
+    context.push(result);
+
+    TRACE_VERBOSE("f32.div: ({}, {}) -> ({})", left, right, result);
+    return next_;
+}
+
+Continuation F64Mul::action(Instance& instance) {
+    Context& context = instance.getActiveContext();
+
+    double right = context.pop().f64;
+    double left = context.pop().f64;
+    double result = left * right;
+    context.push(result);
+
+    TRACE_VERBOSE("f64.mul: ({}, {}) -> ({})", left, right, result);
+    return next_;
+}
+
+Continuation F64Div::action(Instance& instance) {
+    Context& context = instance.getActiveContext();
+
+    double right = context.pop().f64;
+    double left = context.pop().f64;
+    double result = left / right;
+    context.push(result);
+
+    TRACE_VERBOSE("f64.div: ({}, {}) -> ({})", left, right, result);
+    return next_;
+}
+
+Continuation F64CopySign::action(Instance& instance) {
+    Context& context = instance.getActiveContext();
+
+    double y = context.pop().f64;
+    double x = context.pop().f64;
+    double result = std::copysign(x, y);
+    context.push(result);
+
+    TRACE_VERBOSE("f64.copysign: ({}, {}) -> ({})", x, y, result);
+    return next_;
+}
+
 Continuation I32WrapI64::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
@@ -1556,6 +1993,121 @@ Continuation I64ExtendI32Unsigned::action(Instance& instance) {
     return next_;
 }
 
+Continuation F32ConvertI32Signed::action(Instance& instance) {
+    Context& context = instance.getActiveContext();
+
+    int32_t val = context.pop().i32;
+    context.push(static_cast<float>(val));
+
+    TRACE_VERBOSE("f32.convert_s_i32: ({}) -> ({})", val, static_cast<float>(val));
+    return next_;
+}
+
+Continuation F32DemoteF64::action(Instance& instance) {
+    Context& context = instance.getActiveContext();
+
+    double val = context.pop().f64;
+    context.push(static_cast<float>(val));
+
+    TRACE_VERBOSE("f32.demote_f64: ({}) -> ({})", val, static_cast<float>(val));
+    return next_;
+}
+
+Continuation F64ConvertI32Signed::action(Instance& instance) {
+    Context& context = instance.getActiveContext();
+
+    int32_t val = context.pop().i32;
+    context.push(static_cast<double>(val));
+
+    TRACE_VERBOSE("f64.convert_i32_s: ({}) -> ({})", val, static_cast<double>(val));
+    return next_;
+}
+
+Continuation F64PromoteF32::action(Instance& instance) {
+    Context& context = instance.getActiveContext();
+
+    float val = context.pop().f32;
+    context.push(static_cast<double>(val));
+
+    TRACE_VERBOSE("f64.promote_f32: ({}) -> ({})", val, static_cast<double>(val));
+    return next_;
+}
+
+Continuation I32ReinterpretF32::action(Instance& instance) {
+    TRACE_VERBOSE("i32.reinterpret_f32");
+    return next_;
+}
+
+Continuation I64ReinterpretF64::action(Instance& instance) {
+    TRACE_VERBOSE("i64.reinterpret_f64");
+    return next_;
+}
+
+Continuation F32ReinterpretI32::action(Instance& instance) {
+    TRACE_VERBOSE("f32.reinterpret_i32");
+    return next_;
+}
+
+Continuation F64ReinterpretI64::action(Instance& instance) {
+    TRACE_VERBOSE("f64.reinterpret_i64");
+    return next_;
+}
+
+Continuation I32Extend8Signed::action(Instance& instance) {
+    Context& context = instance.getActiveContext();
+
+    int32_t val = context.pop().i32;
+    int32_t result = static_cast<int8_t>(val);
+    context.push(result);
+
+    TRACE_VERBOSE("i32.extend8_s: ({}) -> ({})", val, result);
+    return next_;
+}
+
+Continuation I32Extend16Signed::action(Instance& instance) {
+    Context& context = instance.getActiveContext();
+
+    int32_t val = context.pop().i32;
+    int32_t result = static_cast<int16_t>(val);
+    context.push(result);
+
+    TRACE_VERBOSE("i32.extend16_s: ({}) -> ({})", val, result);
+    return next_;
+}
+
+Continuation I64Extend8Signed::action(Instance& instance) {
+    Context& context = instance.getActiveContext();
+
+    int64_t val = context.pop().i64;
+    int64_t result = static_cast<int8_t>(val);
+    context.push(result);
+
+    TRACE_VERBOSE("i64.extend8_s: ({}) -> ({})", val, result);
+    return next_;
+}
+
+Continuation I64Extend16Signed::action(Instance& instance) {
+    Context& context = instance.getActiveContext();
+
+    int64_t val = context.pop().i64;
+    int64_t result = static_cast<int16_t>(val);
+    context.push(result);
+
+    TRACE_VERBOSE("i64.extend16_s: ({}) -> ({})", val, result);
+    return next_;
+}
+
+Continuation I64Extend32Signed::action(Instance& instance) {
+    Context& context = instance.getActiveContext();
+
+    int64_t val = context.pop().i64;
+    int64_t result = static_cast<int32_t>(val);
+    context.push(result);
+
+    TRACE_VERBOSE("i64.extend32_s: ({}) -> ({})", val, result);
+    return next_;
+}
+
 /***********************/
 /* Memory Instructions */
 /***********************/
@@ -1571,11 +2123,21 @@ Continuation I32Load::action(Instance& instance) {
     int32_t base = context.pop().i32;
     uint32_t addr = base + offset_;
 
-    std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
-    if (addr + sizeof(int32_t) > memory.size())
-        return trap(instance, "i32.load out of bounds memory address", addr_);
+    int32_t val;
+    if (addr < VIRT_MEMORY) {
+        std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
 
-    int32_t val = *reinterpret_cast<int32_t*>(&memory[addr]);
+        if (addr + sizeof(int32_t) > memory.size())
+            return trap(instance, "i32.load out of bounds memory address", addr_);
+
+        val = *reinterpret_cast<int32_t*>(&memory[addr]);
+    } else {
+        MemoryManagementUnit& mmu = MemoryManagementUnit::instance();
+        if (mmu.readI32(addr, &val) != Errno::SUCCESS) {
+            return trap(instance, "i32.load invalid memory access", addr_);
+        }
+    }
+
     context.pushI32(val);
 
     TRACE_VERBOSE("i32.load {} {}: ({}) -> ({})", align_, offset_, base, val);
@@ -1592,14 +2154,73 @@ Continuation I64Load::action(Instance& instance) {
     int32_t base = context.pop().i32;
     uint32_t addr = base + offset_;
 
-    std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
-    if (addr + sizeof(int64_t) > memory.size())
-        return trap(instance, "i64.load out of bounds memory address", addr);
+    int64_t val;
 
-    int64_t val = *reinterpret_cast<int64_t*>(&memory[addr]);
+    if (addr < VIRT_MEMORY) {
+        std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
+        if (addr + sizeof(int64_t) > memory.size())
+            return trap(instance, "i64.load out of bounds memory address", addr);
+
+        val = *reinterpret_cast<int64_t*>(&memory[addr]);
+    } else {
+        MemoryManagementUnit& mmu = MemoryManagementUnit::instance();
+        if (mmu.readI64(addr, &val) != Errno::SUCCESS) {
+            // repeat the operation after handling the page fault 
+            context.push(base);
+            context.getEpilogues().push(this);
+
+            // trigger page fault handling
+            context.pushI32(addr); // faulting address
+            context.pushI32(false); // is_write
+            return instance.pageFault(instance);
+        }
+    }
+
     context.pushI64(val);
 
     TRACE_VERBOSE("i64.load {} {}: ({}) -> ({})", align_, offset_, base, val);
+    return next_;
+}
+
+F32Load::F32Load(const grammar::F32Load& f32_load)
+    : offset_(f32_load.getMemArg().getOffset()),
+      align_(f32_load.getMemArg().getAlign()) {}
+
+Continuation F32Load::action(Instance& instance) {
+    Context& context = instance.getActiveContext();
+
+    int32_t base = context.pop().i32;
+    uint32_t addr = base + offset_;
+
+    std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
+    if (addr + sizeof(float) > memory.size())
+        return trap(instance, "f32.load out of bounds memory address", addr);
+
+    float val = *reinterpret_cast<float*>(&memory[addr]);
+    context.push(val);
+
+    TRACE_VERBOSE("f32.load {} {}: ({}) -> ({})", align_, offset_, base, val);
+    return next_;
+}
+
+F64Load::F64Load(const grammar::F64Load& f64_load)
+    : offset_(f64_load.getMemArg().getOffset()),
+      align_(f64_load.getMemArg().getAlign()) {}
+
+Continuation F64Load::action(Instance& instance) {
+    Context& context = instance.getActiveContext();
+
+    int32_t base = context.pop().i32;
+    uint32_t addr = base + offset_;
+
+    std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
+    if (addr + sizeof(double) > memory.size())
+        return trap(instance, "f64.load out of bounds memory address", addr);
+
+    double val = *reinterpret_cast<double*>(&memory[addr]);
+    context.push(val);
+
+    TRACE_VERBOSE("f64.load {} {}: ({}) -> ({})", align_, offset_, base, val);
     return next_;
 }
 
@@ -1635,15 +2256,48 @@ Continuation I32Load8Unsigned::action(Instance& instance) {
     int32_t base = context.pop().i32;
     uint32_t addr = base + offset_;
 
-    std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
-    if (addr + sizeof(int8_t) > memory.size())
-        return trap(instance, "i32.load8_u out of bounds memory address", addr);
+    uint8_t val;
+    if (addr < VIRT_MEMORY) {
+        std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
 
-    uint8_t val = memory[addr];
+        if (addr + sizeof(int32_t) > memory.size())
+            return trap(instance, "i32.load out of bounds memory address", addr_);
+
+        val = memory[addr];
+    } else {
+        MemoryManagementUnit& mmu = MemoryManagementUnit::instance();
+        if (mmu.readI8(addr, reinterpret_cast<int8_t*>(&val)) != Errno::SUCCESS) {
+            return trap(instance, "i32.load invalid memory access", addr_);
+        }
+    }
+
     context.pushI32(val);
-
     TRACE_VERBOSE("i32.load8_u {} {}: ({}) -> ({})", align_, offset_, base,
                   val);
+    return next_;
+}
+
+I32Load16Signed::I32Load16Signed(
+    const grammar::I32Load16Signed& i32_load16_s)
+    : offset_(i32_load16_s.getMemArg().getOffset()),
+      align_(i32_load16_s.getMemArg().getAlign()) {}
+
+Continuation I32Load16Signed::action(Instance& instance) {
+    Context& context = instance.getActiveContext();
+
+    int32_t base = context.pop().i32;
+    uint32_t addr = base + offset_;
+
+    std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
+    if (addr + sizeof(int16_t) > memory.size())
+        return trap(instance, "i32.load16_s out of bounds memory address",
+                    addr);
+
+    int16_t val = *reinterpret_cast<int16_t*>(&memory[addr]);
+    context.pushI32(val);
+
+    TRACE_VERBOSE("i32.load16_s align={} offset={}: (base={}) -> (val={})",
+                  align_, offset_, base, val);
     return next_;
 }
 
@@ -1658,15 +2312,147 @@ Continuation I32Load16Unsigned::action(Instance& instance) {
     int32_t base = context.pop().i32;
     uint32_t addr = base + offset_;
 
-    std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
-    if (addr + sizeof(uint16_t) > memory.size())
-        return trap(instance, "i32.load16_u out of bounds memory address",
-                    addr);
+    uint16_t val;
 
-    uint16_t val = *reinterpret_cast<uint16_t*>(&memory[addr]);
+    if (addr < VIRT_MEMORY) {
+        std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
+        if (addr + sizeof(uint16_t) > memory.size())
+            return trap(instance, "i32.load16_u out of bounds memory address",
+                        addr);
+
+        val = *reinterpret_cast<uint16_t*>(&memory[addr]);
+    } else {
+        MemoryManagementUnit& mmu = MemoryManagementUnit::instance();
+        if (mmu.readI16(addr, reinterpret_cast<int16_t*>(&val)) != Errno::SUCCESS) {
+            // repeat the operation after handling the page fault
+            context.push(base);
+            context.getEpilogues().push(this);
+
+            // trigger a page fault
+            context.pushI32(addr);  // faulting address
+            context.pushI32(false); // isWrite
+            return instance.pageFault(instance);
+        }
+    }
+
     context.pushI32(val);
 
     TRACE_VERBOSE("i32.load16_u align={} offset={}: (base={}) -> (val={})",
+                  align_, offset_, base, val);
+    return next_;
+}
+
+I64Load8Signed::I64Load8Signed(
+    const grammar::I64Load8Signed& i64_load8_s)
+    : offset_(i64_load8_s.getOffset()), align_(i64_load8_s.getAlign()) {}
+
+Continuation I64Load8Signed::action(Instance& instance) {
+    Context& context = instance.getActiveContext();
+
+    int32_t base = context.pop().i32;
+    uint32_t addr = base + offset_;
+
+    std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
+    if (addr + sizeof(int8_t) > memory.size())
+        return trap(instance, "i64.load8_s out of bounds memory address",
+                    addr);
+
+    int8_t val = static_cast<int8_t>(memory[addr]);
+    context.pushI64(val);
+
+    TRACE_VERBOSE("i64.load8_s align={} offset={}: (base={}) -> (val={})",
+                  align_, offset_, base, val);
+    return next_;
+}
+
+I64Load8Unsigned::I64Load8Unsigned(
+    const grammar::I64Load8Unsigned& i64_load8_u)
+    : offset_(i64_load8_u.getOffset()), align_(i64_load8_u.getAlign()) {}
+
+Continuation I64Load8Unsigned::action(Instance& instance) {
+    Context& context = instance.getActiveContext();
+
+    int32_t base = context.pop().i32;
+    uint32_t addr = base + offset_;
+
+    std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
+    if (addr + sizeof(uint8_t) > memory.size())
+        return trap(instance, "i64.load8_u out of bounds memory address",
+                    addr);
+
+    uint8_t val = memory[addr];
+    context.pushI64(val);
+
+    TRACE_VERBOSE("i64.load8_u align={} offset={}: (base={}) -> (val={})",
+                  align_, offset_, base, val);
+    return next_;
+}
+
+I64Load16Signed::I64Load16Signed(
+    const grammar::I64Load16Signed& i64_load16_s)
+    : offset_(i64_load16_s.getOffset()), align_(i64_load16_s.getAlign()) {}
+
+Continuation I64Load16Signed::action(Instance& instance) {
+    Context& context = instance.getActiveContext();
+
+    int32_t base = context.pop().i32;
+    uint32_t addr = base + offset_;
+
+    std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
+    if (addr + sizeof(int16_t) > memory.size())
+        return trap(instance, "i64.load16_s out of bounds memory address",
+                    addr);
+
+    int16_t val = *reinterpret_cast<int16_t*>(&memory[addr]);
+    context.pushI64(val);
+
+    TRACE_VERBOSE("i64.load16_s align={} offset={}: (base={}) -> (val={})",
+                  align_, offset_, base, val);
+    return next_;
+}
+
+I64Load16Unsigned::I64Load16Unsigned(
+    const grammar::I64Load16Unsigned& i64_load16_u)
+    : offset_(i64_load16_u.getOffset()), align_(i64_load16_u.getAlign()) {}
+
+Continuation I64Load16Unsigned::action(Instance& instance) {
+    Context& context = instance.getActiveContext();
+
+    int32_t base = context.pop().i32;
+    uint32_t addr = base + offset_;
+
+    std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
+    if (addr + sizeof(uint16_t) > memory.size())
+        return trap(instance, "i64.load16_u out of bounds memory address",
+                    addr);
+
+    uint16_t val = *reinterpret_cast<uint16_t*>(&memory[addr]);
+    context.pushI64(val);
+
+    TRACE_VERBOSE("i64.load16_u align={} offset={}: (base={}) -> (val={})",
+                  align_, offset_, base, val);
+    return next_;
+}
+
+I64Load32Signed::I64Load32Signed(
+    const grammar::I64Load32Signed& i64_load32_s)
+    : offset_(i64_load32_s.getOffset()), align_(i64_load32_s.getAlign()) {}
+
+Continuation I64Load32Signed::action(Instance& instance) {
+    Context& context = instance.getActiveContext();
+
+    int32_t base = context.pop().i32;
+    uint32_t addr = base + offset_;
+
+    std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
+    if (addr + sizeof(int32_t) > memory.size())
+        return trap(instance, "i64.load32_s out of bounds memory address",
+                    addr);
+
+    int32_t val = *reinterpret_cast<int32_t*>(&memory[addr]);
+    context.pushI64(val);
+
+    TRACE_VERBOSE("i64.load32_s align={} offset={}: (base={}) -> (val={})",
                   align_, offset_, base, val);
     return next_;
 }
@@ -1707,14 +2493,28 @@ Continuation I32Store::action(Instance& instance) {
 
     uint32_t addr = base + offset_;
 
-    std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
-    if (addr + sizeof(int32_t) > memory.size())
-        return trap(instance, "i32.store out of bounds memory address", addr_);
+    if (addr < VIRT_MEMORY) {
+        std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
 
-    if (addr == 42155068)
-        fmt::println("{}: i32.store {}: {}", getFormattedAddres(instance), offset_, val);
+        if (addr + sizeof(int32_t) > memory.size())
+            return trap(instance, "i32.store out of bounds memory address", addr);
 
-    *reinterpret_cast<int32_t*>(&memory[addr]) = val;
+        *reinterpret_cast<int32_t*>(&memory[addr]) = val; 
+    } else {
+        MemoryManagementUnit& mmu = MemoryManagementUnit::instance();
+        if (mmu.writeI32(addr, val) != Errno::SUCCESS) {
+            // repeat the operation after handling the page fault
+            context.pushI32(base);
+            context.pushI32(val);
+            context.getEpilogues().push(this);
+            
+            // trigger page fault handling
+            context.pushI32(addr); // faulting address
+            context.pushI32(true); // is_write
+            return instance.pageFault(instance);
+        }
+    }
+
 
     TRACE_VERBOSE("i32.store {} {}: ({}, {}) -> ()", align_, offset_, base,
                   val);
@@ -1733,13 +2533,51 @@ Continuation I64Store::action(Instance& instance) {
 
     uint32_t addr = base + offset_;
 
-    std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
-    if (addr + sizeof(int64_t) > memory.size())
-        return trap(instance, "i64.store out of bounds memory address", addr);
+    if (addr < VIRT_MEMORY) {
+        std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
 
-    *reinterpret_cast<int64_t*>(&memory[addr]) = val;
+        if (addr + sizeof(int64_t) > memory.size())
+            return trap(instance, "i64.store out of bounds memory address", addr);
+
+        *reinterpret_cast<int64_t*>(&memory[addr]) = val; 
+    } else {
+        MemoryManagementUnit& mmu = MemoryManagementUnit::instance();
+        if (mmu.writeI64(addr, val) != Errno::SUCCESS) {
+            // repeat the operation after handling the page fault
+            context.pushI32(base);
+            context.pushI64(val);
+            context.getEpilogues().push(this);
+            
+            // trigger page fault handling
+            context.pushI32(addr); // faulting address
+            context.pushI32(true); // is_write
+            return instance.pageFault(instance);
+        }
+    }
 
     TRACE_VERBOSE("i64.store {} {}: ({}, {}) -> ()", align_, offset_, base,
+                  val);
+    return next_;
+}
+
+F32Store::F32Store(const grammar::F32Store& f32_store)
+    : offset_(f32_store.getOffset()), align_(f32_store.getAlign()) {}
+
+Continuation F32Store::action(Instance& instance) {
+    Context& context = instance.getActiveContext();
+
+    float val = context.pop().f32;
+    int32_t base = context.pop().i32;
+
+    uint32_t addr = base + offset_;
+
+    std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
+    if (addr + sizeof(float) > memory.size())
+        return trap(instance, "f32.store out of bounds memory address", addr);
+
+    std::memcpy(&memory[addr], &val, sizeof(float));
+
+    TRACE_VERBOSE("f32.store {} {}: ({}, {}) -> ()", align_, offset_, base,
                   val);
     return next_;
 }
@@ -1777,11 +2615,27 @@ Continuation I32Store8::action(Instance& instance) {
     int32_t base = context.pop().i32;
 
     uint32_t addr = base + offset_;
-    std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
-    if (addr + sizeof(int8_t) > memory.size())
-        return trap(instance, "i32.store8 out of bounds memory address", addr);
 
-    memory[addr] = static_cast<uint8_t>(val & 0xFF);
+    if (addr < VIRT_MEMORY) {
+        std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
+        if (addr + sizeof(int8_t) > memory.size())
+            return trap(instance, "i32.store8 out of bounds memory address", addr);
+
+        memory[addr] = static_cast<uint8_t>(val & 0xFF);
+    } else {
+        MemoryManagementUnit& mmu = MemoryManagementUnit::instance();
+        if (mmu.writeI8(addr, static_cast<int8_t>(val & 0xFF)) != Errno::SUCCESS) {
+            // repeat the operation after handling the page fault
+            context.pushI32(base);
+            context.pushI32(val);
+            context.getEpilogues().push(this);
+            
+            // trigger page fault handling
+            context.pushI32(addr); // faulting address
+            context.pushI32(true); // is_write
+            return instance.pageFault(instance);
+        }
+    }
 
     TRACE_VERBOSE("i32.store8 {} {}: ({}, {}) -> ()", align_, offset_, base,
                   val);
@@ -1799,15 +2653,98 @@ Continuation I32Store16::action(Instance& instance) {
     int32_t base = context.pop().i32;
 
     uint32_t addr = base + offset_;
-    std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
-    if (addr + sizeof(int16_t) > memory.size())
-        return trap(instance, "i32.store16 out of bounds memory address", addr);
 
-    *reinterpret_cast<uint16_t*>(&memory[addr]) =
-        static_cast<uint16_t>(val & 0xFFFF);
+    if (addr < VIRT_MEMORY) {
+        std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
+
+        if (addr + sizeof(int16_t) > memory.size())
+            return trap(instance, "i32.store16 out of bounds memory address", addr);
+
+        *reinterpret_cast<uint16_t*>(&memory[addr]) =
+            static_cast<uint16_t>(val & 0xFFFF);
+    } else {
+        MemoryManagementUnit& mmu = MemoryManagementUnit::instance();
+        if (mmu.writeI16(addr, static_cast<int16_t>(val & 0xFFFF)) != Errno::SUCCESS) {
+            // repeat the operation after handling the page fault
+            context.pushI32(base);
+            context.pushI32(val);
+            context.getEpilogues().push(this);
+            
+            // trigger page fault handling
+            context.pushI32(addr); // faulting address
+            context.pushI32(true); // is_write
+            return instance.pageFault(instance);
+        }
+    }
 
     TRACE_VERBOSE("i32.store16 align={} offset={}: (base={}, val={}) -> ()",
                   align_, offset_, base, val & 0xFFFF);
+    return next_;
+}
+
+I64Store8::I64Store8(const grammar::I64Store8& i64_store8)
+    : offset_(i64_store8.getMemArg().getOffset()),
+      align_(i64_store8.getMemArg().getAlign()) {}
+
+Continuation I64Store8::action(Instance& instance) {
+    Context& context = instance.getActiveContext();
+
+    int64_t val = context.pop().i64;
+    int32_t base = context.pop().i32;
+
+    uint32_t addr = base + offset_;
+    std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
+    if (addr + sizeof(int8_t) > memory.size())
+        return trap(instance, "i64.store8 out of bounds memory address", addr);
+
+    memory[addr] = val & 0xFF;
+
+    TRACE_VERBOSE("i64.store8 align={} offset={}: (base={}, val={}) -> ()",
+                  align_, offset_, base, val & 0xFF);
+    return next_;
+}
+
+I64Store16::I64Store16(const grammar::I64Store16& i64_store16)
+    : offset_(i64_store16.getMemArg().getOffset()),
+      align_(i64_store16.getMemArg().getAlign()) {}
+
+Continuation I64Store16::action(Instance& instance) {
+    Context& context = instance.getActiveContext();
+
+    int64_t val = context.pop().i64;
+    int32_t base = context.pop().i32;
+
+    uint32_t addr = base + offset_;
+    std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
+    if (addr + sizeof(int16_t) > memory.size())
+        return trap(instance, "i64.store16 out of bounds memory address", addr);
+
+    *reinterpret_cast<uint16_t*>(&memory[addr]) = static_cast<uint16_t>(val & 0xFFFF);
+
+    TRACE_VERBOSE("i64.store16 align={} offset={}: (base={}, val={}) -> ()",
+                  align_, offset_, base, val & 0xFFFF);
+    return next_;
+}
+
+I64Store32::I64Store32(const grammar::I64Store32& i64_store32)
+    : offset_(i64_store32.getMemArg().getOffset()),
+      align_(i64_store32.getMemArg().getAlign()) {}
+
+Continuation I64Store32::action(Instance& instance) {
+    Context& context = instance.getActiveContext();
+
+    int64_t val = context.pop().i64;
+    int32_t base = context.pop().i32;
+
+    uint32_t addr = base + offset_;
+    std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
+    if (addr + sizeof(int32_t) > memory.size())
+        return trap(instance, "i64.store32 out of bounds memory address", addr);
+
+    *reinterpret_cast<uint32_t*>(&memory[addr]) = static_cast<uint32_t>(val & 0xFFFFFFFF);
+
+    TRACE_VERBOSE("i64.store32 align={} offset={}: (base={}, val={}) -> ()",
+                  align_, offset_, base, val & 0xFFFFFFFF);
     return next_;
 }
 
@@ -1881,12 +2818,63 @@ Continuation MemoryCopy::action(Instance& instance) {
     uint32_t src = static_cast<uint32_t>(context.pop().i32);
     uint32_t dst = static_cast<uint32_t>(context.pop().i32);
 
-    std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
-    if (src + count > memory.size() || dst + count > memory.size())
-        return trap(instance, "memory.copy out of bounds memory address",
+    if ((src < VIRT_MEMORY && src + count >= VIRT_MEMORY) ||
+        (dst < VIRT_MEMORY && dst + count >= VIRT_MEMORY)) {
+        return trap(instance,
+                    fmt::format(
+                        "memory.copy crosses into invalid memory region: src=0x{:x} dst=0x{:x} count={}",
+                        src, dst, count),
                     addr_);
+    }
+    
+    std::vector<uint8_t> temp_buffer(count);
 
-    memmove(&memory[dst], &memory[src], count);
+    if (src < VIRT_MEMORY) {
+        std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
+        if (src + count > memory.size())
+            return trap(instance, "memory.copy out of bounds memory address",
+                        addr_);
+
+        memcpy(&temp_buffer[0], &memory[src], count);
+    } else {
+        MemoryManagementUnit& mmu = MemoryManagementUnit::instance();
+        if (mmu.read(src, temp_buffer) != Errno::SUCCESS) {
+            // repeat the operation after handling the page fault
+            context.pushI32(dst);
+            context.pushI32(src);
+            context.pushI32(count);
+            context.getEpilogues().push(this);
+            
+            // trigger page fault handling
+            context.pushI32(src); // faulting address
+            context.pushI32(false); // is_write
+            return instance.pageFault(instance);
+        }
+    }
+
+    if (dst < VIRT_MEMORY) {
+        std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
+        if (dst + count > memory.size())
+            return trap(instance, "memory.copy out of bounds memory address",
+                        addr_);
+
+        memcpy(&memory[dst], &temp_buffer[0], count);
+        return next_;
+    } else {
+        MemoryManagementUnit& mmu = MemoryManagementUnit::instance();
+        if (mmu.write(dst, temp_buffer) != Errno::SUCCESS) {
+            // repeat the operation after handling the page fault
+            context.pushI32(dst);
+            context.pushI32(src);
+            context.pushI32(count);
+            context.getEpilogues().push(this);
+            
+            // trigger page fault handling
+            context.pushI32(dst); // faulting address
+            context.pushI32(true); // is_write
+            return instance.pageFault(instance);
+        }
+    }
 
     TRACE_VERBOSE("memory.copy: (dst={}, src={}, count={})", dst, src, count);
     return next_;
@@ -1899,12 +2887,37 @@ Continuation MemoryFill::action(Instance& instance) {
     int32_t val = context.pop().i32;
     uint32_t dst = static_cast<uint32_t>(context.pop().i32);
 
-    std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
-    if (dst + count > memory.size())
-        return trap(instance, "memory.fill out of bounds memory address",
+    if (dst < VIRT_MEMORY && dst + count > VIRT_MEMORY) {
+        return trap(instance,
+                    fmt::format(
+                        "memory.fill crosses into invalid memory region: dst=0x{:x} count={}",
+                        dst, count),
                     addr_);
+    }
 
-    memset(&memory[dst], val, count);
+    if (dst < VIRT_MEMORY) {
+        std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
+        if (dst + count > memory.size())
+            return trap(instance, fmt::format("memory.fill out of bounds memory address: dst=0x{:x} count={}", dst, count),
+                        addr_);
+
+        memset(&memory[dst], val, count);
+    } else {
+        MemoryManagementUnit& mmu = MemoryManagementUnit::instance();
+        if (mmu.memset(dst, static_cast<uint8_t>(val), count) != Errno::SUCCESS) {
+            // repeat the operation after handling the page fault
+            context.pushI32(dst);
+            context.pushI32(val);
+            context.pushI32(count);
+            context.getEpilogues().push(this);
+            
+            // trigger page fault handling
+            context.pushI32(dst); // faulting address
+            context.pushI32(true); // is_write
+            return instance.pageFault(instance);
+        }
+    }
+
     return next_;
 };
 

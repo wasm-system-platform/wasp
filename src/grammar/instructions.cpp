@@ -320,18 +320,20 @@ Expected<Instruction> InstructionBase::parse(std::istream& in,
         return std::make_shared<F64Mul>();
     case F64Div::OPCODE:
         return std::make_shared<F64Div>();
+    case F64CopySign::OPCODE:
+        return std::make_shared<F64CopySign>();
     case I32WrapI64::OPCODE:
         return std::make_shared<I32WrapI64>();
     case I64ExtendI32Signed::OPCODE:
         return std::make_shared<I64ExtendI32Signed>();
     case I64ExtendI32Unsigned::OPCODE:
         return std::make_shared<I64ExtendI32Unsigned>();
-    case F32ConvertSigned32::OPCODE:
-        return std::make_shared<F32ConvertSigned32>();
+    case F32ConvertI32Signed::OPCODE:
+        return std::make_shared<F32ConvertI32Signed>();
     case F32DemoteF64::OPCODE:
         return std::make_shared<F32DemoteF64>();
-    case F64ConvertSigned32::OPCODE:
-        return std::make_shared<F64ConvertSigned32>();
+    case F64ConvertI32Signed::OPCODE:
+        return std::make_shared<F64ConvertI32Signed>();
     case F64PromoteF32::OPCODE:
         return std::make_shared<F64PromoteF32>();
     case I32ReinterpretF32::OPCODE:
@@ -390,8 +392,7 @@ Expected<Instruction> InstructionBase::parse(std::istream& in,
         return std::make_shared<I32Load8Unsigned>(*i32_load8_u_res);
     }
     case I32Load16Signed::OPCODE: {
-        Expected<I32Load16Signed> i32_load16_s_exp =
-            I32Load16Signed::parse(in);
+        Expected<I32Load16Signed> i32_load16_s_exp = I32Load16Signed::parse(in);
         if (!i32_load16_s_exp)
             return Unexpected(PROPAGATE(i32_load16_s_exp));
         return std::make_shared<I32Load16Signed>(*i32_load16_s_exp);
@@ -404,8 +405,7 @@ Expected<Instruction> InstructionBase::parse(std::istream& in,
         return std::make_shared<I32Load16Unsigned>(*i32_load16_u_res);
     }
     case I64Load8Signed::OPCODE: {
-        Expected<I64Load8Signed> i64_load8_s_exp =
-            I64Load8Signed::parse(in);
+        Expected<I64Load8Signed> i64_load8_s_exp = I64Load8Signed::parse(in);
         if (!i64_load8_s_exp)
             return Unexpected(PROPAGATE(i64_load8_s_exp));
         return std::make_shared<I64Load8Signed>(*i64_load8_s_exp);
@@ -418,8 +418,7 @@ Expected<Instruction> InstructionBase::parse(std::istream& in,
         return std::make_shared<I64Load8Unsigned>(*i64_load8_u_exp);
     }
     case I64Load16Signed::OPCODE: {
-        Expected<I64Load16Signed> i64_load16_s_exp =
-            I64Load16Signed::parse(in);
+        Expected<I64Load16Signed> i64_load16_s_exp = I64Load16Signed::parse(in);
         if (!i64_load16_s_exp)
             return Unexpected(PROPAGATE(i64_load16_s_exp));
         return std::make_shared<I64Load16Signed>(*i64_load16_s_exp);
@@ -432,8 +431,7 @@ Expected<Instruction> InstructionBase::parse(std::istream& in,
         return std::make_shared<I64Load16Unsigned>(*i64_load16_u_exp);
     }
     case I64Load32Signed::OPCODE: {
-        Expected<I64Load32Signed> i64_load32_s_exp =
-            I64Load32Signed::parse(in);
+        Expected<I64Load32Signed> i64_load32_s_exp = I64Load32Signed::parse(in);
         if (!i64_load32_s_exp)
             return Unexpected(PROPAGATE(i64_load32_s_exp));
         return std::make_shared<I64Load32Signed>(*i64_load32_s_exp);
@@ -506,7 +504,7 @@ Expected<Instruction> InstructionBase::parse(std::istream& in,
         return std::make_shared<MemoryGrow>(*memory_grow_exp);
     }
     case MemoryIntstructionBase::OPCODE:
-        return MemoryIntstructionBase::parse(in);
+        return MemoryIntstructionBase::parse(in, addr);
     case AtomicIntstructionBase::OPCODE:
         return AtomicIntstructionBase::parse(in);
     default:
@@ -1143,7 +1141,7 @@ Expected<MemoryGrow> MemoryGrow::parse(std::istream& in, size_t addr) {
 
 std::string MemoryGrow::toString() const { return "memory.grow 0"; }
 
-Expected<Instruction> MemoryIntstructionBase::parse(std::istream& in) {
+Expected<Instruction> MemoryIntstructionBase::parse(std::istream& in, size_t addr) {
     Expected<Byte> mem_opcode_exp = Byte::parse(in);
     if (!mem_opcode_exp)
         return Unexpected(PROPAGATE(mem_opcode_exp));
@@ -1169,7 +1167,7 @@ Expected<Instruction> MemoryIntstructionBase::parse(std::istream& in) {
         return std::make_shared<MemoryCopy>(*mem_copy_exp);
     }
     case MemoryFill::MEM_OPCODE: {
-        Expected<MemoryFill> mem_fill_exp = MemoryFill::parse(in);
+        Expected<MemoryFill> mem_fill_exp = MemoryFill::parse(in, addr);
         if (!mem_fill_exp)
             return Unexpected(PROPAGATE(mem_fill_exp));
         return std::make_shared<MemoryFill>(*mem_fill_exp);
@@ -1225,14 +1223,14 @@ Expected<MemoryCopy> MemoryCopy::parse(std::istream& in) {
     return MemoryCopy();
 }
 
-Expected<MemoryFill> MemoryFill::parse(std::istream& in) {
+Expected<MemoryFill> MemoryFill::parse(std::istream& in, size_t addr) {
     Expected<Byte> zero_exp = Byte::parse(in);
     if (!zero_exp)
         return Unexpected(PROPAGATE(zero_exp));
     if (*zero_exp != 0)
         return Unexpected(ERROR("invalid trailing bytes"));
 
-    return MemoryFill();
+    return MemoryFill(addr);
 }
 
 /******************************/

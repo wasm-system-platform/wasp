@@ -42,5 +42,7 @@ void Timer::clear() { t_ = {}; }
 
 uint64_t Timer::getTime() {
     auto now = std::chrono::steady_clock::now();
-    return std::chrono::duration_cast<std::chrono::nanoseconds>(now - boot_time_).count();
+    return std::chrono::duration_cast<std::chrono::nanoseconds>(now -
+                                                                boot_time_)
+        .count();
 }

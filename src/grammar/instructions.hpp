@@ -1048,7 +1048,7 @@ public:
     std::string toString() const override { return "i64.shr_u"; }
 };
 
-class I64RotateLeft: public InstructionBase {
+class I64RotateLeft : public InstructionBase {
 public:
     static constexpr uint8_t OPCODE = 0x89;
 
@@ -1057,7 +1057,7 @@ public:
     std::string toString() const override { return "i64.rotl"; }
 };
 
-class I64RotateRight: public InstructionBase {
+class I64RotateRight : public InstructionBase {
 public:
     static constexpr uint8_t OPCODE = 0x8A;
 
@@ -1102,6 +1102,14 @@ public:
     std::string toString() const override { return "f64.div"; }
 };
 
+class F64CopySign : public InstructionBase {
+public:
+    static constexpr uint8_t OPCODE = 0xA6;
+
+    F64CopySign() : InstructionBase(OPCODE) {}
+
+    std::string toString() const override { return "f64.copysign"; }
+};
 
 class I32WrapI64 : public InstructionBase {
 public:
@@ -1130,13 +1138,13 @@ public:
     std::string toString() const override { return "i64.extend_i32_u"; }
 };
 
-class F32ConvertSigned32 : public InstructionBase {
+class F32ConvertI32Signed : public InstructionBase {
 public:
     static constexpr uint8_t OPCODE = 0xB2;
 
-    F32ConvertSigned32() : InstructionBase(OPCODE) {}
+    F32ConvertI32Signed() : InstructionBase(OPCODE) {}
 
-    std::string toString() const override { return "f32.convert_s_i32"; }
+    std::string toString() const override { return "f32.convert_i32_s"; }
 };
 
 class F32DemoteF64 : public InstructionBase {
@@ -1148,13 +1156,13 @@ public:
     std::string toString() const override { return "f32.demote_f64"; }
 };
 
-class F64ConvertSigned32 : public InstructionBase {
+class F64ConvertI32Signed : public InstructionBase {
 public:
     static constexpr uint8_t OPCODE = 0xB7;
 
-    F64ConvertSigned32() : InstructionBase(OPCODE) {}
+    F64ConvertI32Signed() : InstructionBase(OPCODE) {}
 
-    std::string toString() const override { return "f32.convert_s_i32"; }
+    std::string toString() const override { return "f64.convert_i32_s"; }
 };
 
 class F64PromoteF32 : public InstructionBase {
@@ -1199,7 +1207,7 @@ public:
 
     F64ReinterpretI64() : InstructionBase(OPCODE) {}
 
-    std::string toString() const override { return "f32.reinterpret_i64"; }
+    std::string toString() const override { return "f64.reinterpret_i64"; }
 };
 
 class I32Extend8Signed : public InstructionBase {
@@ -1643,7 +1651,7 @@ class MemoryIntstructionBase : public InstructionBase {
 public:
     static constexpr uint8_t OPCODE = 0xFC;
 
-    static Expected<Instruction> parse(std::istream& in);
+    static Expected<Instruction> parse(std::istream& in, size_t addr);
 
     uint32_t getMemoryOpcode() const { return mem_opcode_; }
 
@@ -1656,8 +1664,8 @@ public:
     }
 
 protected:
-    MemoryIntstructionBase(uint32_t mem_id)
-        : InstructionBase(OPCODE), mem_opcode_(mem_id) {}
+    MemoryIntstructionBase(uint32_t mem_id, size_t addr = 0)
+        : InstructionBase(OPCODE, addr), mem_opcode_(mem_id) {}
 
 private:
     uint32_t mem_opcode_;
@@ -1713,12 +1721,12 @@ class MemoryFill : public MemoryIntstructionBase {
 public:
     static constexpr uint32_t MEM_OPCODE = 0x0B;
 
-    static Expected<MemoryFill> parse(std::istream& in);
+    static Expected<MemoryFill> parse(std::istream& in, size_t addr);
 
     std::string toString() const override { return "memory.fill"; }
 
 private:
-    MemoryFill() : MemoryIntstructionBase(MEM_OPCODE) {}
+    MemoryFill(size_t addr) : MemoryIntstructionBase(MEM_OPCODE, addr) {}
 };
 
 /******************************/

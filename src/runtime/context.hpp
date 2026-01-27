@@ -15,15 +15,15 @@ class Stack {
 public:
     size_t size() const { return top; }
 
-    Value& peek() { return data[top - 1]; }
-
-    inline Value pop() { return data[--top]; }
-
-    inline void push(Value value) { data[top++] = value; }
+    Value& peek() { return data_[top - 1]; }
+    inline Value pop() { return data_[--top]; }
+    inline void push(Value value) { data_[top++] = value; }
+    inline void resize(size_t new_size) { top = new_size; }
+    const Value* data() { return data_.data(); }
 
 private:
     size_t top = 0;
-    std::array<Value, UINT16_MAX> data;
+    std::array<Value, UINT16_MAX> data_;
 };
 
 class Locals {
@@ -55,6 +55,10 @@ public:
         stack_[frame_pointer_ + idx] = value;
     }
 
+    size_t getFramePointersSize() const {
+        return frame_pointers_.size();
+    }
+
 private:
     size_t stack_pointer_ = 0;
     size_t frame_pointer_ = 0;
@@ -64,13 +68,19 @@ private:
 
 class Epilogues {
 public:
-    void push(Continuation epilogue) { data[top++] = epilogue; }
-
-    Continuation pop() { return data[--top]; }
+    void push(Continuation epilogue) {
+        if (epilogue == nullptr) fmt::println("oof");
+        data_[top++] = epilogue; }
+    Continuation pop() { return data_[--top]; }
+    Continuation peek() { return data_[top - 1]; }
+    void swap(Continuation epilogue) { data_[top - 1] = epilogue; }
+    void shrink(size_t new_size) { top = new_size; }
+    size_t size() { return top; }
+    const Continuation* data()  { return data_.data(); }
 
 private:
     size_t top = 0;
-    std::array<Continuation, UINT16_MAX> data;
+    std::array<Continuation, UINT16_MAX> data_;
 };
 
 class OperationBase;
@@ -93,6 +103,7 @@ public:
     inline Value pop() { return stack_->pop(); }
     inline void drop() { stack_->pop(); }
 
+    inline Locals& getLocals() { return locals_; }
     void pushLocals(const std::vector<Value>& locals) {
         return locals_.pushLocals(locals);
     }
@@ -121,8 +132,17 @@ public:
         return timeout_;
     }
 
+    // execve stack
+    inline void setExecveStack(uint32_t stack) { execve_stack_ = stack; }
+    inline uint32_t getExecveStack() const { return execve_stack_; }
+
+    // pid
+    inline void setPid(uint32_t pid) { pid_ = pid; }
+    inline uint32_t getPid() const { return pid_; }
+
 private:
     size_t id_;
+    uint32_t pid_ = -1;
 
     Locals locals_;
     std::unique_ptr<Stack> stack_ = std::make_unique<Stack>();
@@ -131,6 +151,7 @@ private:
     RunState run_state_;
 
     uint32_t wait_addr_;
+    uint32_t execve_stack_ = 0;
     int64_t timeout_;
 };
 

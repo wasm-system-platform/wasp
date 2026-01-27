@@ -17,9 +17,12 @@ sp_sources = files(
     'src/runtime/waiting_room.cpp',
     'src/runtime/function.cpp',
     'src/runtime/vm.cpp',
+    'src/runtime/handler.cpp',
+    'src/runtime/setjmp.cpp',
     'src/devices/device.cpp',
     'src/devices/timer.cpp',
     # 'src/devices/keyboard.cpp',
+    'src/hw/mmu.cpp',
     'src/hw/wasm_disk.cpp',
     'src/util/error_handling.cpp'
 )

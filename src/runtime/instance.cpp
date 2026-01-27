@@ -3,9 +3,12 @@
 
 #include "devices/keyboard.hpp"
 #include "hw/wasm_disk.hpp"
+#include "hw/mmu.hpp"
 #include "runtime/context_manager.hpp"
 #include "runtime/instance.hpp"
+#include "runtime/handler.hpp"
 #include "runtime/process_manager.hpp"
+#include "runtime/setjmp.hpp"
 
 namespace runtime {
 
@@ -69,7 +72,8 @@ Instance::createKernel(const std::string& kernel_path,
         return instance.getGlobalState().getInterruptsEnabled();
     };
 
-    Function interrupts_enable = Function::createExternal(interrupts_enable_func);
+    Function interrupts_enable =
+        Function::createExternal(interrupts_enable_func);
     Function interrupts_disable =
         Function::createExternal(interrupts_disable_func);
     Function interrupts_enabled =
@@ -89,11 +93,13 @@ Instance::createKernel(const std::string& kernel_path,
     Function terminal_write = Function::createExternal(terminal_write_func);
 
     // Console
-    std::function<int32_t(Instance&, int32_t, int32_t, int32_t)> console_out_func =
-        [](Instance& instance, uint32_t buffer, uint32_t count, uint32_t nwritten) -> int32_t {
+    std::function<int32_t(Instance&, int32_t, int32_t, int32_t)>
+        console_out_func = [](Instance& instance, uint32_t buffer,
+                              uint32_t count, uint32_t nwritten) -> int32_t {
         std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
 
-        if (buffer + count >= memory.size() || nwritten + sizeof(int32_t) >= memory.size()) {
+        if (buffer + count >= memory.size() ||
+            nwritten + sizeof(int32_t) >= memory.size()) {
             return -1;
         }
 
@@ -109,13 +115,15 @@ Instance::createKernel(const std::string& kernel_path,
 
     // Debug
     std::function<void(Instance&, int32_t, int32_t, int32_t)> debug_log_func =
-        [](Instance& instance, uint32_t buffer, uint32_t count, int32_t level) -> void {
+        [](Instance& instance, uint32_t buffer, uint32_t count,
+           int32_t level) -> void {
         std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
 
         if (buffer + count < memory.size()) {
-            std::string_view msg(reinterpret_cast<char*>(&memory[buffer]), count);
+            std::string_view msg(reinterpret_cast<char*>(&memory[buffer]),
+                                 count);
             fmt::print("{}", msg);
-        }        
+        }
     };
 
     Function debug_log = Function::createExternal(debug_log_func);
@@ -153,15 +161,15 @@ Instance::createKernel(const std::string& kernel_path,
 
     std::function<int32_t(Instance&, int32_t, int32_t)> disk_read_func =
         [disk](Instance& instance, uint32_t buf, uint32_t count) -> int32_t {
-            std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
-            if (memory.size() < buf + 1) {
-                return -1;
-            }
+        std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
+        if (memory.size() < buf + 1) {
+            return -1;
+        }
 
-            return disk->read(&instance.getGlobalState().getMemory()[buf], count);
+        return disk->read(&instance.getGlobalState().getMemory()[buf], count);
     };
-    std::function<int32_t(Instance&, int32_t)>
-        disk_tellg_func = [disk](Instance& instance, uint32_t offset) -> int32_t {
+    std::function<int32_t(Instance&, int32_t)> disk_tellg_func =
+        [disk](Instance& instance, uint32_t offset) -> int32_t {
         std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
         if (memory.size() < offset + sizeof(uint32_t)) {
             return -1;
@@ -171,14 +179,15 @@ Instance::createKernel(const std::string& kernel_path,
     };
     std::function<int32_t(Instance&, int32_t, int32_t, int32_t)>
         disk_seekg_func = [disk](Instance& instance, uint32_t offset,
-                                     int32_t whence, uint32_t new_offset) -> int32_t {
+                                 int32_t whence,
+                                 uint32_t new_offset) -> int32_t {
         std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
         if (memory.size() < new_offset + sizeof(uint32_t)) {
             return -1;
         }
 
-        
-        return disk->seekg(offset, whence, reinterpret_cast<uint32_t*>(&memory[new_offset]));
+        return disk->seekg(offset, whence,
+                           reinterpret_cast<uint32_t*>(&memory[new_offset]));
     };
 
     Function disk_read = Function::createExternal(disk_read_func);
@@ -187,15 +196,15 @@ Instance::createKernel(const std::string& kernel_path,
 
     std::function<int32_t(Instance&, int32_t, int32_t)> disk_write_func =
         [disk](Instance& instance, uint32_t buf, uint32_t count) -> int32_t {
-            std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
-            if (memory.size() < buf + 1) {
-                return -1;
-            }
+        std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
+        if (memory.size() < buf + 1) {
+            return -1;
+        }
 
-            return disk->write(&instance.getGlobalState().getMemory()[buf], count);
+        return disk->write(&instance.getGlobalState().getMemory()[buf], count);
     };
-    std::function<int32_t(Instance&, int32_t)>
-        disk_tellp_func = [disk](Instance& instance, uint32_t offset) -> int32_t {
+    std::function<int32_t(Instance&, int32_t)> disk_tellp_func =
+        [disk](Instance& instance, uint32_t offset) -> int32_t {
         std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
         if (memory.size() < offset + sizeof(uint32_t)) {
             return -1;
@@ -205,13 +214,15 @@ Instance::createKernel(const std::string& kernel_path,
     };
     std::function<int32_t(Instance&, int32_t, int32_t, int32_t)>
         disk_seekp_func = [disk](Instance& instance, uint32_t offset,
-                                     int32_t whence, uint32_t new_offset) -> int32_t {
+                                 int32_t whence,
+                                 uint32_t new_offset) -> int32_t {
         std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
         if (memory.size() < new_offset + sizeof(uint32_t)) {
             return -1;
         }
 
-        return disk->seekp(offset, whence, reinterpret_cast<uint32_t*>(&memory[new_offset]));
+        return disk->seekp(offset, whence,
+                           reinterpret_cast<uint32_t*>(&memory[new_offset]));
     };
 
     Function disk_write = Function::createExternal(disk_read_func);
@@ -245,10 +256,10 @@ Instance::createKernel(const std::string& kernel_path,
     };
     std::function<void(Instance&, int32_t)> process_unload_func =
         [](Instance& instance, uint32_t pid) -> void {};
-    std::function<int32_t(Instance&, int32_t)> process_run_func =
-        [](Instance& instance, uint32_t pid) -> int32_t {
+    std::function<int32_t(Instance&, int32_t, int32_t)> process_run_func =
+        [](Instance& instance, uint32_t pid, uint32_t execve_stack) -> int32_t {
         ProcessManager& proc_mgr = ProcessManager::instance();
-        proc_mgr.runProcess(pid, instance);
+        proc_mgr.runProcess(pid, instance, execve_stack);
         return 0;
     };
     std::function<void(Instance&, int32_t)> process_terminate_func =
@@ -258,14 +269,22 @@ Instance::createKernel(const std::string& kernel_path,
         proc.getActiveContext().setRunState(Context::RunState::rdy);
     };
     std::function<int32_t(Instance&, int32_t, int32_t, int32_t, int32_t)>
-        process_read_func = [](Instance& instance, int pid, uint32_t dst,
-                               uint32_t proc_src, uint32_t count) -> int32_t {
-        std::vector<uint8_t>& mem = instance.getGlobalState().getMemory();
+        process_read_memory_func = [](Instance& instance, int pid, uint32_t kbuf, uint32_t pbuf, uint32_t count) -> int32_t {
         ProcessManager& proc_mgr = ProcessManager::instance();
-        std::vector<uint8_t>& proc_mem =
-            proc_mgr.getProcess(pid).getGlobalState().getMemory();
-        std::memcpy(&mem[dst], &proc_mem[proc_src], count);
-        return count;
+        Errno result = proc_mgr.readMemory(pid, kbuf, pbuf, count);
+        return static_cast<int32_t>(result);
+    };
+    std::function<int32_t(Instance&, int32_t, int32_t, int32_t, int32_t)>
+        process_read_memory_cstring_func = [](Instance& instance, int pid, uint32_t kbuf, uint32_t pbuf, uint32_t maxlen) -> int32_t {
+        ProcessManager& proc_mgr = ProcessManager::instance();
+        Errno result = proc_mgr.readMemoryCString(pid, kbuf, pbuf, maxlen);
+        return static_cast<int32_t>(result);
+    };
+    std::function<int32_t(Instance&, int32_t, int32_t, int32_t, int32_t)>
+        process_write_memory_func = [](Instance& instance, int pid, uint32_t kbuf, uint32_t pbuf, uint32_t count) -> int32_t {
+        ProcessManager& proc_mgr = ProcessManager::instance();
+        Errno result = proc_mgr.writeMemory(pid, kbuf, pbuf, count);
+        return static_cast<int32_t>(result);
     };
 
     Function process_load = Function::createExternal(process_load_func);
@@ -273,7 +292,9 @@ Instance::createKernel(const std::string& kernel_path,
     Function process_run = Function::createExternal(process_run_func);
     Function process_terminate =
         Function::createExternal(process_terminate_func);
-    Function process_read = Function::createExternal(process_read_func);
+    Function process_read_memory = Function::createExternal(process_read_memory_func);
+    Function process_read_memory_cstring = Function::createExternal(process_read_memory_cstring_func);
+    Function process_write_memory = Function::createExternal(process_write_memory_func);
 
     // Devices
     std::function<int64_t(Instance&)> timer_get_time_func =
@@ -286,10 +307,57 @@ Instance::createKernel(const std::string& kernel_path,
         instance.getTimer().setInterval(timout);
     };
 
-    Function timer_get_time =
-        Function::createExternal(timer_get_time_func);
+    Function timer_get_time = Function::createExternal(timer_get_time_func);
     Function timer_set_interval =
         Function::createExternal(timer_set_interval_func);
+
+
+    /* MMU */
+    std::function<int32_t(Instance&)> mmu_active_table_func =
+        [](Instance& instance) -> int32_t {
+        return MemoryManagementUnit::instance().activeTable();
+    };
+    std::function<int32_t(Instance&, int32_t, int32_t, int32_t, int32_t)> mmu_map_page_func =
+        [](Instance& instance, int32_t table_idx, uint32_t va, uint32_t pa, int32_t prot) -> int32_t {
+        std::vector<uint8_t>& mem = instance.getGlobalState().getMemory();
+        if (pa > mem.size()) {
+            return static_cast<int32_t>(Errno::BAD_ADDRESS);
+        }
+        uint8_t* page = &mem[pa];
+
+        return static_cast<int32_t>(MemoryManagementUnit::instance().mapPage(table_idx, va, page, prot));
+    };
+    std::function<int32_t(Instance&, int32_t, int32_t, int32_t, int32_t)> mmu_unmap_page_func =
+        [](Instance& instance, int32_t table_idx, uint32_t va, uint32_t pa_ptr, int32_t prot_ptr) -> int32_t {
+        std::vector<uint8_t>& mem = instance.getGlobalState().getMemory();
+        if (pa_ptr > mem.size() || prot_ptr > mem.size()) {
+            return static_cast<int32_t>(Errno::BAD_ADDRESS);
+        }
+        uint8_t** pa = reinterpret_cast<uint8_t**>(&mem[pa_ptr]);
+        int* prot = reinterpret_cast<int32_t*>(&mem[prot_ptr]);
+
+        return static_cast<int32_t>(MemoryManagementUnit::instance().unmapPage(table_idx, va, pa, prot));
+    };
+    std::function<int32_t(Instance&, int32_t, int32_t, int32_t, int32_t)> mmu_get_page_func =
+        [](Instance& instance, int32_t table_idx, uint32_t va, uint32_t pa_ptr, int32_t prot_ptr) -> int32_t {
+        std::vector<uint8_t>& mem = instance.getGlobalState().getMemory();
+        if (pa_ptr > mem.size() || prot_ptr > mem.size()) {
+            return static_cast<int32_t>(Errno::BAD_ADDRESS);
+        }
+        uint8_t** pa = reinterpret_cast<uint8_t**>(&mem[pa_ptr]);
+        int* prot = reinterpret_cast<int32_t*>(&mem[prot_ptr]);
+
+        return static_cast<int32_t>(MemoryManagementUnit::instance().getPage(table_idx, va, pa, prot));
+    };
+
+    Function mmu_active_table =
+        Function::createExternal(mmu_active_table_func);
+    Function mmu_map_page =
+        Function::createExternal(mmu_map_page_func);
+    Function mmu_unmap_page =
+        Function::createExternal(mmu_unmap_page_func);
+    Function mmu_get_page =
+        Function::createExternal(mmu_get_page_func);
 
     Expected<std::shared_ptr<Instance>> instance_exp = Instance::create(
         *module, {
@@ -311,9 +379,15 @@ Instance::createKernel(const std::string& kernel_path,
                      {"process.unload", process_unload},
                      {"process.run", process_run},
                      {"process.terminate", process_terminate},
-                     {"process.read", process_read},
+                     {"process.read_memory", process_read_memory},
+                     {"process.read_memory_cstring", process_read_memory_cstring},
+                     {"process.write_memory", process_write_memory},
                      {"timer.get_time", timer_get_time},
                      {"timer.set_interval", timer_set_interval},
+                     {"mmu.active_table", mmu_active_table},
+                     {"mmu.map_page", mmu_map_page},
+                     {"mmu.unmap_page", mmu_unmap_page},
+                     {"mmu.get_page", mmu_get_page},
                  });
     if (!instance_exp)
         return Unexpected(PROPAGATE(instance_exp));
@@ -347,14 +421,30 @@ Instance::createKernel(const std::string& kernel_path,
 
     const Export& syscall_handler = it->second;
 
-    size_t syscall_handler_sig = std::hash<FunctionType>()(
-        FunctionType::ProducerI32_I32_I32_I32_I32_I32());
+    size_t syscall_handler_sig =
+        std::hash<FunctionType>()(FunctionType::ProducerI32x8());
     if (syscall_handler.signature != syscall_handler_sig)
-        return Unexpected(ERROR(fmt::format(
-            "interrupt handler has a wrong signature; "
-            "expected signature '{}' but found '{}'",
-            FunctionType::ProducerI32_I32_I32_I32_I32_I32().toString(),
-            syscall_handler.func_type.toString())));
+        return Unexpected(
+            ERROR(fmt::format("syscall handler has a wrong signature; "
+                              "expected signature '{}' but found '{}'",
+                              FunctionType::ProducerI32x8().toString(),
+                              syscall_handler.func_type.toString())));
+
+    it = instance.exports_.find("page_fault_handler");
+    if (it == instance.exports_.end())
+        return Unexpected(ERROR("no page fault handler found"));
+
+    const Export& page_fault_handler = it->second;
+    size_t page_fault_handler_sig =
+        std::hash<FunctionType>()(FunctionType::ConsumerI32x3());
+    if (page_fault_handler.signature != page_fault_handler_sig)
+        return Unexpected(
+            ERROR(fmt::format("page fault handler has a wrong signature; "
+                              "expected signature '{}' but found '{}'",
+                              FunctionType::ConsumerI32x3().toString(),
+                              page_fault_handler.func_type.toString())));
+
+    instance.page_fault_ = std::make_shared<PageFault>(page_fault_handler.func_idx);
 
     return instance_exp;
 }
@@ -368,8 +458,10 @@ Instance::createUserProgram(const std::string& program, Instance& parent) {
     if (!module_exp)
         return Unexpected(PROPAGATE(module_exp));
 
+    grammar::Module& module = *module_exp;
+
     Instance& kernel = parent.getKernel();
-    
+
     auto it = kernel.exports_.find("sys_call_handler");
     if (it == kernel.exports_.end()) {
         return Unexpected(ERROR("kernel export 'sys_call_handler' not found"));
@@ -380,17 +472,71 @@ Instance::createUserProgram(const std::string& program, Instance& parent) {
     std::shared_ptr<SysCall> sys_call_op =
         std::make_shared<SysCall>(sys_call_handler.func_idx);
 
-    Function sys_call(std::move(sys_call_op), 6,
+    Function sys_call(std::move(sys_call_op), 7,
                       {int32_t(0), int32_t(0), int32_t(0), int32_t(0),
-                       int32_t(0), int32_t(0)},
-                      sys_call_handler.signature);
+                       int32_t(0), int32_t(0), int32_t(0)},
+                      FunctionType::ProducerI32x7().getSignature());
 
+    std::function<int32_t(Instance&)> sys_execve_stack_func =
+        [](Instance& instance) -> int32_t {
+        return instance.getActiveContext().getExecveStack();
+    };
+
+    Function sys_execve_stack = Function::createExternal(sys_execve_stack_func);
+
+    /* setjmp/longjmp */
+    std::shared_ptr<Sigsetjmp> env_sigsetjmp_op = std::make_shared<Sigsetjmp>();
+    Sigsetjmp& sigsetjmp = *env_sigsetjmp_op;
+    Function env_sigsetjmp(env_sigsetjmp_op, 2, {int32_t(0), int32_t(0)}, FunctionType::ProducerI32x2().getSignature());
+    
+    std::shared_ptr<Longjmp> env_longjmp_op = std::make_shared<Longjmp>();
+    Function env_longjmp(env_longjmp_op, 2, {int32_t(0), int32_t(0)}, FunctionType::ConsumerI32x2().getSignature());
+ 
     Expected<std::shared_ptr<Instance>> instance_result =
-        Instance::create(*module_exp, {{"sys.call", sys_call}});
+        Instance::create(*module_exp, {{"sys.call", sys_call},
+                                       {"sys.execve_stack", sys_execve_stack},
+                                    {"env.sigsetjmp", env_sigsetjmp},
+                                    {"env.longjmp", env_longjmp},
+                                    });
     if (!instance_result)
         return Unexpected(PROPAGATE(instance_result));
 
-    instance_result->get()->parent_ = &parent;
+    Instance& instance = **instance_result;
+    instance.parent_ = &parent;
+    instance.page_fault_ = parent.page_fault_;
+
+    it = instance.exports_.find("sigsetjmp_prologue");
+    if (it != instance.exports_.end()) {
+        Export& sigsetjmp_prologue = it->second;
+        size_t sigsetjmp_prologue_sig = FunctionType::ConsumerI32x2().getSignature();
+
+        if (sigsetjmp_prologue_sig == sigsetjmp_prologue.signature) {
+            fmt::println("set sigsetjmp prologue");
+            sigsetjmp.setPrologueFuncIdx(sigsetjmp_prologue.func_idx);
+        } else {
+            fmt::println("warning: sigsetjmp prologue has a wrong signature; "
+                              "expected signature '{}' but found '{}'",
+                              FunctionType::ConsumerI32x2().toString(),
+                              sigsetjmp_prologue.func_type.toString());
+        }
+    }
+
+    it = instance.exports_.find("sigsetjmp_epilogue");
+    if (it != instance.exports_.end()) {
+        Export& sigsetjmp_epilogue = it->second;
+        size_t sigsetjmp_epilogue_sig = FunctionType::ConsumerI32x2().getSignature();
+
+        if (sigsetjmp_epilogue_sig == sigsetjmp_epilogue.signature) {
+            fmt::println("set sigsetjmp epilogue");
+            sigsetjmp.setEpilogueFuncIdx(sigsetjmp_epilogue.func_idx);
+        } else {
+            fmt::println("warning: sigsetjmp epilogue has a wrong signature; "
+                              "expected signature '{}' but found '{}'",
+                              FunctionType::ConsumerI32x2().toString(),
+                              sigsetjmp_epilogue.func_type.toString());
+        }
+    }
+
     return instance_result;
 }
 
@@ -417,7 +563,7 @@ Expected<void> Instance::call(const std::string& name, int32_t a, int32_t b) {
     active_context_->pushI32(a);
     active_context_->pushI32(b);
 
-    Expected<void> result = call(name, FunctionType::ConsumerI32I32());
+    Expected<void> result = call(name, FunctionType::ConsumerI32x2());
     if (!result)
         return Unexpected(PROPAGATE(result));
 
@@ -429,7 +575,7 @@ Expected<int32_t> Instance::callRet(const std::string& name, int32_t a,
     active_context_->pushI32(a);
     active_context_->pushI32(b);
 
-    Expected<void> result = call(name, FunctionType::ProducerI32I32());
+    Expected<void> result = call(name, FunctionType::ProducerI32x2());
     if (!result)
         return Unexpected(PROPAGATE(result));
 
@@ -503,82 +649,6 @@ void Instance::run(OperationBase& operation) {
     }
 
     active_context_->setRunState(old_state);
-}
-
-/*********************/
-/* SysCall Operation */
-/*********************/
-
-Instance::SysCall::SysCall(uint32_t sys_call_handler_idx)
-    : sys_call_handler_idx_(sys_call_handler_idx) {}
-
-Continuation Instance::SysCall::action(Instance& instance) {
-    Context& instance_ctx = instance.getActiveContext();
-    int32_t n = instance_ctx.getLocal(0).i32;
-    int32_t a1 = instance_ctx.getLocal(1).i32;
-    int32_t a2 = instance_ctx.getLocal(2).i32;
-    int32_t a3 = instance_ctx.getLocal(3).i32;
-    int32_t a4 = instance_ctx.getLocal(4).i32;
-    int32_t a5 = instance_ctx.getLocal(5).i32;
-
-    Instance& kernel = instance.getKernel();
-
-    Context& kernel_ctx = kernel.getActiveContext();
-    kernel_ctx.pushI32(n);
-    kernel_ctx.pushI32(a1);
-    kernel_ctx.pushI32(a2);
-    kernel_ctx.pushI32(a3);
-    kernel_ctx.pushI32(a4);
-    kernel_ctx.pushI32(a5);
-
-    instance.switchToKernel();
-
-    const Operation& epilogue = createEpilogue(instance);
-    kernel_ctx.getEpilogues().push(epilogue.get());
-    Function syscall_handler =
-        kernel.getGlobalState().getFunction(sys_call_handler_idx_);
-    return syscall_handler.enterFrame(kernel_ctx);
-}
-
-Instance::SysCall::Epilogue::Epilogue(size_t id, Instance& suspended_instance,
-                                      SysCall& parent)
-    : id_(id), suspended_instance_(suspended_instance), parent_(parent) {}
-
-Continuation Instance::SysCall::Epilogue::action(Instance& kernel) {
-    Context& kernel_ctx = kernel.getActiveContext();
-
-    Function syscall_handler =
-        kernel.getGlobalState().getFunction(parent_.sys_call_handler_idx_);
-    syscall_handler.leaveFrame(kernel_ctx);
-
-    Context& proc_ctx = suspended_instance_.getActiveContext();
-    if (proc_ctx.getRunState() == Context::RunState::running) {
-        int32_t result = kernel_ctx.pop().i32; // else this is the exit code
-        proc_ctx.pushI32(result);
-        kernel.switchToInstance(suspended_instance_);
-    }
-
-    return nullptr;
-}
-
-const Operation& Instance::SysCall::createEpilogue(Instance& instance) {
-    size_t idx;
-
-    if (free_list_.empty()) {
-        idx = epilogues_.size();
-        epilogues_.push_back(std::make_shared<Epilogue>(idx, instance, *this));
-    } else {
-        idx = free_list_.top();
-        free_list_.pop();
-        epilogues_[idx] = std::make_shared<Epilogue>(idx, instance, *this);
-    }
-
-    return epilogues_[idx];
-}
-
-void Instance::SysCall::destroyEpilogue(size_t idx) {
-    epilogues_[idx] = nullptr;
-    free_list_.push(idx);
 }
 
 } // namespace runtime

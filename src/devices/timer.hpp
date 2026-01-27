@@ -27,6 +27,7 @@ private:
         bool interval_mode_ = false;
     };
 
-    std::chrono::time_point<std::chrono::steady_clock> boot_time_ = std::chrono::steady_clock::now();
+    std::chrono::time_point<std::chrono::steady_clock> boot_time_ =
+        std::chrono::steady_clock::now();
     Timout t_;
 };
