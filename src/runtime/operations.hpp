@@ -62,7 +62,8 @@ public:
         return reinterpret_cast<Derived&>(*this);
     }
 
-    std::string getFormattedAddres(Instance& instance) const;
+    size_t getAddress() { return addr_; }
+    std::string getFormattedAddress(Instance& instance) const;
 
 protected:
     Operation successor_;
@@ -73,36 +74,6 @@ protected:
     OperationBase(size_t addr) : addr_(addr) {}
 
     Continuation trap(Instance& instance, std::string msg, size_t addr) const;
-};
-
-/*********************/
-/* Helper Operations */
-/*********************/
-
-class Tick : public OperationBase {
-public:
-    Tick(size_t addr) : OperationBase(addr) {}
-
-    Continuation action(Instance& instance) override;
-
-private:
-    class Epilogue : public OperationBase {
-    public:
-        Epilogue(size_t idx, Instance& suspended, Tick& parent);
-
-        Continuation action(Instance& instance) override;
-
-    private:
-        size_t idx_;
-        Instance* suspended_;
-        Tick* parent_;
-    };
-
-    std::vector<Operation> epilogues_;
-    std::stack<size_t> free_list_;
-
-    const Operation& createEpilogue(Instance& instance);
-    void destroyEpilogue(size_t idx);
 };
 
 /**********************/
@@ -120,6 +91,8 @@ class Nop : public OperationBase {
 public:
     Nop(const grammar::Nop& nop) : OperationBase(nop.getAddress()) {}
     Nop(size_t addr) : OperationBase(addr) {}
+
+    void setAddress(size_t addr) { addr_ = addr; }
 };
 
 class Block : public OperationBase {
@@ -129,6 +102,11 @@ public:
           std::vector<Operation>& branch_targets);
 
     Operation addNext(Operation next) override {
+        if (!next_added_) {
+            end_->as<Nop>().setAddress(next->getAddress());
+            next_added_ = true;
+        }
+
         end_->addNext(next);
         return shared_from_this();
     }
@@ -138,6 +116,7 @@ public:
 private:
     Operation start_;
     Operation end_ = std::make_shared<Nop>(addr_);
+    bool next_added_ = false;
 };
 
 class Loop : public OperationBase {
@@ -153,7 +132,7 @@ public:
     Continuation action(Instance& instance) override;
 
 private:
-    Operation start_ = std::make_shared<Tick>(addr_);
+    Operation start_ = std::make_shared<Nop>(addr_);
     Operation end_ = std::make_shared<Nop>(addr_);
 };
 
@@ -1175,7 +1154,7 @@ private:
     uint32_t offset_;
     uint32_t align_;
 
-    Operation idle_ = std::make_shared<Tick>(addr_);
+    Operation idle_ = std::make_shared<Nop>(addr_);
 };
 
 class AtomicLoad : public OperationBase {

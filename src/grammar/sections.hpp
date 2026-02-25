@@ -371,13 +371,16 @@ public:
     static Expected<CodeSection> parse(std::istream& in, size_t code_start);
 
     const std::vector<Function>& getFunctions() const { return funcs_; }
+    const size_t getCodeStart() const { return code_start_; }
 
     std::string toString() const;
 
 private:
     std::vector<Function> funcs_;
+    size_t code_start_;
 
-    CodeSection(std::vector<Function>&& funcs) : funcs_(std::move(funcs)) {}
+    CodeSection(std::vector<Function>&& funcs, size_t code_start)
+        : funcs_(std::move(funcs)), code_start_(code_start) {}
 };
 
 /****************/

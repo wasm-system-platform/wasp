@@ -158,6 +158,7 @@ GlobalState::create(const grammar::Module& module,
 /**************/
 
 DebugInfoInstance DebugInfoInstance::create(const grammar::Module& module) {
+    const grammar::CodeSection& code_section = module.getCodeSection();
     const DebugLineSection& debug_line_section = module.getDebugLineSection();
 
     const std::vector<DebugLineSection::Segment>& section_segments =
@@ -180,11 +181,11 @@ DebugInfoInstance DebugInfoInstance::create(const grammar::Module& module) {
               });
 
     return DebugInfoInstance(std::move(segments),
-                             debug_line_section.getSourceFiles());
+                             debug_line_section.getSourceFiles(), code_section.getCodeStart());
 }
 
 std::string DebugInfoInstance::getFormattedLocation(size_t addr) const {
-    std::string unknown_loc = addr == (uint32_t)-1 ? "<?>" : fmt::format("<0x{:06x}>", addr);
+    std::string unknown_loc = addr == (uint32_t)-1 ? "<?>" : fmt::format("<0x{:06x}>", addr + code_start_);
 
     if (line_info_segments_.empty())
         return unknown_loc;
@@ -210,9 +211,9 @@ std::string DebugInfoInstance::getFormattedLocation(size_t addr) const {
 
 DebugInfoInstance::DebugInfoInstance(
     std::vector<LineInfoSegment>&& line_info_segments,
-    const std::vector<std::string>& src_files)
+    const std::vector<std::string>& src_files, size_t code_start)
     : line_info_segments_(std::move(line_info_segments)),
-      src_files_(src_files) {}
+      src_files_(src_files), code_start_(code_start) {}
 
 Expected<std::vector<Function>> GlobalState::createFunctions(
     const grammar::Module& module,

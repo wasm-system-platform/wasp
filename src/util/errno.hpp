@@ -10,5 +10,7 @@ enum class Errno : int32_t {
     EXIST = 3,
     BAD_ADDRESS = 4,
     PERMISSION_DENIED = 5,
+    BUFFER_TO_SMALL = 6,
+    NO_DATA = 7,
     NAME_TOO_LONG = 36,
 };

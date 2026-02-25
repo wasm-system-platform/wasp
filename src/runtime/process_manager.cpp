@@ -1,64 +1,94 @@
-#include <mutex>
-
-#include "runtime/context_manager.hpp"
 #include "runtime/process_manager.hpp"
+#include "runtime/context_manager.hpp"
+#include "runtime/kernel.hpp"
 #include "hw/mmu.hpp"
+#include <mutex>
 
 namespace runtime {
 
-ProcessManager& ProcessManager::instance() {
-    static ProcessManager manager;
-    return manager;
-}
+Errno ProcessManager::createProcess(Instance& instance, const std::string& program, uint32_t& pid) {
+    pid = allocateProcessId();
 
-uint32_t ProcessManager::createProcess() {
-    std::unique_lock lock(mutex_);
-
-    uint32_t pid;
-    if (free_list_.empty()) {
-        pid = processes_.size();
-        processes_.push_back({});
-    } else {
-        pid = free_list_.top();
-        free_list_.pop();
+    Expected<std::shared_ptr<Process>> process_exp = Process::create(program, instance, pid);
+    if (!process_exp) {
+        fmt::println("error: {}", process_exp.error().toString());
+        freeProcessId(pid);
+        return Errno::INVALID_ARGUMENT;
     }
 
-    return pid;
+    processes_[pid] = std::move(*process_exp);
+
+    return Errno::SUCCESS;
 }
 
-void ProcessManager::runProcess(uint32_t pid, Instance& instance, uint32_t execve_stack) {
-    std::shared_lock lock(mutex_);
+Errno ProcessManager::runProcess(uint32_t pid, Instance& instance, uint32_t execve_stack) {
+    if (pid >= processes_.size())
+        return Errno::INVALID_ARGUMENT;
 
-    Process& process = processes_[pid];
-    process.program->setContext(process.program_ctx);
-    process.program_ctx->setPid(pid);
-    process.program_ctx->setRunState(Context::RunState::running);
-    process.program_ctx->setExecveStack(execve_stack);
-    instance.switchToInstance(*process.program);
+    std::shared_ptr<Process>& proc = processes_[pid];
+    if (!proc)
+        return Errno::INVALID_ARGUMENT;
+
+    ContextManager& ctxt_manager = ContextManager::instance();    
+    Context& ctxt = ctxt_manager.createEmpty();
+
+    ctxt.getEpilogues().push(nullptr);
+    ctxt.getEpilogues().push(proc->getEntry());
+    ctxt.setRunState(Context::RunState::running);
+
+    proc->setExecveStack(execve_stack);
+    proc->setActiveContext(ctxt);
+    instance.as<Kernel>().switchToInstance(*proc);
+    return Errno::SUCCESS;
 }
 
-void ProcessManager::loadProgram(uint32_t pid, Instance& kernel,
-                                 Instance& program, uint32_t entry_func_idx) {
-    std::shared_lock lock(mutex_);
+Errno ProcessManager::cloneProcess(uint32_t pid, uint32_t& clone_pid) {
+    // Invalid pid
+    if (pid >= processes_.size())
+        return Errno::INVALID_ARGUMENT;
 
-    ContextManager& ctx_mgr = ContextManager::instance();
-    size_t cid = ctx_mgr.createContext();
-    const std::shared_ptr<Context>& ctx = ctx_mgr.getContext(cid);
+    std::shared_ptr<Process> original = processes_[pid];
+    if (!original)
+        return Errno::INVALID_ARGUMENT;
 
-    Process& process = processes_[pid];
-    process = {};
-    process.kernel = kernel.shared_from_this();
-    process.program = program.shared_from_this();
-    process.kernel_ctx = program.getActiveContext().shared_from_this();
-    process.program_ctx = ctx;
-    process.entry = std::make_shared<Call>(entry_func_idx, UINT32_MAX);
+    Context& original_ctx = original->getActiveContext();
+    if (original_ctx.getRunState() != Context::RunState::in_syscall) {
+        fmt::println("{}: impl error?", __PRETTY_FUNCTION__);
+        __builtin_trap();
+        return Errno::INVALID_ARGUMENT;
+    }
 
-    ctx->getEpilogues().push(nullptr);
-    ctx->getEpilogues().push(process.entry.get());
+    clone_pid = allocateProcessId();
+    Errno result = original->clone(clone_pid, processes_[clone_pid]);
+    if (result != Errno::SUCCESS)
+        freeProcessId(clone_pid);
+
+    return result;
+}
+
+Errno ProcessManager::resumeProcess(uint32_t pid, Kernel& kernel) {
+    if (pid >= processes_.size())
+        return Errno::INVALID_ARGUMENT;
+
+    std::shared_ptr<Process>& proc = processes_[pid];
+    if (!proc)
+        return Errno::INVALID_ARGUMENT;
+
+    Context& proc_ctx = proc->getActiveContext();
+    if (proc_ctx.getRunState() != Context::RunState::in_syscall) {
+        fmt::println("{}: impl error?", __PRETTY_FUNCTION__);
+        __builtin_trap();
+        return Errno::INVALID_ARGUMENT;
+    }
+    proc_ctx.setRunState(Context::RunState::running);
+
+    kernel.switchToInstance(*proc);
+    kernel.getActiveContext().getEpilogues().push(nullptr);
+    return Errno::SUCCESS;
 }
 
 Instance& ProcessManager::getProcess(uint32_t pid) {
-    return *processes_[pid].program;
+    return *processes_[pid];
 }
 
 Errno ProcessManager::readMemory(uint32_t pid, uint32_t kbuf, uint32_t pbuf, uint32_t count) {
@@ -69,10 +99,10 @@ Errno ProcessManager::readMemory(uint32_t pid, uint32_t kbuf, uint32_t pbuf, uin
         return Errno::INVALID_ARGUMENT;
     }
 
-    Process& process = processes_[pid];
+    std::shared_ptr<Process>& process = processes_[pid];
 
-    std::vector<uint8_t>& kernel_memory = process.kernel->getGlobalState().getMemory();
-    std::vector<uint8_t>& proc_memory = process.program->getGlobalState().getMemory();
+    std::vector<uint8_t>& kernel_memory = kernel_.getGlobalState().getMemory();
+    std::vector<uint8_t>& proc_memory = process->getGlobalState().getMemory();
 
     if (kbuf >= kernel_memory.size() ||
         count > kernel_memory.size() - kbuf) {
@@ -81,7 +111,7 @@ Errno ProcessManager::readMemory(uint32_t pid, uint32_t kbuf, uint32_t pbuf, uin
     }
 
     std::vector<uint8_t> tmp(count);
-    MemoryManagementUnit& mmu = MemoryManagementUnit::instance();
+    MemoryManagementUnit& mmu = kernel_.getMMU();
 
     for (uint32_t i = 0; i < count; ++i) {
         uint32_t addr = pbuf + i;
@@ -111,16 +141,16 @@ Errno ProcessManager::readMemoryCString(uint32_t pid, uint32_t kbuf, uint32_t pb
     if (pid >= processes_.size())
         return Errno::INVALID_ARGUMENT;
 
-    Process& process = processes_[pid];
+    std::shared_ptr<Process>& process = processes_[pid];
 
-    auto& kernel_memory = process.kernel->getGlobalState().getMemory();
-    auto& proc_memory   = process.program->getGlobalState().getMemory();
+    std::vector<uint8_t>& kernel_memory = kernel_.getGlobalState().getMemory();
+    std::vector<uint8_t>& proc_memory = process->getGlobalState().getMemory();
 
     if (kbuf >= kernel_memory.size() ||
         maxlen > kernel_memory.size() - kbuf)
         return Errno::INVALID_ARGUMENT;
 
-    MemoryManagementUnit& mmu = MemoryManagementUnit::instance();
+    MemoryManagementUnit& mmu = kernel_.getMMU();
 
     for (uint32_t i = 0; i < maxlen; ++i) {
         uint8_t byte;
@@ -154,10 +184,10 @@ Errno ProcessManager::writeMemory(uint32_t pid, uint32_t kbuf, uint32_t pbuf, ui
         return Errno::INVALID_ARGUMENT;
     }
 
-    Process& process = processes_[pid];
+    std::shared_ptr<Process>& process = processes_[pid];
 
-    std::vector<uint8_t>& kernel_memory = process.kernel->getGlobalState().getMemory();
-    std::vector<uint8_t>& proc_memory = process.program->getGlobalState().getMemory();
+    std::vector<uint8_t>& kernel_memory = kernel_.getGlobalState().getMemory();
+    std::vector<uint8_t>& proc_memory = process->getGlobalState().getMemory();
 
     if (kbuf >= kernel_memory.size() ||
         count > kernel_memory.size() - kbuf) {
@@ -168,7 +198,7 @@ Errno ProcessManager::writeMemory(uint32_t pid, uint32_t kbuf, uint32_t pbuf, ui
     std::vector<uint8_t> tmp(count);
     std::memcpy(tmp.data(), &kernel_memory[kbuf], count);
 
-    MemoryManagementUnit& mmu = MemoryManagementUnit::instance();
+    MemoryManagementUnit& mmu = kernel_.getMMU();
 
     for (uint32_t i = 0; i < count; ++i) {
         uint32_t addr = pbuf + i;
@@ -198,6 +228,27 @@ Errno ProcessManager::writeMemory(uint32_t pid, uint32_t kbuf, uint32_t pbuf, ui
     }
 
     return Errno::SUCCESS;
+}
+
+uint32_t ProcessManager::allocateProcessId() {
+    std::unique_lock lock(mutex_);
+
+    uint32_t pid;
+    if (free_list_.empty()) {
+        pid = processes_.size();
+        processes_.push_back({});
+    } else {
+        pid = free_list_.top();
+        free_list_.pop();
+    }
+
+    return pid;
+}
+
+void ProcessManager::freeProcessId(uint32_t pid) {
+    std::unique_lock lock(mutex_);
+    processes_[pid] = nullptr;
+    free_list_.push(pid);
 }
 
 } // namespace runtime

@@ -8,8 +8,7 @@ class Timer : public DeviceBase {
 public:
     Timer(uint32_t interrupt_handler_idx);
 
-    runtime::Operation tick(runtime::Instance& instance, uint32_t port,
-                            runtime::Operation interrupt) override;
+    runtime::Continuation tick(uint32_t port) override;
 
     void setTimout(uint32_t timeout);
 

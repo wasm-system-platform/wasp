@@ -93,9 +93,10 @@ private:
 
     std::vector<LineInfoSegment> line_info_segments_;
     std::vector<std::string> src_files_;
+    size_t code_start_;
 
     DebugInfoInstance(std::vector<LineInfoSegment>&& line_info_segments,
-                      const std::vector<std::string>& src_files);
+                      const std::vector<std::string>& src_files, size_t code_start);
 };
 
 /*********/
@@ -133,33 +134,17 @@ public:
     inline std::vector<uint32_t>& getIndirections() { return indirect_funcs_; }
 
     inline Function& getFunction(uint32_t idx) { return funcs_[idx]; }
-    inline Function& getFunctionIndirect(uint32_t idx) {
+    bool hasFunctionIndirect(uint32_t idx) {
+        if (idx >= indirect_funcs_.size() || indirect_funcs_[idx] >= funcs_.size())
+            return false;
+
+        return true;    
+    }
+    Function& getFunctionIndirect(uint32_t idx) {
         return funcs_[indirect_funcs_[idx]];
-    }
+    } 
 
-    bool getInterruptsEnabled() { return interrupts_enabled_; }
-    bool enableInterrupts() {
-        bool old = interrupts_enabled_;
-        interrupts_enabled_ = true;
-        return old;
-    }
-    bool disableInterrupts() {
-        bool old = interrupts_enabled_;
-        interrupts_enabled_ = false;
-        return old;
-    }
-    Continuation tick(Instance& instance,
-                      const std::unordered_map<uint32_t, Device>& devices) {
-        Operation interrupt;
-
-        for (const auto& [port, device] : devices) {
-            interrupt = device->tick(instance, port, interrupt);
-        }
-
-        return interrupts_enabled_ ? interrupt.get() : nullptr;
-    }
-
-    const DebugInfoInstance& getDebugInfo() const { return debug_info_; }
+    const DebugInfoInstance& getDebugInfo() const { return *debug_info_; }
 
 private:
     std::vector<Function> funcs_;
@@ -168,9 +153,7 @@ private:
     MemoryInstances mems_;
     GlobalInstances globals_;
     DataInstances segments_;
-    DebugInfoInstance debug_info_;
-
-    bool interrupts_enabled_ = false;
+    std::shared_ptr<DebugInfoInstance> debug_info_;
 
     GlobalState(std::vector<Function>&& funcs,
                 std::vector<uint32_t>&& indirect_funcs,
@@ -179,7 +162,7 @@ private:
                 const DebugInfoInstance&& debug_info)
         : funcs_(std::move(funcs)), indirect_funcs_(std::move(indirect_funcs)),
           mems_(mems), globals_(globals), segments_(segments),
-          debug_info_(std::move(debug_info)) {}
+          debug_info_(std::make_shared<DebugInfoInstance>(debug_info)) {}
 
     static Expected<std::vector<Function>>
     createFunctions(const grammar::Module& module,

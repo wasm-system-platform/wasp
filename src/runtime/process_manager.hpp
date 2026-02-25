@@ -5,18 +5,19 @@
 #include <vector>
 
 #include "runtime/instance.hpp"
+#include "runtime/process.hpp"
 #include "util/errno.hpp"
 
 namespace runtime {
 
 class ProcessManager {
 public:
-    static ProcessManager& instance();
+    ProcessManager(Kernel& kernel) : kernel_(kernel) {}
 
-    uint32_t createProcess();
-    void runProcess(uint32_t pid, Instance& instance, uint32_t execve_stack);
-    void loadProgram(uint32_t pid, Instance& kernel, Instance& program,
-                     uint32_t entry_func_idx);
+    Errno createProcess(Instance& instance, const std::string& program, uint32_t& pid);
+    Errno runProcess(uint32_t pid, Instance& instance, uint32_t execve_stack);
+    Errno cloneProcess(uint32_t pid, uint32_t& clone_pid);
+    Errno resumeProcess(uint32_t pid, Kernel& kernel);
     Instance& getProcess(uint32_t pid);
 
     Errno readMemory(uint32_t pid, uint32_t kbuf, uint32_t pbuf, uint32_t count);
@@ -28,6 +29,7 @@ public:
     const std::shared_ptr<runtime::ProcessManager>& getContext(size_t id);
 
 private:
+    /*
     struct Process {
         std::shared_ptr<Instance> kernel;
         std::shared_ptr<Instance> program;
@@ -35,11 +37,16 @@ private:
         std::shared_ptr<Context> program_ctx;
         Operation entry;
     };
+    */
+    Kernel& kernel_;
 
-    std::vector<Process> processes_;
+    std::vector<std::shared_ptr<Process>> processes_;
     std::stack<uint32_t> free_list_;
 
     std::shared_mutex mutex_;
+
+    uint32_t allocateProcessId();
+    void freeProcessId(uint32_t pid);
 };
 
 } // namespace runtime

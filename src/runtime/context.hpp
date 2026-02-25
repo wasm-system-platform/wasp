@@ -84,11 +84,18 @@ private:
 class OperationBase;
 using Continuation = OperationBase*;
 
-class Context : public std::enable_shared_from_this<Context> {
+class Context {
 public:
-    enum class RunState { rdy, running, waiting };
+    enum class RunState { rdy, running, waiting, in_syscall, suspended };
 
     Context(size_t id) : id_(id) {}
+    Context(const Context& other, size_t id) : 
+        id_(id),
+        locals_(std::make_unique<Locals>(*other.locals_)),
+        stack_(std::make_unique<Stack>(*other.stack_)),
+        epilogues_(std::make_unique<Epilogues>(*other.epilogues_)) {
+            fmt::println("{}: epilogues={} other_epilogues={}", __PRETTY_FUNCTION__, epilogues_->size(), other.epilogues_->size());
+        }
 
     inline size_t getId() const { return id_; }
 
@@ -101,14 +108,14 @@ public:
     inline Value pop() { return stack_->pop(); }
     inline void drop() { stack_->pop(); }
 
-    inline Locals& getLocals() { return locals_; }
+    inline Locals& getLocals() { return *locals_; }
     void pushLocals(const std::vector<Value>& locals) {
-        return locals_.pushLocals(locals);
+        return locals_->pushLocals(locals);
     }
-    inline void popLocals() { locals_.popLocals(); }
-    inline Value getLocal(uint32_t idx) { return locals_.getLocal(idx); }
+    inline void popLocals() { locals_->popLocals(); }
+    inline Value getLocal(uint32_t idx) { return locals_->getLocal(idx); }
     inline void setLocal(uint32_t idx, Value value) {
-        locals_.setLocal(idx, value);
+        locals_->setLocal(idx, value);
     }
 
     void setRunState(RunState state) { run_state_ = state; }
@@ -130,26 +137,16 @@ public:
         return timeout_;
     }
 
-    // execve stack
-    inline void setExecveStack(uint32_t stack) { execve_stack_ = stack; }
-    inline uint32_t getExecveStack() const { return execve_stack_; }
-
-    // pid
-    inline void setPid(uint32_t pid) { pid_ = pid; }
-    inline uint32_t getPid() const { return pid_; }
-
 private:
     size_t id_;
-    uint32_t pid_ = -1;
 
-    Locals locals_;
+    std::unique_ptr<Locals> locals_ = std::make_unique<Locals>();
     std::unique_ptr<Stack> stack_ = std::make_unique<Stack>();
     std::unique_ptr<Epilogues> epilogues_ = std::make_unique<Epilogues>();
 
     RunState run_state_;
 
     uint32_t wait_addr_;
-    uint32_t execve_stack_ = 0;
     int64_t timeout_;
 };
 

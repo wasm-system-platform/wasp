@@ -1,16 +1,24 @@
 #pragma once
 
+#include <list>
+
 #include "devices/device.hpp"
 
 class Keyboard : public DeviceBase {
 public:
-    Keyboard(uint32_t interrupt_handler_idx);
+    Keyboard();
 
-    runtime::Operation tick(runtime::Instance& instance, uint32_t port,
-                            runtime::Operation interrupt) override;
+    bool tick() override;
 
-    char getInput();
+    Errno io(int32_t cmd, std::span<uint8_t>& buffer) override;
 
 private:
-    std::stack<char> intput_;
+    enum class Command {
+        get_input = 1
+    };
+
+    std::mutex guard_;
+    std::list<char> input_;
+
+    Errno getInput(std::span<uint8_t>& buffer);
 };

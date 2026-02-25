@@ -4,7 +4,8 @@
 #include <unordered_map>
 #include <vector>
 
-#include "util/error_handling.hpp"
+#include "runtime/handler.hpp"
+#include "runtime/operations.hpp"
 #include "util/errno.hpp"
 
 static constexpr uint32_t VIRT_MEMORY = 0x8000'0000;
@@ -34,8 +35,8 @@ private:
 
 class MemoryManagementUnit {
 public:
-    static MemoryManagementUnit& instance();
-    
+    MemoryManagementUnit(uint32_t page_fault_handler_idx) : page_fault_handler_(std::make_shared<runtime::PageFault>(page_fault_handler_idx)) {}
+
     /* Table management */
     size_t activeTable() const { return active_idx_; }
     Errno createTable(uint32_t* ptable_idx);
@@ -62,9 +63,11 @@ public:
 
     Errno checkAccess(uint32_t virt_addr, AccessType access_type);
 
+    runtime::Continuation fault(runtime::Instance& instance, uint32_t addr, bool is_write);
+
 private:
-    std::vector<PageTable> tables_;
+    std::vector<PageTable> tables_ = {{}};
     uint32_t active_idx_ = 0;
 
-    MemoryManagementUnit();
+    runtime::Operation page_fault_handler_;
 };

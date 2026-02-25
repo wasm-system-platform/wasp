@@ -2,7 +2,7 @@
 
 #include <cxxopts.hpp>
 
-#include "runtime/instance.hpp"
+#include "runtime/kernel.hpp"
 
 int main(int argc, char** argv) {
     cxxopts::Options options("wasm-sp");
@@ -33,7 +33,7 @@ int main(int argc, char** argv) {
         exit(1);
     }
 
-    auto kernel_exp = runtime::Instance::createKernel(
+    auto kernel_exp = runtime::Kernel::create(
         args["kernel"].as<std::string>(), args["rootfs"].as<std::string>());
     if (!kernel_exp) {
         std::cout << kernel_exp.error().toString() << std::endl;

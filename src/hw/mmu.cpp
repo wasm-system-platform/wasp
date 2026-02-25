@@ -1,11 +1,5 @@
 #include "hw/mmu.hpp"
-
-MemoryManagementUnit::MemoryManagementUnit() : tables_(1) {};
-
-MemoryManagementUnit& MemoryManagementUnit::instance() {
-    static MemoryManagementUnit mmu;
-    return mmu;
-}
+#include "runtime/instance.hpp"
 
 Errno MemoryManagementUnit::createTable(uint32_t* ptable_idx) {
     *ptable_idx = tables_.size();
@@ -299,4 +293,12 @@ Errno PageTable::translate(uint32_t va, uint8_t** pa, AccessType access_type) {
 
     *pa = mapping.real_addr + offset;
     return Errno::SUCCESS;
+}
+
+runtime::Continuation
+MemoryManagementUnit::fault(runtime::Instance& instance, uint32_t addr, bool is_write) {
+    runtime::Context& ctxt = instance.getActiveContext();
+    ctxt.pushI32(addr);
+    ctxt.pushI32(is_write);
+    return page_fault_handler_.get();
 }

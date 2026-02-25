@@ -5,6 +5,7 @@
 #include "runtime/instance.hpp"
 #include "runtime/operations.hpp"
 #include "runtime/vm.hpp"
+#include "runtime/kernel.hpp"
 
 namespace runtime {
 
@@ -578,56 +579,16 @@ Continuation OperationBase::trap(Instance& instance, std::string msg,
     for (size_t i = ctxt.getEpilogues().size() - 1; i > 0; i--) {
         const Continuation& epilogue = epilogues[i];
         if (epilogue == nullptr) break;
-        fmt::println("  {}: at {}", i, epilogue->getFormattedAddres(instance));
+        fmt::println("  {}: at {}", i, epilogue->getFormattedAddress(instance));
     }
 
     std::exit(1);
     return nullptr;
 }
 
-std::string OperationBase::getFormattedAddres(Instance& instance) const {
+std::string OperationBase::getFormattedAddress(Instance& instance) const {
     return instance.getGlobalState().getDebugInfo().getFormattedLocation(addr_);
 }
-
-/*********************/
-/* Helper Operations */
-/*********************/
-
-Continuation Tick::action(Instance& instance) {
-    const Operation& epilogue = createEpilogue(instance);
-
-    instance.switchToKernel();
-    instance.getKernel().getActiveContext().getEpilogues().push(epilogue.get());
-
-    return instance.tick();
-}
-
-Tick::Epilogue::Epilogue(size_t idx, Instance& suspended, Tick& parent)
-    : idx_(idx), suspended_(&suspended), parent_(&parent) {}
-
-Continuation Tick::Epilogue::action(Instance& instance) {
-    instance.switchToInstance(*suspended_);
-    parent_->destroyEpilogue(idx_);
-    return parent_->next_;
-}
-
-const Operation& Tick::createEpilogue(Instance& instance) {
-    size_t idx;
-
-    if (free_list_.empty()) {
-        idx = epilogues_.size();
-        epilogues_.push_back(std::make_shared<Epilogue>(idx, instance, *this));
-    } else {
-        idx = free_list_.top();
-        free_list_.pop();
-        Epilogue& epilogue = epilogues_[idx]->as<Epilogue>();
-        epilogue = Epilogue(idx, instance, *this);
-    }
-
-    return epilogues_[idx];
-}
-
-void Tick::destroyEpilogue(size_t idx) { free_list_.push(idx); }
 
 /**********************/
 /* Control Operations */
@@ -677,7 +638,10 @@ Loop::Loop(const grammar::Loop& loop,
 
 Continuation Loop::action(Instance& instance) {
     TRACE_VERBOSE("{}: loop", getFormattedAddres(instance));
-    return start_.get();
+
+    // use epilogue to enforce interrupt handler
+    instance.getActiveContext().getEpilogues().push(start_.get());
+    return nullptr;
 }
 
 IfThen::IfThen(const grammar::IfElse& if_else,
@@ -765,9 +729,12 @@ BranchIf::BranchIf(const grammar::BranchIf& br_if,
 
 Continuation BranchIf::action(Instance& instance) {
     int32_t cond = instance.getActiveContext().pop().i32;
-    TRACE_VERBOSE("{}: br_if --> {}: (cond={}) -> ()",
-                  getFormattedAddres(instance),
-                  target_->getFormattedAddres(instance), cond);
+    if (instance.is<Process>()) {
+        TRACE("{:{}}{}: br_if --> {}: (cond={}) -> () is_kernel={}",
+          "", instance.getActiveContext().getEpilogues().size(),
+          instance.getGlobalState().getDebugInfo().getFormattedLocation(addr_),
+          target_->getFormattedAddress(instance), cond, instance.as<Process>().getKernel().is<Kernel>());
+    }
 
     if (cond)
         return target_.get();
@@ -802,11 +769,11 @@ Continuation Call::action(Instance& instance) {
 
     instance.getActiveContext().getEpilogues().push(epilogue_.get());
 
-    if (instance.getActiveContext().getPid() == 0) {
-        TRACE("{:{}}{}: call {}",
+    if (instance.is<Process>()) {
+        TRACE("{:{}}{}: call {} is_kernel={}",
           "", instance.getActiveContext().getEpilogues().size(),
           instance.getGlobalState().getDebugInfo().getFormattedLocation(addr_),
-          func_idx_);
+          func_idx_, instance.as<Process>().getKernel().is<Kernel>());
     }
     return func.enterFrame(instance.getActiveContext());
 }
@@ -814,6 +781,13 @@ Continuation Call::action(Instance& instance) {
 Call::Epilogue::Epilogue(uint32_t func_idx, size_t addr) : OperationBase(addr), func_idx_(func_idx) {}
 
 Continuation Call::Epilogue::action(Instance& instance) {
+    if (instance.is<Process>()) {
+        TRACE("{:{}}{}: ret {} is_kernel={}",
+          "", instance.getActiveContext().getEpilogues().size(),
+          instance.getGlobalState().getDebugInfo().getFormattedLocation(addr_),
+          func_idx_, instance.as<Process>().getKernel().is<Kernel>());
+    }
+
     Function& func = instance.getGlobalState().getFunction(func_idx_);
     func.leaveFrame(instance.getActiveContext());
     return next_;
@@ -857,7 +831,7 @@ Continuation CallIndirect::action(Instance& instance) {
     Operation epilogue = createEpilogue(func);
     instance.getActiveContext().getEpilogues().push(epilogue.get());
 
-    if (instance.getActiveContext().getPid() == 0) {
+    if (instance.is<Process>()) {
         TRACE("{:{}}{}: call_indirect: (element_idx={}) -> ()",
           "", instance.getActiveContext().getEpilogues().size(),
           instance.getGlobalState().getDebugInfo().getFormattedLocation(addr_),
@@ -892,6 +866,13 @@ CallIndirect::Epilogue::Epilogue(size_t idx, Function& func,
     : idx_(idx), func_(func), parent_(parent) {}
 
 Continuation CallIndirect::Epilogue::action(Instance& instance) {
+    if (instance.is<Process>()) {
+        TRACE("{:{}}{}: ret is_kernel={}",
+          "", instance.getActiveContext().getEpilogues().size(),
+          instance.getGlobalState().getDebugInfo().getFormattedLocation(addr_),
+          instance.as<Process>().getKernel().is<Kernel>());
+    }
+
     func_.leaveFrame(instance.getActiveContext());
     parent_.destroyEpilogue(idx_);
     return parent_.next_;
@@ -2141,7 +2122,8 @@ Continuation I32Load::action(Instance& instance) {
 
         val = *reinterpret_cast<int32_t*>(&memory[addr]);
     } else {
-        MemoryManagementUnit& mmu = MemoryManagementUnit::instance();
+        Kernel& kernel = instance.is<Kernel>() ? instance.as<Kernel>() : instance.as<Process>().getKernel();
+        MemoryManagementUnit& mmu = kernel.getMMU();
         if (mmu.readI32(addr, &val) != Errno::SUCCESS) {
             return trap(instance, "i32.load invalid memory access", addr_);
         }
@@ -2172,16 +2154,15 @@ Continuation I64Load::action(Instance& instance) {
 
         val = *reinterpret_cast<int64_t*>(&memory[addr]);
     } else {
-        MemoryManagementUnit& mmu = MemoryManagementUnit::instance();
+        Kernel& kernel = instance.is<Kernel>() ? instance.as<Kernel>() : instance.as<Process>().getKernel();
+        MemoryManagementUnit& mmu = kernel.getMMU();
         if (mmu.readI64(addr, &val) != Errno::SUCCESS) {
             // repeat the operation after handling the page fault 
             context.push(base);
             context.getEpilogues().push(this);
 
             // trigger page fault handling
-            context.pushI32(addr); // faulting address
-            context.pushI32(false); // is_write
-            return instance.pageFault(instance);
+            return mmu.fault(instance, addr, false);
         }
     }
 
@@ -2252,7 +2233,8 @@ Continuation I32Load8Signed::action(Instance& instance) {
 
         val = static_cast<int8_t>(memory[addr]);
     } else {
-        MemoryManagementUnit& mmu = MemoryManagementUnit::instance();
+        Kernel& kernel = instance.is<Kernel>() ? instance.as<Kernel>() : instance.as<Process>().getKernel();
+        MemoryManagementUnit& mmu = kernel.getMMU();
         if (mmu.readI8(addr, reinterpret_cast<int8_t*>(&val)) != Errno::SUCCESS) {
             return trap(instance, "i32.load8_s invalid memory access", addr_);
         }
@@ -2283,7 +2265,8 @@ Continuation I32Load8Unsigned::action(Instance& instance) {
 
         val = memory[addr];
     } else {
-        MemoryManagementUnit& mmu = MemoryManagementUnit::instance();
+        Kernel& kernel = instance.is<Kernel>() ? instance.as<Kernel>() : instance.as<Process>().getKernel();
+        MemoryManagementUnit& mmu = kernel.getMMU();
         if (mmu.readI8(addr, reinterpret_cast<int8_t*>(&val)) != Errno::SUCCESS) {
             return trap(instance, "i32.load8_u invalid memory access", addr_);
         }
@@ -2340,16 +2323,16 @@ Continuation I32Load16Unsigned::action(Instance& instance) {
 
         val = *reinterpret_cast<uint16_t*>(&memory[addr]);
     } else {
-        MemoryManagementUnit& mmu = MemoryManagementUnit::instance();
+        Kernel& kernel = instance.is<Kernel>() ? instance.as<Kernel>() : instance.as<Process>().getKernel();
+        MemoryManagementUnit& mmu = kernel.getMMU();
         if (mmu.readI16(addr, reinterpret_cast<int16_t*>(&val)) != Errno::SUCCESS) {
             // repeat the operation after handling the page fault
             context.push(base);
             context.getEpilogues().push(this);
 
             // trigger a page fault
-            context.pushI32(addr);  // faulting address
-            context.pushI32(false); // isWrite
-            return instance.pageFault(instance);
+            return mmu.fault(instance, addr, false);
+
         }
     }
 
@@ -2519,17 +2502,16 @@ Continuation I32Store::action(Instance& instance) {
 
         *reinterpret_cast<int32_t*>(&memory[addr]) = val; 
     } else {
-        MemoryManagementUnit& mmu = MemoryManagementUnit::instance();
+        Kernel& kernel = instance.is<Kernel>() ? instance.as<Kernel>() : instance.as<Process>().getKernel();
+        MemoryManagementUnit& mmu = kernel.getMMU();
         if (mmu.writeI32(addr, val) != Errno::SUCCESS) {
             // repeat the operation after handling the page fault
             context.pushI32(base);
             context.pushI32(val);
             context.getEpilogues().push(this);
-            
+
             // trigger page fault handling
-            context.pushI32(addr); // faulting address
-            context.pushI32(true); // is_write
-            return instance.pageFault(instance);
+            return mmu.fault(instance, addr, true);
         }
     }
 
@@ -2559,7 +2541,8 @@ Continuation I64Store::action(Instance& instance) {
 
         *reinterpret_cast<int64_t*>(&memory[addr]) = val; 
     } else {
-        MemoryManagementUnit& mmu = MemoryManagementUnit::instance();
+        Kernel& kernel = instance.is<Kernel>() ? instance.as<Kernel>() : instance.as<Process>().getKernel();
+        MemoryManagementUnit& mmu = kernel.getMMU();
         if (mmu.writeI64(addr, val) != Errno::SUCCESS) {
             // repeat the operation after handling the page fault
             context.pushI32(base);
@@ -2567,9 +2550,7 @@ Continuation I64Store::action(Instance& instance) {
             context.getEpilogues().push(this);
             
             // trigger page fault handling
-            context.pushI32(addr); // faulting address
-            context.pushI32(true); // is_write
-            return instance.pageFault(instance);
+            return mmu.fault(instance, addr, true);
         }
     }
 
@@ -2641,7 +2622,8 @@ Continuation I32Store8::action(Instance& instance) {
 
         memory[addr] = static_cast<uint8_t>(val & 0xFF);
     } else {
-        MemoryManagementUnit& mmu = MemoryManagementUnit::instance();
+        Kernel& kernel = instance.is<Kernel>() ? instance.as<Kernel>() : instance.as<Process>().getKernel();
+        MemoryManagementUnit& mmu = kernel.getMMU();
         if (mmu.writeI8(addr, static_cast<int8_t>(val & 0xFF)) != Errno::SUCCESS) {
             // repeat the operation after handling the page fault
             context.pushI32(base);
@@ -2649,9 +2631,7 @@ Continuation I32Store8::action(Instance& instance) {
             context.getEpilogues().push(this);
             
             // trigger page fault handling
-            context.pushI32(addr); // faulting address
-            context.pushI32(true); // is_write
-            return instance.pageFault(instance);
+            return mmu.fault(instance, addr, true);
         }
     }
 
@@ -2681,7 +2661,8 @@ Continuation I32Store16::action(Instance& instance) {
         *reinterpret_cast<uint16_t*>(&memory[addr]) =
             static_cast<uint16_t>(val & 0xFFFF);
     } else {
-        MemoryManagementUnit& mmu = MemoryManagementUnit::instance();
+        Kernel& kernel = instance.is<Kernel>() ? instance.as<Kernel>() : instance.as<Process>().getKernel();
+        MemoryManagementUnit& mmu = kernel.getMMU();
         if (mmu.writeI16(addr, static_cast<int16_t>(val & 0xFFFF)) != Errno::SUCCESS) {
             // repeat the operation after handling the page fault
             context.pushI32(base);
@@ -2689,9 +2670,7 @@ Continuation I32Store16::action(Instance& instance) {
             context.getEpilogues().push(this);
             
             // trigger page fault handling
-            context.pushI32(addr); // faulting address
-            context.pushI32(true); // is_write
-            return instance.pageFault(instance);
+            return mmu.fault(instance, addr, true);
         }
     }
 
@@ -2855,7 +2834,8 @@ Continuation MemoryCopy::action(Instance& instance) {
 
         memcpy(&temp_buffer[0], &memory[src], count);
     } else {
-        MemoryManagementUnit& mmu = MemoryManagementUnit::instance();
+        Kernel& kernel = instance.is<Kernel>() ? instance.as<Kernel>() : instance.as<Process>().getKernel();
+        MemoryManagementUnit& mmu = kernel.getMMU();
         if (mmu.read(src, temp_buffer) != Errno::SUCCESS) {
             // repeat the operation after handling the page fault
             context.pushI32(dst);
@@ -2864,9 +2844,7 @@ Continuation MemoryCopy::action(Instance& instance) {
             context.getEpilogues().push(this);
             
             // trigger page fault handling
-            context.pushI32(src); // faulting address
-            context.pushI32(false); // is_write
-            return instance.pageFault(instance);
+            return mmu.fault(instance, src, false);
         }
     }
 
@@ -2879,7 +2857,8 @@ Continuation MemoryCopy::action(Instance& instance) {
         memcpy(&memory[dst], &temp_buffer[0], count);
         return next_;
     } else {
-        MemoryManagementUnit& mmu = MemoryManagementUnit::instance();
+        Kernel& kernel = instance.is<Kernel>() ? instance.as<Kernel>() : instance.as<Process>().getKernel();
+        MemoryManagementUnit& mmu = kernel.getMMU();
         if (mmu.write(dst, temp_buffer) != Errno::SUCCESS) {
             // repeat the operation after handling the page fault
             context.pushI32(dst);
@@ -2888,9 +2867,7 @@ Continuation MemoryCopy::action(Instance& instance) {
             context.getEpilogues().push(this);
             
             // trigger page fault handling
-            context.pushI32(dst); // faulting address
-            context.pushI32(true); // is_write
-            return instance.pageFault(instance);
+            return mmu.fault(instance, dst, true);
         }
     }
 
@@ -2921,7 +2898,8 @@ Continuation MemoryFill::action(Instance& instance) {
 
         memset(&memory[dst], val, count);
     } else {
-        MemoryManagementUnit& mmu = MemoryManagementUnit::instance();
+        Kernel& kernel = instance.is<Kernel>() ? instance.as<Kernel>() : instance.as<Process>().getKernel();
+        MemoryManagementUnit& mmu = kernel.getMMU();
         if (mmu.memset(dst, static_cast<uint8_t>(val), count) != Errno::SUCCESS) {
             // repeat the operation after handling the page fault
             context.pushI32(dst);
@@ -2930,9 +2908,7 @@ Continuation MemoryFill::action(Instance& instance) {
             context.getEpilogues().push(this);
             
             // trigger page fault handling
-            context.pushI32(dst); // faulting address
-            context.pushI32(true); // is_write
-            return instance.pageFault(instance);
+            return mmu.fault(instance, dst, true);
         }
     }
 

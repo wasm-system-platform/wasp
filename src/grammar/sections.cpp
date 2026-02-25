@@ -576,7 +576,7 @@ Expected<CodeSection> CodeSection::parse(std::istream& in, size_t code_start) {
         funcs.push_back(*func_res);
     }
 
-    return CodeSection(std::move(funcs));
+    return CodeSection(std::move(funcs), code_start);
 }
 
 std::string CodeSection::toString() const {
