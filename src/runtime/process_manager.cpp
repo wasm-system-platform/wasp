@@ -1,15 +1,16 @@
 #include "runtime/process_manager.hpp"
 #include "runtime/context_manager.hpp"
 #include "runtime/kernel.hpp"
-#include "hw/mmu.hpp"
 #include <mutex>
 
 namespace runtime {
 
-Errno ProcessManager::createProcess(Instance& instance, const std::string& program, uint32_t& pid) {
+using hw::mem::VIRT_MEMORY;
+
+Errno ProcessManager::createProcess(Instance& instance, std::span<const char>& program_bytes, uint32_t& pid) {
     pid = allocateProcessId();
 
-    Expected<std::shared_ptr<Process>> process_exp = Process::create(program, instance, pid);
+    Expected<std::shared_ptr<Process>> process_exp = Process::create(program_bytes, instance, pid);
     if (!process_exp) {
         fmt::println("error: {}", process_exp.error().toString());
         freeProcessId(pid);
@@ -66,10 +67,10 @@ Errno ProcessManager::cloneProcess(uint32_t pid, uint32_t& clone_pid) {
     return result;
 }
 
-Errno ProcessManager::resumeProcess(uint32_t pid, Kernel& kernel) {
+Errno ProcessManager::resumeProcess(uint32_t pid, Kernel& kernel, int32_t retval) {
     if (pid >= processes_.size())
         return Errno::INVALID_ARGUMENT;
-
+    
     std::shared_ptr<Process>& proc = processes_[pid];
     if (!proc)
         return Errno::INVALID_ARGUMENT;
@@ -80,10 +81,11 @@ Errno ProcessManager::resumeProcess(uint32_t pid, Kernel& kernel) {
         __builtin_trap();
         return Errno::INVALID_ARGUMENT;
     }
+
+    proc_ctx.pushI32(retval);
     proc_ctx.setRunState(Context::RunState::running);
 
     kernel.switchToInstance(*proc);
-    kernel.getActiveContext().getEpilogues().push(nullptr);
     return Errno::SUCCESS;
 }
 
@@ -91,7 +93,7 @@ Instance& ProcessManager::getProcess(uint32_t pid) {
     return *processes_[pid];
 }
 
-Errno ProcessManager::readMemory(uint32_t pid, uint32_t kbuf, uint32_t pbuf, uint32_t count) {
+Errno ProcessManager::readMemory(uint32_t pid, uint32_t kbuffer_offset, uint32_t pbuffer_offset, uint32_t count) {
     std::shared_lock lock(mutex_);
 
     if (pid >= processes_.size()) {
@@ -101,41 +103,33 @@ Errno ProcessManager::readMemory(uint32_t pid, uint32_t kbuf, uint32_t pbuf, uin
 
     std::shared_ptr<Process>& process = processes_[pid];
 
-    std::vector<uint8_t>& kernel_memory = kernel_.getGlobalState().getMemory();
-    std::vector<uint8_t>& proc_memory = process->getGlobalState().getMemory();
+    Memory& kernel_memory = kernel_.getGlobalState().getMemory();
+    Memory& proc_memory = process->getGlobalState().getMemory();
 
-    if (kbuf >= kernel_memory.size() ||
-        count > kernel_memory.size() - kbuf) {
-        fmt::println("Invalid kernel buffer range: kbuf=0x{:08X}, count={}", kbuf, count);
-        return Errno::INVALID_ARGUMENT;
-    }
-
-    std::vector<uint8_t> tmp(count);
+    std::vector<uint8_t> tbuffer(count);
     MemoryManagementUnit& mmu = kernel_.getMMU();
 
     for (uint32_t i = 0; i < count; ++i) {
-        uint32_t addr = pbuf + i;
+        uint32_t offset = pbuffer_offset + i;
 
-        if (addr < VIRT_MEMORY) {
-            if (addr >= proc_memory.size()) {
-                fmt::println("Invalid process memory access: addr=0x{:08X}", addr);
+        if (offset < VIRT_MEMORY) {
+            if (!proc_memory.load(offset, tbuffer[i])) {
+                fmt::println("Invalid process memory access: addr=0x{:08X}", offset);
                 return Errno::BAD_ADDRESS;
             }
-            tmp[i] = proc_memory[addr];
         } else {
-            Errno err = mmu.readI8(addr, reinterpret_cast<int8_t*>(&tmp[i]));
-            if (err != Errno::SUCCESS) {
-                fmt::println("Invalid process memory access: addr=0x{:08X} count={}", addr, count);
-                return err;
+            if (!mmu.load(offset, tbuffer[i])) {
+                fmt::println("Invalid process memory access: addr=0x{:08X} count={}", offset, count);
+                return Errno::BAD_ADDRESS;
             }
         }
     }
 
-    std::memcpy(&kernel_memory[kbuf], tmp.data(), count);
+    kernel_memory.store(kbuffer_offset, tbuffer);
     return Errno::SUCCESS;
 }
 
-Errno ProcessManager::readMemoryCString(uint32_t pid, uint32_t kbuf, uint32_t pbuf, uint32_t maxlen) {
+Errno ProcessManager::readMemoryCString(uint32_t pid, uint32_t kbuffer_offset, uint32_t pbuffer_offset, uint32_t maxlen) {
     std::shared_lock lock(mutex_);
 
     if (pid >= processes_.size())
@@ -143,40 +137,49 @@ Errno ProcessManager::readMemoryCString(uint32_t pid, uint32_t kbuf, uint32_t pb
 
     std::shared_ptr<Process>& process = processes_[pid];
 
-    std::vector<uint8_t>& kernel_memory = kernel_.getGlobalState().getMemory();
-    std::vector<uint8_t>& proc_memory = process->getGlobalState().getMemory();
-
-    if (kbuf >= kernel_memory.size() ||
-        maxlen > kernel_memory.size() - kbuf)
-        return Errno::INVALID_ARGUMENT;
-
+    Memory& kernel_memory = kernel_.getGlobalState().getMemory();
+    Memory& proc_memory = process->getGlobalState().getMemory();
     MemoryManagementUnit& mmu = kernel_.getMMU();
 
-    for (uint32_t i = 0; i < maxlen; ++i) {
-        uint8_t byte;
-        uint32_t addr = pbuf + i;
+    std::vector<uint8_t> tbuffer(maxlen);
 
-        if (addr < VIRT_MEMORY) {
-            if (addr >= proc_memory.size())
+    for (uint32_t i = 0; i <= maxlen; ++i) {
+        if (i == maxlen)
+            return Errno::NAME_TOO_LONG;
+
+        uint32_t offset = pbuffer_offset + i;
+
+        if (offset < VIRT_MEMORY) {
+            if (!proc_memory.load(offset, tbuffer[i]))
                 return Errno::BAD_ADDRESS;
-            byte = proc_memory[addr];
         } else {
-            Errno err = mmu.readI8(addr, reinterpret_cast<int8_t*>(&byte));
-            if (err != Errno::SUCCESS)
-                return err;
+            if (!mmu.load(offset, tbuffer[i]))
+                return Errno::BAD_ADDRESS;
         }
 
-        kernel_memory[kbuf + i] = byte;
-
-        if (byte == '\0') {
-            return Errno::SUCCESS;
-        }
+        if (tbuffer[i] == '\0')
+            break;
     }
 
-    return Errno::NAME_TOO_LONG;
+    for (uint32_t i = 0; i <= maxlen; ++i) {
+        uint32_t offset = kbuffer_offset + i;
+
+        if (offset < VIRT_MEMORY) {
+            if (!kernel_memory.store(offset, tbuffer[i]))
+                return Errno::BAD_ADDRESS;
+        } else {
+            if (!mmu.store(offset, tbuffer[i]))
+                return Errno::BAD_ADDRESS;
+        }
+
+        if (tbuffer[i] == '\0')
+            break;
+    }
+
+    return Errno::SUCCESS;
 }
 
-Errno ProcessManager::writeMemory(uint32_t pid, uint32_t kbuf, uint32_t pbuf, uint32_t count) {
+Errno ProcessManager::writeMemory(uint32_t pid, uint32_t kbuffer_offset, uint32_t pbuffer_offset, uint32_t count) {
     std::shared_lock lock(mutex_);
 
     if (pid >= processes_.size()) {
@@ -186,44 +189,33 @@ Errno ProcessManager::writeMemory(uint32_t pid, uint32_t kbuf, uint32_t pbuf, ui
 
     std::shared_ptr<Process>& process = processes_[pid];
 
-    std::vector<uint8_t>& kernel_memory = kernel_.getGlobalState().getMemory();
-    std::vector<uint8_t>& proc_memory = process->getGlobalState().getMemory();
-
-    if (kbuf >= kernel_memory.size() ||
-        count > kernel_memory.size() - kbuf) {
-        fmt::println("Invalid kernel buffer range: kbuf=0x{:08X}, count={}", kbuf, count);
-        return Errno::INVALID_ARGUMENT;
-    }
-
-    std::vector<uint8_t> tmp(count);
-    std::memcpy(tmp.data(), &kernel_memory[kbuf], count);
-
+    Memory& kernel_memory = kernel_.getGlobalState().getMemory();
+    Memory& proc_memory = process->getGlobalState().getMemory();
     MemoryManagementUnit& mmu = kernel_.getMMU();
 
-    for (uint32_t i = 0; i < count; ++i) {
-        uint32_t addr = pbuf + i;
+    std::vector<uint8_t> buffer(count);
 
-        if (addr < VIRT_MEMORY) {
-            if (addr >= proc_memory.size()) {
-                fmt::println("Invalid process memory access: addr=0x{:08X}", addr);
+    for (uint32_t i = 0; i < count; ++i) {
+        uint32_t offset = kbuffer_offset + i;
+
+        if (offset < VIRT_MEMORY) {
+            if (!kernel_memory.load(offset, buffer[i]))
                 return Errno::BAD_ADDRESS;
-            }
         } else {
-            Errno err = mmu.checkAccess(addr, AccessType::WRITE);
-            if (err != Errno::SUCCESS) {
-                fmt::println("MMU access check failed: addr=0x{:08X}, err={}", addr, static_cast<int>(err));
-                return err;
-            }
+            if (!mmu.load(offset, buffer[i]))
+                return Errno::BAD_ADDRESS;
         }
     }
 
     for (uint32_t i = 0; i < count; ++i) {
-        uint32_t addr = pbuf + i;
+        uint32_t offset = pbuffer_offset + i;
 
-        if (addr < VIRT_MEMORY) {
-            proc_memory[addr] = tmp[i];
+        if (offset < VIRT_MEMORY) {
+            if (!proc_memory.store(offset, buffer[i]))
+                return Errno::BAD_ADDRESS;
         } else {
-            mmu.writeI8(addr, tmp[i]);
+            if (!mmu.store(offset, buffer[i]))
+                return Errno::BAD_ADDRESS;
         }
     }
 

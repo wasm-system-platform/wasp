@@ -25,7 +25,7 @@ struct JumpBuffer {
             hashCombine(hash, stack_data[i].i64);
         }
 
-        const Continuation* epilogue_data = context.getEpilogues().data();
+        const Operation* epilogue_data = context.getEpilogues().data();
         for (size_t i = 0; i < context.getEpilogues().size(); i++) {
             hashCombine(hash, epilogue_data[i]);
         }
@@ -46,7 +46,7 @@ struct JumpBuffer {
             hashCombine(hash, stack_data[i].i64);
         }
 
-        const Continuation* epilogue_data = context.getEpilogues().data();
+        const Operation* epilogue_data = context.getEpilogues().data();
         for (size_t i = 0; i < context.getEpilogues().size(); i++) {
             hashCombine(hash, epilogue_data[i]);
         }
@@ -69,17 +69,17 @@ private:
 Continuation Sigsetjmp::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    context.getEpilogues().push(epilogue_.get());
+    context.getEpilogues().push(epilogue_);
 
-    uint32_t jb_addr = context.getLocal(0).i32;
+    uint32_t jbuffer_offset = context.getLocal(0).i32;
     int32_t savesigs = context.getLocal(1).i32;
 
-    std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
-    if (jb_addr + sizeof(JumpBuffer) > memory.size())
+    Memory& memory = instance.getGlobalState().getMemory();
+    if (!memory.contains(jbuffer_offset, sizeof(JumpBuffer)))
         return trap(instance, "sigsetjmp out of bounds memory address", addr_);
 
-    context.pushI32(jb_addr);
-    context.pushI32(jb_addr);
+    context.pushI32(jbuffer_offset);
+    context.pushI32(jbuffer_offset);
     context.pushI32(savesigs);
 
     return prologue_call_.get();
@@ -88,22 +88,23 @@ Continuation Sigsetjmp::action(Instance& instance) {
 Continuation Sigsetjmp::Epilogue::action(Instance& instance) {
     Context& context = instance.getActiveContext();
     
-    uint32_t jb_addr = context.pop().i32;
+    uint32_t jbuffer_offset = context.pop().i32;
 
-    std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
-    if (jb_addr + sizeof(JumpBuffer) > memory.size())
+    JumpBuffer* jbuffer;
+
+    Memory& memory = instance.getGlobalState().getMemory();
+    if (!memory.ptr(jbuffer_offset, &jbuffer))
         return trap(instance, "sigsetjmp out of bounds memory address", addr_);
 
-    JumpBuffer* jb = reinterpret_cast<JumpBuffer*>(&memory[jb_addr]);
-    jb->stack_size = context.getStack().size();
-    jb->frames_size = context.getLocals().getFramePointersSize();
-    jb->epilogues_size = context.getEpilogues().size();
-    jb->setjmp_epilogue = epilogue_call_.get();
-    jb->return_epilogue = context.getEpilogues().peek();
-    jb->computeValidator(context);
+    jbuffer->stack_size = context.getStack().size();
+    jbuffer->frames_size = context.getLocals().getFramePointersSize();
+    jbuffer->epilogues_size = context.getEpilogues().size();
+    jbuffer->setjmp_epilogue = epilogue_call_.get();
+    jbuffer->return_epilogue = context.getEpilogues().peek().get();
+    jbuffer->computeValidator(context);
 
     context.pushI32(0);
-    context.pushI32(jb_addr);
+    context.pushI32(jbuffer_offset);
     context.pushI32(0);
     return epilogue_call_.get();
 }
@@ -115,38 +116,39 @@ Continuation Sigsetjmp::Epilogue::action(Instance& instance) {
 Continuation Longjmp::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    uint32_t jb_addr = context.getLocal(0).i32;
+    uint32_t jbuffer_offset = context.getLocal(0).i32;
     int32_t status = context.getLocal(1).i32;
 
-    std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
-    if (jb_addr + sizeof(JumpBuffer) > memory.size())
+    Memory& memory = instance.getGlobalState().getMemory();
+    JumpBuffer* jbuffer;
+
+    if (!memory.ptr(jbuffer_offset, &jbuffer))
         return trap(instance, "longjmp out of bounds memory address", addr_);
 
-    JumpBuffer* jb = reinterpret_cast<JumpBuffer*>(&memory[jb_addr]);
-    if (jb->stack_size != context.getStack().size())
+    if (jbuffer->stack_size != context.getStack().size())
         return trap(instance, "longjmp invalid program state: handle me", addr_);
 
-    if (context.getLocals().getFramePointersSize() < jb->frames_size)
+    if (context.getLocals().getFramePointersSize() < jbuffer->frames_size)
         return trap(instance, "longjmp invalid program state: frame stack is too small", addr_);
 
-    while (context.getLocals().getFramePointersSize() > jb->frames_size) {
+    while (context.getLocals().getFramePointersSize() > jbuffer->frames_size) {
         context.getLocals().popLocals();
     }
 
-    if (context.getEpilogues().size() < jb->epilogues_size)
+    if (context.getEpilogues().size() < jbuffer->epilogues_size)
         return trap(instance, "longjmp invalid program state: epiloges stack is too small", addr_);
 
-    context.getEpilogues().shrink(jb->epilogues_size);
-    context.getEpilogues().swap(jb->return_epilogue);
+    context.getEpilogues().shrink(jbuffer->epilogues_size);
+    context.getEpilogues().swap(jbuffer->return_epilogue->shared_from_this());
 
-    if (!jb->isValid(context))
+    if (!jbuffer->isValid(context))
         return trap(instance, "longjmp invalid program state: corrupt jump buffer", addr_);
 
-    uint32_t ub_addr = jb_addr + offsetof(JumpBuffer, user_buffer);
+    uint32_t ubuffer_offset = jbuffer_offset + offsetof(JumpBuffer, user_buffer);
     context.pushI32(status ? status : 1);
-    context.pushI32(ub_addr);
+    context.pushI32(ubuffer_offset);
     context.pushI32(status ? status : 1);
-    return jb->setjmp_epilogue;
+    return jbuffer->setjmp_epilogue;
 }
 
 }

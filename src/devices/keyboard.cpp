@@ -1,4 +1,5 @@
 #include <fcntl.h>
+#include <unistd.h>
 
 #include "devices/keyboard.hpp"
 
@@ -12,7 +13,6 @@ bool Keyboard::tick() {
     char c;
     if (read(STDIN_FILENO, &c, 1) == 1) {
         input_.push_back(c);
-        fmt::println("c");
         return true;
     }
 

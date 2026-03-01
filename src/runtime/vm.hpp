@@ -5,6 +5,7 @@
 
 #include "devices/device.hpp"
 #include "grammar/module.hpp"
+#include "hw/mem/memory.hpp"
 #include "runtime/context.hpp"
 #include "runtime/function.hpp"
 #include "runtime/operations.hpp"
@@ -13,26 +14,7 @@ namespace runtime {
 
 using Params = std::vector<Value>;
 using Result = std::optional<Value>;
-
-/********************/
-/* Memory Instances */
-/********************/
-
-class MemoryInstances {
-public:
-    static Expected<MemoryInstances> create(const grammar::Module& module);
-
-    inline const std::vector<uint8_t>& getHeap() const { return heap_; }
-    inline std::vector<uint8_t>& getHeap() { return heap_; }
-
-private:
-    std::vector<uint8_t> heap_;
-    uint32_t max_;
-    bool shared_;
-
-    MemoryInstances(std::vector<uint8_t>&& heap, uint32_t max, bool shared)
-        : heap_(std::move(heap)), max_(max), shared_(shared) {}
-};
+using hw::mem::Memory;
 
 /********************/
 /* Global Instances */
@@ -110,10 +92,9 @@ public:
     create(const grammar::Module& module,
            const std::unordered_map<std::string, Function>& imports);
 
-    inline const std::vector<uint8_t>& getMemory() const {
-        return mems_.getHeap();
+    Memory& getMemory() {
+        return memory_;
     }
-    inline std::vector<uint8_t>& getMemory() { return mems_.getHeap(); }
 
     inline std::vector<std::vector<uint8_t>>& getData() {
         return segments_.getSegments();
@@ -150,18 +131,18 @@ private:
     std::vector<Function> funcs_;
     std::vector<uint32_t> indirect_funcs_;
 
-    MemoryInstances mems_;
+    hw::mem::Memory memory_;
     GlobalInstances globals_;
     DataInstances segments_;
     std::shared_ptr<DebugInfoInstance> debug_info_;
 
     GlobalState(std::vector<Function>&& funcs,
                 std::vector<uint32_t>&& indirect_funcs,
-                const MemoryInstances& mems, const GlobalInstances& globals,
+                Memory&& memory, const GlobalInstances& globals,
                 const DataInstances& segments,
                 const DebugInfoInstance&& debug_info)
         : funcs_(std::move(funcs)), indirect_funcs_(std::move(indirect_funcs)),
-          mems_(mems), globals_(globals), segments_(segments),
+          memory_(std::move(memory)), globals_(globals), segments_(segments),
           debug_info_(std::make_shared<DebugInfoInstance>(debug_info)) {}
 
     static Expected<std::vector<Function>>
@@ -170,6 +151,8 @@ private:
 
     static Expected<std::vector<uint32_t>>
     createIndirectFunctions(const grammar::Module& module);
+
+    static Expected<Memory> createMemory(const grammar::Module& module);
 
     static Expected<int32_t>
     evaluateExpressionI32(const grammar::Expression& expression);

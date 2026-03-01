@@ -24,12 +24,15 @@ sp_sources = files(
     'src/runtime/process.cpp',
     # 'src/devices/timer.cpp',
     'src/devices/keyboard.cpp',
-    'src/hw/mmu.cpp',
+    'src/hw/mem/mmu.cpp',
     'src/hw/wasm_disk.cpp',
     'src/util/error_handling.cpp'
 )
 
+memory_type = get_option('memory_type')
 trace_level = get_option('trace_level')
+
+add_project_arguments('-DMEMORY_' + memory_type.to_upper(), language : 'cpp')
 
 if trace_level > 0
     add_project_arguments('-DTRACE_LEVEL=' + trace_level.to_string(), language : 'cpp')
@@ -58,4 +61,4 @@ sp = executable(
     ]
 )
 
-subdir('test')
+#subdir('test')

@@ -13,7 +13,7 @@ public:
     // input
     int read(void* dst, uint32_t count);
     int tellg(uint32_t* offset);
-    int seekg(int32_t offset, int whence, uint32_t* new_offset);
+    int seekg(int32_t pos, int whence, uint32_t* new_pos);
 
     // output
     int write(void* src, uint32_t count);

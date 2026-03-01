@@ -11,20 +11,13 @@ public:
 protected:
     class Epilogue : public OperationBase {
     protected:
-        Epilogue(size_t id, Instance& suspended_instance) : id_(id), suspended_instance_(suspended_instance) {}
+        Epilogue(Instance& suspended_instance) : suspended_instance_(suspended_instance) {}
 
-        size_t id_;
         Instance& suspended_instance_;
     };
 
     uint32_t handler_idx_;
     std::vector<Operation> epilogues_;
-
-    size_t allocateEpilogue(Instance& instance);
-    void freeEpilogue(size_t id);
-
-private:
-    std::stack<size_t> free_list_;
 };
 
 /*********************/
@@ -42,7 +35,7 @@ public:
 private:
     class Epilogue : public Handler::Epilogue {
     public:
-        Epilogue(size_t id, Instance& suspended_instance, Interrupt& parent) : Handler::Epilogue(id, suspended_instance), parent_(parent) {}
+        Epilogue(Instance& suspended_instance, Interrupt& parent) : Handler::Epilogue(suspended_instance), parent_(parent) {}
 
         Continuation action(Instance& instance) override;
 
@@ -66,7 +59,7 @@ public:
 private:
     class Epilogue : public Handler::Epilogue {
     public:
-        Epilogue(size_t id, Instance& suspended_instance, SysCall& parent) : Handler::Epilogue(id, suspended_instance), parent_(parent) {}
+        Epilogue(Instance& suspended_instance, SysCall& parent) : Handler::Epilogue(suspended_instance), parent_(parent) {}
 
         Continuation action(Instance& instance) override;
 
@@ -88,7 +81,7 @@ public:
 private:
     class Epilogue : public Handler::Epilogue {
     public:
-        Epilogue(size_t id, Instance& suspended_instance, PageFault& parent) : Handler::Epilogue(id, suspended_instance), parent_(parent) {}
+        Epilogue(Instance& suspended_instance, PageFault& parent) : Handler::Epilogue(suspended_instance), parent_(parent) {}
 
         Continuation action(Instance& instance) override;
 

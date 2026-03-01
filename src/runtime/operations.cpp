@@ -1,6 +1,6 @@
 #include <fmt/base.h>
 
-#include "hw/mmu.hpp"
+#include "hw/mem/mmu.hpp"
 #include "runtime/context.hpp"
 #include "runtime/instance.hpp"
 #include "runtime/operations.hpp"
@@ -8,6 +8,8 @@
 #include "runtime/kernel.hpp"
 
 namespace runtime {
+
+using hw::mem::VIRT_MEMORY;
 
 Operation
 OperationBase::create(const std::vector<grammar::Instruction>& instructions,
@@ -573,11 +575,10 @@ Continuation OperationBase::trap(Instance& instance, std::string msg,
     std::string fmt_loc =
         instance.getGlobalState().getDebugInfo().getFormattedLocation(addr);
     fmt::println("trap: {}: at {}", msg, fmt_loc);
-    
     Context& ctxt = instance.getActiveContext();
-    const Continuation* epilogues = ctxt.getEpilogues().data();
+    const Operation* epilogues = ctxt.getEpilogues().data();
     for (size_t i = ctxt.getEpilogues().size() - 1; i > 0; i--) {
-        const Continuation& epilogue = epilogues[i];
+        const Operation& epilogue = epilogues[i];
         if (epilogue == nullptr) break;
         fmt::println("  {}: at {}", i, epilogue->getFormattedAddress(instance));
     }
@@ -640,7 +641,7 @@ Continuation Loop::action(Instance& instance) {
     TRACE_VERBOSE("{}: loop", getFormattedAddres(instance));
 
     // use epilogue to enforce interrupt handler
-    instance.getActiveContext().getEpilogues().push(start_.get());
+    instance.getActiveContext().getEpilogues().push(start_);
     return nullptr;
 }
 
@@ -659,11 +660,12 @@ IfThen::IfThen(const grammar::IfElse& if_else,
 
 Continuation IfThen::action(Instance& instance) {
     Context& ctxt = instance.getActiveContext();
-    if (next_)
-        ctxt.getEpilogues().push(next_);
 
     int32_t cond = ctxt.pop().i32;
     if (cond) {
+        if (next_)
+            ctxt.getEpilogues().push(successor_);
+
         TRACE_VERBOSE(
             "{}: if --> cond=true",
             instance.getGlobalState().getDebugInfo().getFormattedLocation(
@@ -697,7 +699,7 @@ IfElse::IfElse(const grammar::IfElse& if_else,
 Continuation IfElse::action(Instance& instance) {
     Context& ctxt = instance.getActiveContext();
     if (next_)
-        ctxt.getEpilogues().push(next_);
+        ctxt.getEpilogues().push(successor_);
 
     int32_t cond = ctxt.pop().i32;
     if (cond) {
@@ -767,7 +769,7 @@ Call::Call(uint32_t func_idx, size_t addr)
 Continuation Call::action(Instance& instance) {
     Function& func = instance.getGlobalState().getFunction(func_idx_);
 
-    instance.getActiveContext().getEpilogues().push(epilogue_.get());
+    instance.getActiveContext().getEpilogues().push(epilogue_);
 
     if (instance.is<Process>()) {
         TRACE("{:{}}{}: call {} is_kernel={}",
@@ -829,7 +831,7 @@ Continuation CallIndirect::action(Instance& instance) {
                     addr_);
 
     Operation epilogue = createEpilogue(func);
-    instance.getActiveContext().getEpilogues().push(epilogue.get());
+    instance.getActiveContext().getEpilogues().push(epilogue);
 
     if (instance.is<Process>()) {
         TRACE("{:{}}{}: call_indirect: (element_idx={}) -> ()",
@@ -2111,25 +2113,23 @@ Continuation I32Load::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
     int32_t base = context.pop().i32;
-    uint32_t addr = base + offset_;
+    uint32_t offset = base + offset_;
 
-    int32_t val;
-    if (addr < VIRT_MEMORY) {
-        std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
+    int32_t value;
+    if (offset < VIRT_MEMORY) {
+        Memory& memory = instance.getGlobalState().getMemory();
 
-        if (addr + sizeof(int32_t) > memory.size())
+        if (!memory.load(offset, value))
             return trap(instance, "i32.load out of bounds memory address", addr_);
-
-        val = *reinterpret_cast<int32_t*>(&memory[addr]);
     } else {
         Kernel& kernel = instance.is<Kernel>() ? instance.as<Kernel>() : instance.as<Process>().getKernel();
         MemoryManagementUnit& mmu = kernel.getMMU();
-        if (mmu.readI32(addr, &val) != Errno::SUCCESS) {
+        if (!mmu.load(offset, value)) {
             return trap(instance, "i32.load invalid memory access", addr_);
         }
     }
 
-    context.pushI32(val);
+    context.pushI32(value);
 
     TRACE_VERBOSE("i32.load {} {}: ({}) -> ({})", align_, offset_, base, val);
     return next_;
@@ -2143,30 +2143,27 @@ Continuation I64Load::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
     int32_t base = context.pop().i32;
-    uint32_t addr = base + offset_;
+    uint32_t offset = base + offset_;
 
-    int64_t val;
-
-    if (addr < VIRT_MEMORY) {
-        std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
-        if (addr + sizeof(int64_t) > memory.size())
-            return trap(instance, "i64.load out of bounds memory address", addr);
-
-        val = *reinterpret_cast<int64_t*>(&memory[addr]);
+    int64_t value;
+    if (offset < VIRT_MEMORY) {
+        Memory& memory = instance.getGlobalState().getMemory();
+        if (!memory.load(offset, value))
+            return trap(instance, "i64.load out of bounds memory address", offset);
     } else {
         Kernel& kernel = instance.is<Kernel>() ? instance.as<Kernel>() : instance.as<Process>().getKernel();
         MemoryManagementUnit& mmu = kernel.getMMU();
-        if (mmu.readI64(addr, &val) != Errno::SUCCESS) {
+        if (!mmu.load(offset, value)) {
             // repeat the operation after handling the page fault 
             context.push(base);
-            context.getEpilogues().push(this);
+            context.getEpilogues().push(shared_from_this());
 
             // trigger page fault handling
-            return mmu.fault(instance, addr, false);
+            return mmu.fault(instance, offset, false);
         }
     }
 
-    context.pushI64(val);
+    context.pushI64(value);
 
     TRACE_VERBOSE("i64.load {} {}: ({}) -> ({})", align_, offset_, base, val);
     return next_;
@@ -2180,14 +2177,15 @@ Continuation F32Load::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
     int32_t base = context.pop().i32;
-    uint32_t addr = base + offset_;
+    uint32_t offset = base + offset_;
 
-    std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
-    if (addr + sizeof(float) > memory.size())
-        return trap(instance, "f32.load out of bounds memory address", addr);
+    float value;
 
-    float val = *reinterpret_cast<float*>(&memory[addr]);
-    context.push(val);
+    Memory& memory = instance.getGlobalState().getMemory();
+    if (!memory.load(offset, value))
+        return trap(instance, "f32.load out of bounds memory address", offset);
+
+    context.push(value);
 
     TRACE_VERBOSE("f32.load {} {}: ({}) -> ({})", align_, offset_, base, val);
     return next_;
@@ -2201,13 +2199,14 @@ Continuation F64Load::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
     int32_t base = context.pop().i32;
-    uint32_t addr = base + offset_;
+    uint32_t offset = base + offset_;
 
-    std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
-    if (addr + sizeof(double) > memory.size())
-        return trap(instance, "f64.load out of bounds memory address", addr);
+    double val;
 
-    double val = *reinterpret_cast<double*>(&memory[addr]);
+    Memory& memory = instance.getGlobalState().getMemory();
+    if (!memory.load(offset, val))
+        return trap(instance, "f64.load out of bounds memory address", offset);
+
     context.push(val);
 
     TRACE_VERBOSE("f64.load {} {}: ({}) -> ({})", align_, offset_, base, val);
@@ -2222,25 +2221,23 @@ Continuation I32Load8Signed::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
     int32_t base = context.pop().i32;
-    uint32_t addr = base + offset_;
+    uint32_t offset = base + offset_;
 
-    int8_t val;
-    if (addr < VIRT_MEMORY) {
-        std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
+    int8_t value;
+    if (offset < VIRT_MEMORY) {
+        Memory& memory = instance.getGlobalState().getMemory();
 
-        if (addr + sizeof(int8_t) > memory.size())
+        if (!memory.load(offset, value))
             return trap(instance, "i32.load8_s out of bounds memory address", addr_);
-
-        val = static_cast<int8_t>(memory[addr]);
     } else {
         Kernel& kernel = instance.is<Kernel>() ? instance.as<Kernel>() : instance.as<Process>().getKernel();
         MemoryManagementUnit& mmu = kernel.getMMU();
-        if (mmu.readI8(addr, reinterpret_cast<int8_t*>(&val)) != Errno::SUCCESS) {
+        if (!mmu.load(offset, value)) {
             return trap(instance, "i32.load8_s invalid memory access", addr_);
         }
     }
 
-    context.pushI32(val);
+    context.pushI32(value);
     TRACE_VERBOSE("i32.load8_s {} {}: ({}) -> ({})", align_, offset_, base,
                   val);
     return next_;
@@ -2254,25 +2251,22 @@ Continuation I32Load8Unsigned::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
     int32_t base = context.pop().i32;
-    uint32_t addr = base + offset_;
+    uint32_t offset = base + offset_;
 
-    uint8_t val;
-    if (addr < VIRT_MEMORY) {
-        std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
-
-        if (addr + sizeof(uint8_t) > memory.size())
+    uint8_t value;
+    if (offset < VIRT_MEMORY) {
+        Memory& memory = instance.getGlobalState().getMemory();
+        if (!memory.load(offset, value))
             return trap(instance, "i32.load8_u out of bounds memory address", addr_);
-
-        val = memory[addr];
     } else {
         Kernel& kernel = instance.is<Kernel>() ? instance.as<Kernel>() : instance.as<Process>().getKernel();
         MemoryManagementUnit& mmu = kernel.getMMU();
-        if (mmu.readI8(addr, reinterpret_cast<int8_t*>(&val)) != Errno::SUCCESS) {
+        if (!mmu.load(offset, value)) {
             return trap(instance, "i32.load8_u invalid memory access", addr_);
         }
     }
 
-    context.pushI32(val);
+    context.pushI32(value);
     TRACE_VERBOSE("i32.load8_u {} {}: ({}) -> ({})", align_, offset_, base,
                   val);
     return next_;
@@ -2287,15 +2281,16 @@ Continuation I32Load16Signed::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
     int32_t base = context.pop().i32;
-    uint32_t addr = base + offset_;
+    uint32_t offset = base + offset_;
 
-    std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
-    if (addr + sizeof(int16_t) > memory.size())
+    int16_t value;
+
+    Memory& memory = instance.getGlobalState().getMemory();
+    if (!memory.load(offset, value))
         return trap(instance, "i32.load16_s out of bounds memory address",
-                    addr);
+                    offset);
 
-    int16_t val = *reinterpret_cast<int16_t*>(&memory[addr]);
-    context.pushI32(val);
+    context.pushI32(value);
 
     TRACE_VERBOSE("i32.load16_s align={} offset={}: (base={}) -> (val={})",
                   align_, offset_, base, val);
@@ -2311,32 +2306,29 @@ Continuation I32Load16Unsigned::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
     int32_t base = context.pop().i32;
-    uint32_t addr = base + offset_;
+    uint32_t offset = base + offset_;
 
-    uint16_t val;
+    uint16_t value;
 
-    if (addr < VIRT_MEMORY) {
-        std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
-        if (addr + sizeof(uint16_t) > memory.size())
+    if (offset < VIRT_MEMORY) {
+        Memory& memory = instance.getGlobalState().getMemory();
+        if (!memory.load(offset, value))
             return trap(instance, "i32.load16_u out of bounds memory address",
-                        addr);
-
-        val = *reinterpret_cast<uint16_t*>(&memory[addr]);
+                        offset);
     } else {
         Kernel& kernel = instance.is<Kernel>() ? instance.as<Kernel>() : instance.as<Process>().getKernel();
         MemoryManagementUnit& mmu = kernel.getMMU();
-        if (mmu.readI16(addr, reinterpret_cast<int16_t*>(&val)) != Errno::SUCCESS) {
+        if (!mmu.load(offset, value)) {
             // repeat the operation after handling the page fault
             context.push(base);
-            context.getEpilogues().push(this);
+            context.getEpilogues().push(shared_from_this());
 
             // trigger a page fault
-            return mmu.fault(instance, addr, false);
-
+            return mmu.fault(instance, offset, false);
         }
     }
 
-    context.pushI32(val);
+    context.pushI32(value);
 
     TRACE_VERBOSE("i32.load16_u align={} offset={}: (base={}) -> (val={})",
                   align_, offset_, base, val);
@@ -2351,15 +2343,16 @@ Continuation I64Load8Signed::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
     int32_t base = context.pop().i32;
-    uint32_t addr = base + offset_;
+    uint32_t offset = base + offset_;
 
-    std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
-    if (addr + sizeof(int8_t) > memory.size())
+    int8_t value;
+
+    Memory& memory = instance.getGlobalState().getMemory();
+    if (!memory.load(offset, value))
         return trap(instance, "i64.load8_s out of bounds memory address",
-                    addr);
+                    offset);
 
-    int8_t val = static_cast<int8_t>(memory[addr]);
-    context.pushI64(val);
+    context.pushI64(value);
 
     TRACE_VERBOSE("i64.load8_s align={} offset={}: (base={}) -> (val={})",
                   align_, offset_, base, val);
@@ -2374,15 +2367,16 @@ Continuation I64Load8Unsigned::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
     int32_t base = context.pop().i32;
-    uint32_t addr = base + offset_;
+    uint32_t offset = base + offset_;
 
-    std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
-    if (addr + sizeof(uint8_t) > memory.size())
+    uint8_t value;
+
+    Memory& memory = instance.getGlobalState().getMemory();
+    if (!memory.load(offset, value))
         return trap(instance, "i64.load8_u out of bounds memory address",
-                    addr);
+                    offset);
 
-    uint8_t val = memory[addr];
-    context.pushI64(val);
+    context.pushI64(value);
 
     TRACE_VERBOSE("i64.load8_u align={} offset={}: (base={}) -> (val={})",
                   align_, offset_, base, val);
@@ -2397,15 +2391,16 @@ Continuation I64Load16Signed::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
     int32_t base = context.pop().i32;
-    uint32_t addr = base + offset_;
+    uint32_t offset = base + offset_;
 
-    std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
-    if (addr + sizeof(int16_t) > memory.size())
+    int16_t value;
+
+    Memory& memory = instance.getGlobalState().getMemory();
+    if (!memory.load(offset, value))
         return trap(instance, "i64.load16_s out of bounds memory address",
-                    addr);
+                    offset);
 
-    int16_t val = *reinterpret_cast<int16_t*>(&memory[addr]);
-    context.pushI64(val);
+    context.pushI64(value);
 
     TRACE_VERBOSE("i64.load16_s align={} offset={}: (base={}) -> (val={})",
                   align_, offset_, base, val);
@@ -2420,15 +2415,16 @@ Continuation I64Load16Unsigned::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
     int32_t base = context.pop().i32;
-    uint32_t addr = base + offset_;
+    uint32_t offset = base + offset_;
 
-    std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
-    if (addr + sizeof(uint16_t) > memory.size())
+    uint16_t value;
+
+    Memory& memory = instance.getGlobalState().getMemory();
+    if (!memory.load(offset, value))
         return trap(instance, "i64.load16_u out of bounds memory address",
-                    addr);
+                    offset);
 
-    uint16_t val = *reinterpret_cast<uint16_t*>(&memory[addr]);
-    context.pushI64(val);
+    context.pushI64(value);
 
     TRACE_VERBOSE("i64.load16_u align={} offset={}: (base={}) -> (val={})",
                   align_, offset_, base, val);
@@ -2443,15 +2439,16 @@ Continuation I64Load32Signed::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
     int32_t base = context.pop().i32;
-    uint32_t addr = base + offset_;
+    uint32_t offset = base + offset_;
 
-    std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
-    if (addr + sizeof(int32_t) > memory.size())
+    int32_t value;
+
+    Memory& memory = instance.getGlobalState().getMemory();
+    if (!memory.load(offset, value))
         return trap(instance, "i64.load32_s out of bounds memory address",
-                    addr);
+                    offset);
 
-    int32_t val = *reinterpret_cast<int32_t*>(&memory[addr]);
-    context.pushI64(val);
+    context.pushI64(value);
 
     TRACE_VERBOSE("i64.load32_s align={} offset={}: (base={}) -> (val={})",
                   align_, offset_, base, val);
@@ -2466,15 +2463,16 @@ Continuation I64Load32Unsigned::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
     int32_t base = context.pop().i32;
-    uint32_t addr = base + offset_;
+    uint32_t offset = base + offset_;
 
-    std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
-    if (addr + sizeof(uint32_t) > memory.size())
+    uint32_t value;
+
+    Memory& memory = instance.getGlobalState().getMemory();
+    if (!memory.load(offset, value))
         return trap(instance, "i64.load32_u out of bounds memory address",
-                    addr);
+                    offset);
 
-    uint32_t val = *reinterpret_cast<uint32_t*>(&memory[addr]);
-    context.pushI64(val);
+    context.pushI64(value);
 
     TRACE_VERBOSE("i64.load32_u align={} offset={}: (base={}) -> (val={})",
                   align_, offset_, base, val);
@@ -2489,32 +2487,31 @@ I32Store::I32Store(const grammar::I32Store& i32_store)
 Continuation I32Store::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    int32_t val = context.pop().i32;
+    int32_t value = context.pop().i32;
     int32_t base = context.pop().i32;
 
-    uint32_t addr = base + offset_;
+    uint32_t offset = base + offset_;
 
-    if (addr < VIRT_MEMORY) {
-        std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
-
-        if (addr + sizeof(int32_t) > memory.size())
-            return trap(instance, "i32.store out of bounds memory address", addr);
-
-        *reinterpret_cast<int32_t*>(&memory[addr]) = val; 
+    if (offset < VIRT_MEMORY) {
+        Memory& memory = instance.getGlobalState().getMemory();
+        if (!memory.store(offset, value))
+            return trap(instance, "i32.store out of bounds memory address", addr_);
     } else {
         Kernel& kernel = instance.is<Kernel>() ? instance.as<Kernel>() : instance.as<Process>().getKernel();
         MemoryManagementUnit& mmu = kernel.getMMU();
-        if (mmu.writeI32(addr, val) != Errno::SUCCESS) {
+        if (!mmu.store(offset, value)) {
             // repeat the operation after handling the page fault
             context.pushI32(base);
-            context.pushI32(val);
-            context.getEpilogues().push(this);
+            context.pushI32(value);
+            context.getEpilogues().push(shared_from_this());
 
+            if (instance.is<Kernel>()) {
+                fmt::println("i32.store: {}", getFormattedAddress(instance));
+            }
             // trigger page fault handling
-            return mmu.fault(instance, addr, true);
+            return mmu.fault(instance, offset, true);
         }
     }
-
 
     TRACE_VERBOSE("i32.store {} {}: ({}, {}) -> ()", align_, offset_, base,
                   val);
@@ -2528,29 +2525,26 @@ I64Store::I64Store(const grammar::I64Store& i64_store)
 Continuation I64Store::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    int64_t val = context.pop().i64;
+    int64_t value = context.pop().i64;
     int32_t base = context.pop().i32;
 
-    uint32_t addr = base + offset_;
+    uint32_t offset = base + offset_;
 
-    if (addr < VIRT_MEMORY) {
-        std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
-
-        if (addr + sizeof(int64_t) > memory.size())
-            return trap(instance, "i64.store out of bounds memory address", addr);
-
-        *reinterpret_cast<int64_t*>(&memory[addr]) = val; 
+    if (offset < VIRT_MEMORY) {
+        Memory& memory = instance.getGlobalState().getMemory();
+        if (!memory.store(offset, value))
+            return trap(instance, "i64.store out of bounds memory address", offset);
     } else {
         Kernel& kernel = instance.is<Kernel>() ? instance.as<Kernel>() : instance.as<Process>().getKernel();
         MemoryManagementUnit& mmu = kernel.getMMU();
-        if (mmu.writeI64(addr, val) != Errno::SUCCESS) {
+        if (!mmu.store(offset, value)) {
             // repeat the operation after handling the page fault
             context.pushI32(base);
-            context.pushI64(val);
-            context.getEpilogues().push(this);
+            context.pushI64(value);
+            context.getEpilogues().push(shared_from_this());
             
             // trigger page fault handling
-            return mmu.fault(instance, addr, true);
+            return mmu.fault(instance, offset, true);
         }
     }
 
@@ -2565,16 +2559,14 @@ F32Store::F32Store(const grammar::F32Store& f32_store)
 Continuation F32Store::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    float val = context.pop().f32;
+    float value = context.pop().f32;
     int32_t base = context.pop().i32;
 
-    uint32_t addr = base + offset_;
+    uint32_t offset = base + offset_;
 
-    std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
-    if (addr + sizeof(float) > memory.size())
-        return trap(instance, "f32.store out of bounds memory address", addr);
-
-    std::memcpy(&memory[addr], &val, sizeof(float));
+    Memory& memory = instance.getGlobalState().getMemory();
+    if (!memory.store(offset, value))
+        return trap(instance, "f32.store out of bounds memory address", offset);
 
     TRACE_VERBOSE("f32.store {} {}: ({}, {}) -> ()", align_, offset_, base,
                   val);
@@ -2587,16 +2579,14 @@ F64Store::F64Store(const grammar::F64Store& f64_store)
 Continuation F64Store::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    double val = context.pop().f64;
+    double value = context.pop().f64;
     int32_t base = context.pop().i32;
 
-    uint32_t addr = base + offset_;
+    uint32_t offset = base + offset_;
 
-    std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
-    if (addr + sizeof(double) > memory.size())
-        return trap(instance, "f64.store out of bounds memory address", addr);
-
-    *reinterpret_cast<double*>(&memory[addr]) = val;
+    Memory& memory = instance.getGlobalState().getMemory();
+    if (!memory.store(offset, value))
+        return trap(instance, "f64.store out of bounds memory address", offset);
 
     TRACE_VERBOSE("f64.store {} {}: ({}, {}) -> ()", align_, offset_, base,
                   val);
@@ -2610,28 +2600,26 @@ I32Store8::I32Store8(const grammar::I32Store8& i32_store8)
 Continuation I32Store8::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    int32_t val = context.pop().i32;
+    int32_t value = context.pop().i32;
     int32_t base = context.pop().i32;
 
-    uint32_t addr = base + offset_;
+    uint32_t offset = base + offset_;
 
-    if (addr < VIRT_MEMORY) {
-        std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
-        if (addr + sizeof(int8_t) > memory.size())
-            return trap(instance, "i32.store8 out of bounds memory address", addr);
-
-        memory[addr] = static_cast<uint8_t>(val & 0xFF);
+    if (offset < VIRT_MEMORY) {
+        Memory& memory = instance.getGlobalState().getMemory();
+        if (!memory.store(offset, static_cast<uint8_t>(value & 0xFF)))
+            return trap(instance, "i32.store8 out of bounds memory address", offset);
     } else {
         Kernel& kernel = instance.is<Kernel>() ? instance.as<Kernel>() : instance.as<Process>().getKernel();
         MemoryManagementUnit& mmu = kernel.getMMU();
-        if (mmu.writeI8(addr, static_cast<int8_t>(val & 0xFF)) != Errno::SUCCESS) {
+        if (!mmu.store(offset, static_cast<uint8_t>(value & 0xFF))) {
             // repeat the operation after handling the page fault
             context.pushI32(base);
-            context.pushI32(val);
-            context.getEpilogues().push(this);
+            context.pushI32(value);
+            context.getEpilogues().push(shared_from_this());
             
             // trigger page fault handling
-            return mmu.fault(instance, addr, true);
+            return mmu.fault(instance, offset, true);
         }
     }
 
@@ -2647,30 +2635,26 @@ I32Store16::I32Store16(const grammar::I32Store16& i32_store16)
 Continuation I32Store16::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    int32_t val = context.pop().i32;
+    int32_t value = context.pop().i32;
     int32_t base = context.pop().i32;
 
-    uint32_t addr = base + offset_;
+    uint32_t offset = base + offset_;
 
-    if (addr < VIRT_MEMORY) {
-        std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
-
-        if (addr + sizeof(int16_t) > memory.size())
-            return trap(instance, "i32.store16 out of bounds memory address", addr);
-
-        *reinterpret_cast<uint16_t*>(&memory[addr]) =
-            static_cast<uint16_t>(val & 0xFFFF);
+    if (offset < VIRT_MEMORY) {
+        Memory& memory = instance.getGlobalState().getMemory();
+        if (!memory.store(offset, static_cast<uint16_t>(value & 0xFFFF)))
+            return trap(instance, "i32.store16 out of bounds memory address", offset);
     } else {
         Kernel& kernel = instance.is<Kernel>() ? instance.as<Kernel>() : instance.as<Process>().getKernel();
         MemoryManagementUnit& mmu = kernel.getMMU();
-        if (mmu.writeI16(addr, static_cast<int16_t>(val & 0xFFFF)) != Errno::SUCCESS) {
+        if (!mmu.store(offset, static_cast<int16_t>(value & 0xFFFF))) {
             // repeat the operation after handling the page fault
             context.pushI32(base);
-            context.pushI32(val);
-            context.getEpilogues().push(this);
+            context.pushI32(value);
+            context.getEpilogues().push(shared_from_this());
             
             // trigger page fault handling
-            return mmu.fault(instance, addr, true);
+            return mmu.fault(instance, offset, true);
         }
     }
 
@@ -2689,12 +2673,11 @@ Continuation I64Store8::action(Instance& instance) {
     int64_t val = context.pop().i64;
     int32_t base = context.pop().i32;
 
-    uint32_t addr = base + offset_;
-    std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
-    if (addr + sizeof(int8_t) > memory.size())
-        return trap(instance, "i64.store8 out of bounds memory address", addr);
+    uint32_t offset = base + offset_;
 
-    memory[addr] = val & 0xFF;
+    Memory& memory = instance.getGlobalState().getMemory();
+    if (!memory.store(offset, static_cast<uint8_t>(val & 0xFF)))
+        return trap(instance, "i64.store8 out of bounds memory address", offset);
 
     TRACE_VERBOSE("i64.store8 align={} offset={}: (base={}, val={}) -> ()",
                   align_, offset_, base, val & 0xFF);
@@ -2708,15 +2691,14 @@ I64Store16::I64Store16(const grammar::I64Store16& i64_store16)
 Continuation I64Store16::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    int64_t val = context.pop().i64;
+    int64_t value = context.pop().i64;
     int32_t base = context.pop().i32;
 
-    uint32_t addr = base + offset_;
-    std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
-    if (addr + sizeof(int16_t) > memory.size())
-        return trap(instance, "i64.store16 out of bounds memory address", addr);
+    uint32_t offset = base + offset_;
 
-    *reinterpret_cast<uint16_t*>(&memory[addr]) = static_cast<uint16_t>(val & 0xFFFF);
+    Memory& memory = instance.getGlobalState().getMemory();
+    if (!memory.store(offset, static_cast<uint16_t>(value & 0xFFFF)))
+        return trap(instance, "i64.store16 out of bounds memory address", offset);
 
     TRACE_VERBOSE("i64.store16 align={} offset={}: (base={}, val={}) -> ()",
                   align_, offset_, base, val & 0xFFFF);
@@ -2730,15 +2712,14 @@ I64Store32::I64Store32(const grammar::I64Store32& i64_store32)
 Continuation I64Store32::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    int64_t val = context.pop().i64;
+    int64_t value = context.pop().i64;
     int32_t base = context.pop().i32;
 
-    uint32_t addr = base + offset_;
-    std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
-    if (addr + sizeof(int32_t) > memory.size())
-        return trap(instance, "i64.store32 out of bounds memory address", addr);
+    uint32_t offset = base + offset_;
 
-    *reinterpret_cast<uint32_t*>(&memory[addr]) = static_cast<uint32_t>(val & 0xFFFFFFFF);
+    Memory& memory = instance.getGlobalState().getMemory();
+    if (!memory.store(offset, static_cast<uint32_t>(value & 0xFFFFFFFF)))
+        return trap(instance, "i64.store32 out of bounds memory address", offset);
 
     TRACE_VERBOSE("i64.store32 align={} offset={}: (base={}, val={}) -> ()",
                   align_, offset_, base, val & 0xFFFFFFFF);
@@ -2752,25 +2733,9 @@ Continuation MemoryGrow::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
     uint32_t delta = context.pop().i32;
-    std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
+    Memory& memory = instance.getGlobalState().getMemory();
 
-    constexpr uint32_t PAGE_SIZE = 65536;
-
-    uint32_t old_pages = memory.size() / PAGE_SIZE;
-    if (delta == 0) {
-        context.pushI32(old_pages);
-        return next_;
-    }
-
-    uint64_t new_size = static_cast<uint64_t>(memory.size()) +
-                        static_cast<uint64_t>(delta) * PAGE_SIZE;
-    if (new_size > (UINT32_MAX >> 1)) {
-        context.pushI32(-1);
-        return next_;
-    }
-
-    memory.resize(new_size, 0);
-    context.pushI32(old_pages);
+    context.pushI32(memory.grow(delta));
     return next_;
 }
 
@@ -2781,22 +2746,19 @@ Continuation MemoryInit::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
     int32_t len = context.pop().i32;
-    int32_t src = context.pop().i32;
-    int32_t dst = context.pop().i32;
+    int32_t src_offset = context.pop().i32;
+    int32_t dst_offset = context.pop().i32;
 
-    /* TODO this check should be done at instantiation */
     std::vector<uint8_t>& data_segment =
         instance.getGlobalState().getData()[segment_idx_];
-    if (src + len > data_segment.size())
-        return trap(instance, "memory.init out of bounds data segment address",
-                    addr_);
 
-    std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
-    if (dst + len > memory.size())
-        return trap(instance, "memory.init out of bounds memory address",
-                    addr_);
+    assert(src_offset + len <= data_segment.size());
+    auto src_buffer = std::span<uint8_t>(data_segment).subspan(src_offset, len);
 
-    memcpy(&memory[dst], &data_segment[src], len);
+    Memory& memory = instance.getGlobalState().getMemory();
+    bool result = memory.store(dst_offset, src_buffer);
+    assert(result);
+
     return next_;
 }
 
@@ -2812,62 +2774,48 @@ Continuation MemoryCopy::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
     uint32_t count = static_cast<uint32_t>(context.pop().i32);
-    uint32_t src = static_cast<uint32_t>(context.pop().i32);
-    uint32_t dst = static_cast<uint32_t>(context.pop().i32);
-
-    if ((src < VIRT_MEMORY && src + count >= VIRT_MEMORY) ||
-        (dst < VIRT_MEMORY && dst + count >= VIRT_MEMORY)) {
-        return trap(instance,
-                    fmt::format(
-                        "memory.copy crosses into invalid memory region: src=0x{:x} dst=0x{:x} count={}",
-                        src, dst, count),
-                    addr_);
-    }
+    uint32_t src_offset = static_cast<uint32_t>(context.pop().i32);
+    uint32_t dst_offset = static_cast<uint32_t>(context.pop().i32);
     
-    std::vector<uint8_t> temp_buffer(count);
+    std::vector<uint8_t> buffer(count);
 
-    if (src < VIRT_MEMORY) {
-        std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
-        if (src + count > memory.size())
+    if (src_offset < VIRT_MEMORY) {
+        Memory& memory = instance.getGlobalState().getMemory();
+        if (!memory.load(src_offset, buffer))
             return trap(instance, "memory.copy out of bounds memory address",
                         addr_);
-
-        memcpy(&temp_buffer[0], &memory[src], count);
     } else {
         Kernel& kernel = instance.is<Kernel>() ? instance.as<Kernel>() : instance.as<Process>().getKernel();
         MemoryManagementUnit& mmu = kernel.getMMU();
-        if (mmu.read(src, temp_buffer) != Errno::SUCCESS) {
+        if (!mmu.load(src_offset, buffer)) {
             // repeat the operation after handling the page fault
-            context.pushI32(dst);
-            context.pushI32(src);
+            context.pushI32(dst_offset);
+            context.pushI32(src_offset);
             context.pushI32(count);
-            context.getEpilogues().push(this);
+            context.getEpilogues().push(shared_from_this());
             
             // trigger page fault handling
-            return mmu.fault(instance, src, false);
+            return mmu.fault(instance, src_offset, false);
         }
     }
 
-    if (dst < VIRT_MEMORY) {
-        std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
-        if (dst + count > memory.size())
+    if (dst_offset < VIRT_MEMORY) {
+        Memory& memory = instance.getGlobalState().getMemory();
+        if (!memory.store(dst_offset, buffer))
             return trap(instance, "memory.copy out of bounds memory address",
                         addr_);
-
-        memcpy(&memory[dst], &temp_buffer[0], count);
-        return next_;
     } else {
         Kernel& kernel = instance.is<Kernel>() ? instance.as<Kernel>() : instance.as<Process>().getKernel();
         MemoryManagementUnit& mmu = kernel.getMMU();
-        if (mmu.write(dst, temp_buffer) != Errno::SUCCESS) {
+        if (!mmu.store(dst_offset, buffer)) {
             // repeat the operation after handling the page fault
-            context.pushI32(dst);
-            context.pushI32(src);
+            context.pushI32(dst_offset);
+            context.pushI32(src_offset);
             context.pushI32(count);
-            context.getEpilogues().push(this);
+            context.getEpilogues().push(shared_from_this());
             
             // trigger page fault handling
-            return mmu.fault(instance, dst, true);
+            return mmu.fault(instance, dst_offset, true);
         }
     }
 
@@ -2879,36 +2827,34 @@ Continuation MemoryFill::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
     uint32_t count = static_cast<uint32_t>(context.pop().i32);
-    int32_t val = context.pop().i32;
-    uint32_t dst = static_cast<uint32_t>(context.pop().i32);
+    int32_t value = context.pop().i32;
+    uint32_t dst_offset = static_cast<uint32_t>(context.pop().i32);
 
-    if (dst < VIRT_MEMORY && dst + count > VIRT_MEMORY) {
+    if (dst_offset < VIRT_MEMORY && dst_offset + count > VIRT_MEMORY) {
         return trap(instance,
                     fmt::format(
                         "memory.fill crosses into invalid memory region: dst=0x{:x} count={}",
-                        dst, count),
+                        dst_offset, count),
                     addr_);
     }
 
-    if (dst < VIRT_MEMORY) {
-        std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
-        if (dst + count > memory.size())
-            return trap(instance, fmt::format("memory.fill out of bounds memory address: dst=0x{:x} count={}", dst, count),
+    if (dst_offset < VIRT_MEMORY) {
+        Memory& memory = instance.getGlobalState().getMemory();
+        if (!memory.fill(dst_offset, value, count))
+            return trap(instance, fmt::format("memory.fill out of bounds memory address: dst=0x{:x} count={}", dst_offset, count),
                         addr_);
-
-        memset(&memory[dst], val, count);
     } else {
         Kernel& kernel = instance.is<Kernel>() ? instance.as<Kernel>() : instance.as<Process>().getKernel();
         MemoryManagementUnit& mmu = kernel.getMMU();
-        if (mmu.memset(dst, static_cast<uint8_t>(val), count) != Errno::SUCCESS) {
+        if (!mmu.fill(dst_offset, value, count)) {
             // repeat the operation after handling the page fault
-            context.pushI32(dst);
-            context.pushI32(val);
+            context.pushI32(dst_offset);
+            context.pushI32(value);
             context.pushI32(count);
-            context.getEpilogues().push(this);
+            context.getEpilogues().push(shared_from_this());
             
             // trigger page fault handling
-            return mmu.fault(instance, dst, true);
+            return mmu.fault(instance, dst_offset, true);
         }
     }
 
@@ -2929,18 +2875,18 @@ Continuation AtomicNotify::action(Instance& instance) {
     uint32_t waiters = static_cast<uint32_t>(context.pop().i32);
     uint32_t base = static_cast<uint32_t>(context.pop().i32);
 
-    uint32_t addr = base + offset_;
-    if (addr % align_ != 0)
+    uint32_t offset = base + offset_;
+    if (offset % align_ != 0)
         return trap(instance, "memory.atomic.notify misaligned memory address",
                     addr_);
 
-    std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
-    if (addr + sizeof(int32_t) > memory.size())
+    Memory& memory = instance.getGlobalState().getMemory();
+    if (memory.contains(offset, sizeof(int32_t)))
         return trap(instance,
                     "memory.atomic.notify out of bounds memory address", addr_);
 
     WaitingRoom& waiting_room = instance.getWaitingRoom();
-    uint32_t notified = waiting_room.notify(addr, waiters);
+    uint32_t notified = waiting_room.notify(offset, waiters);
 
     context.pushI32(static_cast<int32_t>(notified));
     return next_;
@@ -2980,31 +2926,31 @@ Continuation AtomicWait32::action(Instance& instance) {
     int32_t expected = context.pop().i32;
     uint32_t base = static_cast<uint32_t>(context.pop().i32);
 
-    uint32_t addr = base + offset_;
-    if (addr % align_ != 0)
+    uint32_t offset = base + offset_;
+    if (offset % align_ != 0)
         return trap(instance, "memory.atomic.wait32 misaligned memory address",
                     addr_);
 
-    std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
-    if (addr + sizeof(int32_t) > memory.size())
+    int32_t* value_ptr;
+
+    Memory& memory = instance.getGlobalState().getMemory();
+    if (!memory.ptr(offset, &value_ptr))
         return trap(instance,
                     "memory.atomic.wait32 out of bounds memory address", addr_);
 
-    int32_t val = __atomic_load_n(reinterpret_cast<int32_t*>(&memory[addr]),
-                                  __ATOMIC_SEQ_CST);
-
+    int32_t value = __atomic_load_n(value_ptr, __ATOMIC_SEQ_CST);
     TRACE_VERBOSE("memory.atomic.wait32 prologue {} {}: ({}, {}, {}) -> ()",
                   align_, offset_, timeout, expected, base);
 
-    if (val != expected) {
+    if (value != expected) {
         context.pushI32(1);
 
         TRACE_VERBOSE("memory.atomic.wait32 epilogue {} {}: () -> ({})", align_,
                       offset_, 1);
         return next_;
     } else {
-        waiting_room.block(context, addr);
-        context.setTimeout(addr, timeout);
+        waiting_room.block(context, offset);
+        context.setTimeout(offset, timeout);
         context.setRunState(Context::RunState::waiting);
 
         idle_->addNext(shared_from_this());
@@ -3026,15 +2972,16 @@ Continuation AtomicLoad::action(Instance& instance) {
         return trap(instance, "memory.atomic.load misaligned memory address",
                     addr_);
 
-    std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
-    if (addr + sizeof(int32_t) > memory.size())
+    int32_t* value_ptr;
+
+    Memory& memory = instance.getGlobalState().getMemory();
+    if (!memory.ptr(addr, &value_ptr))
         return trap(instance, "memory.atomic.load out of bounds memory address",
                     addr_);
 
-    int32_t* ptr = reinterpret_cast<int32_t*>(&memory[addr]);
-    int32_t val = __atomic_load_n(ptr, __ATOMIC_SEQ_CST);
+    int32_t value = __atomic_load_n(value_ptr, __ATOMIC_SEQ_CST);
 
-    context.pushI32(val);
+    context.pushI32(value);
 
     TRACE_VERBOSE("memory.atomic.load {} {}: ({}) -> ({})", align_, offset_,
                   base, val);
@@ -3056,15 +3003,16 @@ Continuation AtomicLoad8Unsigned::action(Instance& instance) {
         return trap(instance, "memory.atomic.load8_u misaligned memory address",
                     addr_);
 
-    std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
-    if (addr + sizeof(uint8_t) > memory.size())
+    uint8_t* value_ptr;
+
+    Memory& memory = instance.getGlobalState().getMemory();
+    if (!memory.ptr(addr, &value_ptr))
         return trap(instance, "memory.atomic.load8_u misaligned memory address",
                     addr_);
 
-    uint8_t* ptr = &memory[addr];
-    uint8_t val = __atomic_load_n(ptr, __ATOMIC_SEQ_CST);
+    uint8_t value = __atomic_load_n(value_ptr, __ATOMIC_SEQ_CST);
 
-    context.pushI32(val);
+    context.pushI32(value);
 
     TRACE_VERBOSE("memory.atomic.load8_u {} {}: ({}) -> ({})", align_, offset_,
                   base, val);
@@ -3078,21 +3026,22 @@ AtomicStore::AtomicStore(const grammar::AtomicStore& atomic_store)
 Continuation AtomicStore::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    int32_t val = context.pop().i32;
+    int32_t value = context.pop().i32;
     uint32_t base = static_cast<uint32_t>(context.pop().i32);
 
-    uint32_t addr = base + offset_;
-    if (addr % align_ != 0)
+    uint32_t offset = base + offset_;
+    if (offset % align_ != 0)
         return trap(instance, "memory.atomic.store misaligned memory address",
                     addr_);
 
-    std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
-    if (addr + sizeof(int32_t) > memory.size())
+    int32_t* value_ptr;
+
+    Memory& memory = instance.getGlobalState().getMemory();
+    if (!memory.ptr(offset, &value_ptr))
         return trap(instance,
                     "memory.atomic.store out of bounds memory address", addr_);
 
-    int32_t* ptr = reinterpret_cast<int32_t*>(&memory[addr]);
-    __atomic_store_n(ptr, val, __ATOMIC_SEQ_CST);
+    __atomic_store_n(value_ptr, value, __ATOMIC_SEQ_CST);
 
     TRACE_VERBOSE("memory.atomic.store {} {}: ({}, {}) -> ()", align_, offset_,
                   val, base);
@@ -3106,21 +3055,22 @@ AtomicStore8::AtomicStore8(const grammar::AtomicStore8& atomic_store8)
 Continuation AtomicStore8::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    uint8_t val = static_cast<uint8_t>(context.pop().i32);
+    uint8_t value = static_cast<uint8_t>(context.pop().i32);
     uint32_t base = static_cast<uint32_t>(context.pop().i32);
 
-    uint32_t addr = base + offset_;
-    if (addr % align_ != 0)
+    uint32_t offset = base + offset_;
+    if (offset % align_ != 0)
         return trap(instance, "memory.atomic.store8 misaligned memory address",
                     addr_);
 
-    std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
-    if (addr + sizeof(uint8_t) > memory.size())
+    uint8_t* value_ptr;
+
+    Memory& memory = instance.getGlobalState().getMemory();
+    if (!memory.ptr(offset, &value_ptr))
         return trap(instance,
                     "memory.atomic.store8 out of bounds memory address", addr_);
-
-    uint8_t* ptr = &memory[addr];
-    __atomic_store_n(ptr, val, __ATOMIC_SEQ_CST);
+;
+    __atomic_store_n(value_ptr, value, __ATOMIC_SEQ_CST);
 
     TRACE_VERBOSE("memory.atomic.store8 {} {}: ({}, {}) -> ()", align_, offset_,
                   val, base);
@@ -3134,22 +3084,23 @@ AtomicAdd::AtomicAdd(const grammar::AtomicAdd& atomic_add)
 Continuation AtomicAdd::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    int32_t val = context.pop().i32;
+    int32_t value = context.pop().i32;
     uint32_t base = static_cast<uint32_t>(context.pop().i32);
 
-    uint32_t addr = base + offset_;
-    if (addr % align_ != 0)
+    uint32_t offset = base + offset_;
+    if (offset % align_ != 0)
         return trap(instance, "i32.atomic.rmw.add misaligned memory address",
                     addr_);
 
-    std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
-    if (addr + 4 > memory.size())
+    uint32_t* value_ptr;
+
+    Memory& memory = instance.getGlobalState().getMemory();
+    if (!memory.ptr(offset, &value_ptr))
         return trap(instance, "i32.atomic.rmw.add out of bounds memory address",
                     addr_);
 
-    uint32_t* ptr = reinterpret_cast<uint32_t*>(&memory[addr]);
     uint32_t old =
-        __atomic_fetch_add(ptr, static_cast<uint32_t>(val), __ATOMIC_SEQ_CST);
+        __atomic_fetch_add(value_ptr, static_cast<uint32_t>(value), __ATOMIC_SEQ_CST);
 
     context.pushI32(static_cast<int32_t>(old));
 
@@ -3166,22 +3117,23 @@ AtomicExchange8Unsigned::AtomicExchange8Unsigned(
 Continuation AtomicExchange8Unsigned::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    uint8_t val = static_cast<uint8_t>(context.pop().i32);
+    uint8_t value = static_cast<uint8_t>(context.pop().i32);
     uint32_t base = static_cast<uint32_t>(context.pop().i32);
 
-    uint32_t addr = base + offset_;
-    if (addr % align_ != 0)
+    uint32_t offset = base + offset_;
+    if (offset % align_ != 0)
         return trap(instance,
                     "i32.atomic.rmw8.xchg_u misaligned memory address", addr_);
 
-    std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
-    if (addr + sizeof(uint8_t) > memory.size())
+    uint8_t* value_ptr;
+
+    Memory& memory = instance.getGlobalState().getMemory();
+    if (!memory.ptr(offset, &value_ptr))
         return trap(instance,
                     "i32.atomic.rmw8.xchg_u out of bonds memory address",
                     addr_);
 
-    uint8_t* ptr = &memory[addr];
-    uint8_t old = __atomic_exchange_n(ptr, val, __ATOMIC_SEQ_CST);
+    uint8_t old = __atomic_exchange_n(value_ptr, value, __ATOMIC_SEQ_CST);
     context.pushI32(old);
 
     TRACE_VERBOSE("i32.atomic.rmw8.xchg_u {} {}: ({}, {}) -> ({})", align_,
@@ -3206,14 +3158,15 @@ Continuation AtomicCompareExchange::action(Instance& instance) {
         return trap(instance,
                     "i32.atomic.rmw.cmpxchg misaligned memory address", addr_);
 
-    std::vector<uint8_t>& memory = instance.getGlobalState().getMemory();
-    if (offset + sizeof(int32_t) > memory.size())
+    int32_t* ptr;
+
+    Memory& memory = instance.getGlobalState().getMemory();
+    if (!memory.ptr(offset, &ptr))
         return trap(instance,
                     "i32.atomic.rmw.cmpxchg out of bounds memory address",
                     addr_);
 
-    int32_t* addr = reinterpret_cast<int32_t*>(&memory[offset]);
-    __atomic_compare_exchange_n(addr, &expected, desired, false,
+    __atomic_compare_exchange_n(ptr, &expected, desired, false,
                                 __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
 
     context.pushI32(expected);

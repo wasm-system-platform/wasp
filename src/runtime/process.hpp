@@ -9,7 +9,7 @@ class Sigsetjmp;
 class Process : public TaggedInstance<Process> {
 public:
     static Expected<std::shared_ptr<Process>>
-    create(const std::string& program, Instance& instance, uint32_t id);
+    create(std::span<const char>& program_bytes, Instance& instance, uint32_t id);
 
     Kernel& getKernel() { return kernel_; }
 
@@ -20,7 +20,7 @@ public:
 
     Errno clone(uint32_t new_id, std::shared_ptr<Process>& proc_out);
 
-    Continuation getEntry() { return entry_.get(); }
+    const Operation& getEntry() { return entry_; }
 
 protected:
     Process(GlobalState&& global_state,
@@ -36,7 +36,7 @@ private:
     uint32_t id_;
     uint32_t execve_stack_ = 0;
 
-    std::shared_ptr<Call> entry_;
+    Operation entry_;
 
     static Expected<Imports>
     createImports(Instance& instance, std::shared_ptr<Sigsetjmp>& env_sigsetjmp_op_out);

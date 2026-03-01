@@ -46,18 +46,18 @@ int WasmDisk::tellg(uint32_t* offset) {
     return 0;
 }
 
-int WasmDisk::seekg(int32_t offset, int whence, uint32_t* new_offset) {
+int WasmDisk::seekg(int32_t pos, int whence, uint32_t* new_pos) {
     std::streampos old_pos = disk_.tellg();
 
     switch (whence) {
     case SEEK_SET:
-        disk_.seekg(offset, std::ios_base::beg);
+        disk_.seekg(pos, std::ios_base::beg);
         break;
     case SEEK_CUR:
-        disk_.seekg(offset, std::ios_base::cur);
+        disk_.seekg(pos, std::ios_base::cur);
         break;
     case SEEK_END:
-        disk_.seekg(offset, std::ios_base::end);
+        disk_.seekg(pos, std::ios_base::end);
         break;
     default:
         return -1;
@@ -69,7 +69,7 @@ int WasmDisk::seekg(int32_t offset, int whence, uint32_t* new_offset) {
         return -1;
     }
 
-    *new_offset = static_cast<uint32_t>(disk_.tellg());
+    *new_pos = static_cast<uint32_t>(disk_.tellg());
     return 0;
 }
 

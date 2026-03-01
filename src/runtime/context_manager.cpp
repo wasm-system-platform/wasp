@@ -36,7 +36,7 @@ Errno ContextManager::createTrampoline(Kernel& kernel, uint32_t entry_func_idx, 
     ctxt.pushI32(entry_func_idx);
 
     ctxt.getEpilogues().push(nullptr);
-    ctxt.getEpilogues().push(entry.get());
+    ctxt.getEpilogues().push(entry);
     ctxt.setRunState(Context::RunState::suspended);
 
     return Errno::SUCCESS;

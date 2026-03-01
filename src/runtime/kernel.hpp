@@ -1,11 +1,13 @@
 #pragma once
 
-#include "hw/mmu.hpp"
+#include "hw/mem/mmu.hpp"
 #include "runtime/device_manager.hpp"
 #include "runtime/instance.hpp"
 #include "runtime/process_manager.hpp"
 
 namespace runtime {
+
+using hw::mem::MemoryManagementUnit;
 
 class Kernel : public TaggedInstance<Kernel> {
 public:

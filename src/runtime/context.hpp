@@ -68,17 +68,17 @@ private:
 
 class Epilogues {
 public:
-    void push(Continuation epilogue) { data_[top++] = epilogue; }
-    Continuation pop() { return data_[--top]; }
-    Continuation peek() { return data_[top - 1]; }
-    void swap(Continuation epilogue) { data_[top - 1] = epilogue; }
+    void push(const Operation& epilogue) { data_[top++] = epilogue; }
+    const Operation& pop() { return data_[--top]; }
+    const Operation& peek() { return data_[top - 1]; }
+    void swap(const Operation& epilogue) { data_[top - 1] = epilogue; }
     void shrink(size_t new_size) { top = new_size; }
     size_t size() { return top; }
-    const Continuation* data()  { return data_.data(); }
+    const Operation* data() { return data_.data(); }
 
 private:
     size_t top = 0;
-    std::array<Continuation, UINT16_MAX> data_;
+    std::array<Operation, UINT16_MAX> data_;
 };
 
 class OperationBase;
@@ -93,9 +93,8 @@ public:
         id_(id),
         locals_(std::make_unique<Locals>(*other.locals_)),
         stack_(std::make_unique<Stack>(*other.stack_)),
-        epilogues_(std::make_unique<Epilogues>(*other.epilogues_)) {
-            fmt::println("{}: epilogues={} other_epilogues={}", __PRETTY_FUNCTION__, epilogues_->size(), other.epilogues_->size());
-        }
+        epilogues_(std::make_unique<Epilogues>(*other.epilogues_)),
+        run_state_(other.run_state_) {}
 
     inline size_t getId() const { return id_; }
 

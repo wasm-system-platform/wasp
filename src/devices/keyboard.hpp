@@ -1,6 +1,7 @@
 #pragma once
 
 #include <list>
+#include <mutex>
 
 #include "devices/device.hpp"
 

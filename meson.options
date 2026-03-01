@@ -1,7 +1,19 @@
+option(
+    'memory_type',
+    type : 'combo',
+    value : 'auto',
+    choices : [
+        'auto', 'vector', 'file'
+    ],
+    description:
+        'Guest memory backend: "vector" stores memory in RAM, "file" provides ' +
+        'file-backed memory',
+)
+
 option('trace_level',
     type : 'integer',
     value : 0,
     min : 0,
     max : 2,
-    description : 'Trace level (0=off, 1=calls, 2=full)'
+    description : 'Trace level (0=off, 1=calls, 2=full)',
 )

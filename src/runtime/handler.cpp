@@ -5,30 +5,6 @@
 
 namespace runtime {
 
-/***********/
-/* Handler */
-/***********/
-
-size_t Handler::allocateEpilogue(Instance& instance) {
-    size_t idx;
-
-    if (free_list_.empty()) {
-        idx = epilogues_.size();
-        epilogues_.push_back(nullptr);
-    } else {
-        idx = free_list_.top();
-        free_list_.pop();
-        epilogues_[idx] = nullptr;
-    }
-
-    return idx;
-}
-
-void Handler::freeEpilogue(size_t id) {
-    epilogues_[id] = nullptr;
-    free_list_.push(id);
-}
-
 /*********************/
 /* Interrupt Handler */
 /*********************/
@@ -38,15 +14,14 @@ Continuation Interrupt::action(Instance& instance) {
 
     controller_.disableInterrupts();
 
-    size_t epilogue_idx = allocateEpilogue(instance);
-    epilogues_[epilogue_idx] = std::make_shared<Epilogue>(epilogue_idx, instance, *this);
+    auto epilogue = std::make_shared<Epilogue>(instance, *this);
 
     if (instance.is<Kernel>()) {
         // if we got interrupted in the kernel we can just call the handler directly
         Kernel& kernel = instance.as<Kernel>();
         Function interrupt_handler = kernel.getGlobalState().getFunction(handler_idx_);
 
-        instance_ctx.getEpilogues().push(epilogues_[epilogue_idx].get());
+        instance_ctx.getEpilogues().push(epilogue);
 
         return interrupt_handler.enterFrame(instance_ctx);
     } else {
@@ -57,7 +32,7 @@ Continuation Interrupt::action(Instance& instance) {
 
         Context& kernel_ctx = instance.getActiveContext();
         kernel_ctx.pushI32(port);
-        instance_ctx.getEpilogues().push(epilogues_[epilogue_idx].get());
+        instance_ctx.getEpilogues().push(epilogue);
 
         kernel.switchBack();
 
@@ -76,8 +51,7 @@ Continuation Interrupt::Epilogue::action(Instance& instance) {
     if (suspended_instance_.is<Process>()) {
         instance.as<Kernel>().switchToInstance(suspended_instance_);
     }
-    
-    parent_.freeEpilogue(id_);
+
     return nullptr;
 }
 
@@ -111,30 +85,37 @@ Continuation SysCall::action(Instance& instance) {
 
     kernel.switchBack();
 
-    size_t epilogue_idx = allocateEpilogue(instance);
-    epilogues_[epilogue_idx] = std::make_shared<Epilogue>(epilogue_idx, instance, *this);
-
-    kernel_ctxt.getEpilogues().push(epilogues_[epilogue_idx].get());
+    auto epilogue = std::make_shared<Epilogue>(instance, *this);
+    kernel_ctxt.getEpilogues().push(epilogue);
     Function syscall_handler = kernel.getGlobalState().getFunction(handler_idx_);
 
     return syscall_handler.enterFrame(kernel_ctxt);
 }
 
 Continuation SysCall::Epilogue::action(Instance& instance) {
-    Context& kernel_ctx = instance.getActiveContext();
-    int32_t result = kernel_ctx.pop().i32;
+    Context& kernel_ctxt = instance.getActiveContext();
+    int32_t result = kernel_ctxt.pop().i32;
 
     Function syscall_handler =
         instance.getGlobalState().getFunction(parent_.handler_idx_);
-    syscall_handler.leaveFrame(kernel_ctx);
+    syscall_handler.leaveFrame(kernel_ctxt);
 
-    Context& proc_ctx = suspended_instance_.getActiveContext();
-    proc_ctx.setRunState(Context::RunState::running);
-    proc_ctx.pushI32(result);
+    Context& proc_ctxt = suspended_instance_.getActiveContext();
+    proc_ctxt.setRunState(Context::RunState::running);
+    proc_ctxt.pushI32(result);
+
+    /*
+    fmt::println("syscall returned: {}", result);
+    const Operation* epilogues = proc_ctxt.getEpilogues().data();
+    for (size_t i = proc_ctxt.getEpilogues().size() - 1; i > 0; i--) {
+        const Operation& epilogue = epilogues[i];
+        if (epilogue == nullptr) break;
+        fmt::println("  {}: at {}", i, epilogue->getFormattedAddress(suspended_instance_));
+    }
+    */
 
     instance.as<Kernel>().switchToInstance(suspended_instance_);
 
-    parent_.freeEpilogue(id_);
     return nullptr;
 }
 
@@ -149,8 +130,7 @@ Continuation PageFault::action(Instance& instance) {
     int32_t faulting_address = instance_ctx.pop().i32;
 
     // allocate epilogue
-    size_t epilogue_idx = allocateEpilogue(instance);
-    epilogues_[epilogue_idx] = std::make_shared<Epilogue>(epilogue_idx, instance, *this);
+    auto epilogue = std::make_shared<Epilogue>(instance, *this);
 
     // pagefault is triggered by a process
     if (instance.is<Process>()) {
@@ -162,7 +142,7 @@ Continuation PageFault::action(Instance& instance) {
         kernel_ctx.pushI32(access_type);
 
         // push epilogue to kernel epilogues
-        kernel_ctx.getEpilogues().push(epilogues_[epilogue_idx].get());
+        kernel_ctx.getEpilogues().push(epilogue);
         
         // switch to kernel instance
         kernel.switchBack();
@@ -179,7 +159,7 @@ Continuation PageFault::action(Instance& instance) {
         instance_ctx.pushI32(access_type);
 
         // push epilogue to instance epilogues
-        instance_ctx.getEpilogues().push(epilogues_[epilogue_idx].get());
+        instance_ctx.getEpilogues().push(epilogue);
 
         //call page fault handler
         Function page_fault_handler = instance.getGlobalState().getFunction(handler_idx_);
@@ -201,7 +181,6 @@ Continuation PageFault::Epilogue::action(Instance& instance) {
         kernel.switchToInstance(suspended_instance_);
     }    
 
-    parent_.freeEpilogue(id_);
     return nullptr;
 }
 

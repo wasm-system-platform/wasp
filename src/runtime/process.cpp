@@ -1,4 +1,4 @@
-#include <sstream>
+#include <spanstream>
 
 #include "runtime/process.hpp"
 #include "runtime/kernel.hpp"
@@ -8,8 +8,8 @@
 namespace runtime {
 
 Expected<std::shared_ptr<Process>>
-Process::create(const std::string &program, Instance &instance, uint32_t id) {
-    std::stringstream program_stream(program);
+Process::create(std::span<const char>& program_bytes, Instance &instance, uint32_t id) {
+    std::ispanstream program_stream(program_bytes);
 
     Expected<grammar::Module> module_exp =
         grammar::Module::parse(program_stream);

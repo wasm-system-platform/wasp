@@ -1,9 +1,11 @@
 #pragma once
 
+#include <span>
+#include <mutex>
+
 #include "devices/device.hpp"
 #include "runtime/interrupts.hpp"
 #include "util/errno.hpp"
-#include <span>
 
 namespace runtime {
 

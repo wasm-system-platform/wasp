@@ -1,72 +1,9 @@
+#include <algorithm>
 #include <fmt/format.h>
 
 #include "runtime/vm.hpp"
 
 namespace runtime {
-
-/*******************/
-/* Memory Instance */
-/*******************/
-
-Expected<MemoryInstances>
-MemoryInstances::create(const grammar::Module& module) {
-    const grammar::ImportSection& import_section = module.getImportSection();
-    const grammar::DataSection& data_section = module.getDataSection();
-    const std::vector<grammar::MemoryImport> mem_imports =
-        import_section.getMemoryImports();
-
-    if (mem_imports.empty())
-        return MemoryInstances({}, 0, false);
-
-    if (mem_imports.size() > 1)
-        return Unexpected(ERROR("multi memory is currently not supported"));
-
-    constexpr size_t WASM_PAGE_SIZE = 1024 * 64;
-
-    const MemoryType& type = mem_imports[0].getMemoryType();
-    std::vector<uint8_t> heap(type.getInitial() * WASM_PAGE_SIZE);
-
-    /* copy active segments */
-    const std::vector<grammar::Segment>& segments = data_section.getSegments();
-    for (const auto& segment : segments) {
-        if (!segment.isActive())
-            continue;
-
-        /* why is the offset an expression?! */
-        const grammar::Expression& offset_expr = segment.getOffset();
-
-        std::vector<Operation> targets;
-        Context dummy_context(0);
-        std::vector<FunctionType> dummy_types;
-        const Operation offset_op = OperationBase::create(
-            offset_expr.getInstructions(), dummy_types, targets);
-
-        Expected<Continuation> continuation_exp =
-            offset_op->eval(dummy_context);
-        if (!continuation_exp)
-            return Unexpected(PROPAGATE(continuation_exp));
-
-        while (continuation_exp.value()) {
-            continuation_exp = continuation_exp.value()->eval(dummy_context);
-            if (!continuation_exp)
-                return Unexpected(PROPAGATE(continuation_exp));
-        }
-
-        if (dummy_context.size() != 1)
-            return Unexpected(ERROR("malformed constant expression"));
-
-        uint32_t offset = dummy_context.pop().i32;
-        const std::vector<uint8_t>& bytes = segment.getBytes();
-
-        if (offset + bytes.size() > heap.size())
-            return Unexpected(ERROR("data segment out of bound"));
-
-        fmt::println("copied segment: offset={} size={}", offset, bytes.size());
-        std::memcpy(heap.data() + offset, bytes.data(), bytes.size());
-    }
-
-    return MemoryInstances(std::move(heap), type.getMax(), type.isShared());
-}
 
 /********************/
 /* Global Instances */
@@ -134,9 +71,9 @@ GlobalState::create(const grammar::Module& module,
     if (!indirect_funcs_exp)
         return Unexpected(PROPAGATE(indirect_funcs_exp));
 
-    Expected<MemoryInstances> mems_exp = MemoryInstances::create(module);
-    if (!mems_exp)
-        return Unexpected(PROPAGATE(mems_exp));
+    Expected<Memory> mem_exp = createMemory(module);
+    if (!mem_exp)
+        return Unexpected(PROPAGATE(mem_exp));
 
     Expected<GlobalInstances> global_exp = GlobalInstances::create(module);
     if (!global_exp)
@@ -149,7 +86,7 @@ GlobalState::create(const grammar::Module& module,
     DebugInfoInstance debug_info = DebugInfoInstance::create(module);
 
     return GlobalState(std::move(*funcs_exp), std::move(*indirect_funcs_exp),
-                       *mems_exp, *global_exp, *datas_exp,
+                       std::move(*mem_exp), *global_exp, *datas_exp,
                        std::move(debug_info));
 }
 
@@ -298,6 +235,60 @@ GlobalState::createIndirectFunctions(const grammar::Module& module) {
     }
 
     return indirect_funcs;
+}
+
+Expected<Memory>
+GlobalState::createMemory(const grammar::Module& module) {
+    const grammar::ImportSection& import_section = module.getImportSection();
+    const grammar::DataSection& data_section = module.getDataSection();
+    const std::vector<grammar::MemoryImport> mem_imports =
+        import_section.getMemoryImports();
+
+    if (mem_imports.empty())
+        return Unexpected(ERROR("atleast one memory declaration is required"));
+
+    if (mem_imports.size() > 1)
+        return Unexpected(ERROR("multi memory is currently not supported"));
+
+    const MemoryType& type = mem_imports[0].getMemoryType();
+    Memory memory(type.getInitial(), type.getMax());
+
+    /* copy active segments */
+    const std::vector<grammar::Segment>& segments = data_section.getSegments();
+    for (const auto& segment : segments) {
+        if (!segment.isActive())
+            continue;
+
+        /* why is the offset an expression?! */
+        const grammar::Expression& offset_expr = segment.getOffset();
+
+        std::vector<Operation> targets;
+        Context dummy_context(0);
+        std::vector<FunctionType> dummy_types;
+        const Operation offset_op = OperationBase::create(
+            offset_expr.getInstructions(), dummy_types, targets);
+
+        Expected<Continuation> continuation_exp =
+            offset_op->eval(dummy_context);
+        if (!continuation_exp)
+            return Unexpected(PROPAGATE(continuation_exp));
+
+        while (continuation_exp.value()) {
+            continuation_exp = continuation_exp.value()->eval(dummy_context);
+            if (!continuation_exp)
+                return Unexpected(PROPAGATE(continuation_exp));
+        }
+
+        if (dummy_context.size() != 1)
+            return Unexpected(ERROR("malformed constant expression"));
+
+        uint32_t offset = dummy_context.pop().i32;
+
+        if (!memory.store(offset, segment.getBytes()))
+            return Unexpected(ERROR("failed to copy segment"));
+    }
+
+    return memory;
 }
 
 Expected<int32_t>

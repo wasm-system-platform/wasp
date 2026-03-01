@@ -164,7 +164,7 @@ void Instance::run(OperationBase& entry) {
 
         // check for epilogues
         if (!continuation)
-            continuation = active_context_->getEpilogues().pop();
+            continuation = active_context_->getEpilogues().pop().get();
     }
 
     assert(active_context_->getEpilogues().size() == 0);
