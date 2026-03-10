@@ -553,20 +553,19 @@ OperationBase::create(const std::vector<grammar::Instruction>& instructions,
 }
 
 Operation OperationBase::addNext(Operation op) {
-    assert(!successor_ || (successor_.get() != op.get()));
+    assert(!next_ || (next_.get() != op.get()));
 
-    if (successor_) {
-        successor_ = successor_->addNext(op);
+    if (next_) {
+        next_ = next_->addNext(op);
     } else {
         /* optimization possible */
         if (isProducer() && op->isConsumer()) {
             return std::make_shared<Composite>(shared_from_this(), op);
         }
 
-        successor_ = op;
+        next_ = op;
     }
 
-    next_ = successor_.get();
     return shared_from_this();
 }
 
@@ -664,7 +663,7 @@ Continuation IfThen::action(Instance& instance) {
     int32_t cond = ctxt.pop().i32;
     if (cond) {
         if (next_)
-            ctxt.getEpilogues().push(successor_);
+            ctxt.getEpilogues().push(next_);
 
         TRACE_VERBOSE(
             "{}: if --> cond=true",
@@ -676,7 +675,7 @@ Continuation IfThen::action(Instance& instance) {
     TRACE_VERBOSE(
         "{}: if --> cond=false",
         instance.getGlobalState().getDebugInfo().getFormattedLocation(addr_));
-    return next_;
+    return next_.get();
 }
 
 IfElse::IfElse(const grammar::IfElse& if_else,
@@ -699,7 +698,7 @@ IfElse::IfElse(const grammar::IfElse& if_else,
 Continuation IfElse::action(Instance& instance) {
     Context& ctxt = instance.getActiveContext();
     if (next_)
-        ctxt.getEpilogues().push(successor_);
+        ctxt.getEpilogues().push(next_);
 
     int32_t cond = ctxt.pop().i32;
     if (cond) {
@@ -741,7 +740,7 @@ Continuation BranchIf::action(Instance& instance) {
     if (cond)
         return target_.get();
 
-    return next_;
+    return next_.get();
 }
 
 BranchTable::BranchTable(const grammar::BranchTable& br_table,
@@ -792,7 +791,7 @@ Continuation Call::Epilogue::action(Instance& instance) {
 
     Function& func = instance.getGlobalState().getFunction(func_idx_);
     func.leaveFrame(instance.getActiveContext());
-    return next_;
+    return next_.get();
 }
 
 CallIndirect::CallIndirect(const grammar::CallIndirect& call_indirect,
@@ -877,7 +876,7 @@ Continuation CallIndirect::Epilogue::action(Instance& instance) {
 
     func_.leaveFrame(instance.getActiveContext());
     parent_.destroyEpilogue(idx_);
-    return parent_.next_;
+    return parent_.next_.get();
 }
 
 Continuation Return::action(Instance& instance) {
@@ -894,7 +893,7 @@ Drop::Drop(const grammar::Drop& drop) : OperationBase(drop.getAddress()) {}
 Continuation Drop::action(Instance& instance) {
     instance.getActiveContext().drop();
     TRACE_VERBOSE("drop");
-    return next_;
+    return next_.get();
 }
 
 Continuation Select::action(Instance& instance) {
@@ -908,7 +907,7 @@ Continuation Select::action(Instance& instance) {
 
     TRACE_VERBOSE("select: (a={}, b={}, cond={}) -> ({})", a.i64, b.i64, cond,
                   cond ? a.i64 : b.i64);
-    return next_;
+    return next_.get();
 }
 
 /*************************/
@@ -928,7 +927,7 @@ Continuation LocalGet::action(Instance& instance) {
         "{}: local.get {}: () -> ({})",
         instance.getGlobalState().getDebugInfo().getFormattedLocation(addr_),
         local_idx_, i.i64);
-    return next_;
+    return next_.get();
 }
 
 LocalSet::LocalSet(const grammar::LocalSet& local_set)
@@ -944,7 +943,7 @@ Continuation LocalSet::action(Instance& instance) {
         "{}: local.set {}: ({}) -> ()",
         instance.getGlobalState().getDebugInfo().getFormattedLocation(addr_),
         local_idx_, i.i64);
-    return next_;
+    return next_.get();
 }
 
 LocalTee::LocalTee(const grammar::LocalTee& local_tee)
@@ -961,7 +960,7 @@ Continuation LocalTee::action(Instance& instance) {
         "{}: local.tee {}: ({}) -> ({})",
         instance.getGlobalState().getDebugInfo().getFormattedLocation(addr_),
         local_idx_, i.i32, i.i32);
-    return next_;
+    return next_.get();
 }
 
 GlobalGet::GlobalGet(const grammar::GlobalGet& global_get)
@@ -971,7 +970,7 @@ Continuation GlobalGet::action(Instance& instance) {
     Value i = instance.getGlobalState().getGlobal(global_idx_);
     instance.getActiveContext().push(i);
     TRACE_VERBOSE("global.get {}: () -> ({})", global_idx_, i.i64);
-    return next_;
+    return next_.get();
 }
 
 GlobalSet::GlobalSet(const grammar::GlobalSet& global_set)
@@ -981,7 +980,7 @@ Continuation GlobalSet::action(Instance& instance) {
     Value i = instance.getActiveContext().pop();
     instance.getGlobalState().setGlobal(global_idx_, i);
     TRACE_VERBOSE("global.set {}: ({}) -> ()", global_idx_, i.i64);
-    return next_;
+    return next_.get();
 }
 
 /************************/
@@ -998,12 +997,12 @@ Continuation I32Const::action(Instance& instance) {
         "{}: i32.const {}: () -> ({})",
         instance.getGlobalState().getDebugInfo().getFormattedLocation(addr_),
         i_, i_);
-    return next_;
+    return next_.get();
 }
 
 Expected<Continuation> I32Const::eval(Context& context) const {
     context.pushI32(i_);
-    return next_;
+    return next_.get();
 }
 
 Value I32Const::produce(Instance& instance) { return i_; }
@@ -1013,7 +1012,7 @@ I64Const::I64Const(const grammar::I64Const& i64_const)
 
 Continuation I64Const::action(Instance& instance) {
     instance.getActiveContext().pushI64(i_);
-    return next_;
+    return next_.get();
 }
 
 F32Const::F32Const(const grammar::F32Const& f32_const)
@@ -1021,7 +1020,7 @@ F32Const::F32Const(const grammar::F32Const& f32_const)
 
 Continuation F32Const::action(Instance& instance) {
     instance.getActiveContext().push(f_);
-    return next_;
+    return next_.get();
 }
 
 F64Const::F64Const(const grammar::F64Const& f64_const)
@@ -1029,7 +1028,7 @@ F64Const::F64Const(const grammar::F64Const& f64_const)
 
 Continuation F64Const::action(Instance& instance) {
     instance.getActiveContext().push(f_);
-    return next_;
+    return next_.get();
 }
 
 Continuation I32EqualZero::action(Instance& instance) {
@@ -1040,7 +1039,7 @@ Continuation I32EqualZero::action(Instance& instance) {
     context.pushI32(result);
 
     TRACE_VERBOSE("i32.eqz: ({}) -> ({})", val, result);
-    return next_;
+    return next_.get();
 }
 
 Continuation I32Equal::action(Instance& instance) {
@@ -1052,7 +1051,7 @@ Continuation I32Equal::action(Instance& instance) {
     context.pushI32(result);
 
     TRACE_VERBOSE("i32.eq: ({}, {}) -> ({})", left, right, result);
-    return next_;
+    return next_.get();
 }
 
 Continuation I32NotEqual::action(Instance& instance) {
@@ -1064,7 +1063,7 @@ Continuation I32NotEqual::action(Instance& instance) {
     context.pushI32(result);
 
     TRACE_VERBOSE("i32.ne: ({}, {}) -> ({})", left, right, result);
-    return next_;
+    return next_.get();
 }
 
 Continuation I32LessThanSigned::action(Instance& instance) {
@@ -1076,7 +1075,7 @@ Continuation I32LessThanSigned::action(Instance& instance) {
     context.pushI32(result);
 
     TRACE_VERBOSE("i32.lt_s: ({}, {}) -> ({})", left, right, result);
-    return next_;
+    return next_.get();
 }
 
 Continuation I32LessThanUnsigned::action(Instance& instance) {
@@ -1088,7 +1087,7 @@ Continuation I32LessThanUnsigned::action(Instance& instance) {
     context.pushI32(result);
 
     TRACE_VERBOSE("i32.lt_u: ({}, {}) -> ({})", left, right, result);
-    return next_;
+    return next_.get();
 }
 
 Continuation I32GreaterThanSigned::action(Instance& instance) {
@@ -1100,7 +1099,7 @@ Continuation I32GreaterThanSigned::action(Instance& instance) {
     context.pushI32(result);
 
     TRACE_VERBOSE("i32.gt_s: ({}, {}) -> ({})", left, right, result);
-    return next_;
+    return next_.get();
 }
 
 Continuation I32GreaterThanUnsigned::action(Instance& instance) {
@@ -1112,7 +1111,7 @@ Continuation I32GreaterThanUnsigned::action(Instance& instance) {
     context.pushI32(result);
 
     TRACE_VERBOSE("i32.gt_u: ({}, {}) -> ({})", left, right, result);
-    return next_;
+    return next_.get();
 }
 
 Continuation I32LessEqualSigned::action(Instance& instance) {
@@ -1124,7 +1123,7 @@ Continuation I32LessEqualSigned::action(Instance& instance) {
     context.pushI32(result);
 
     TRACE_VERBOSE("i32.ge_s: ({}, {}) -> ({})", left, right, result);
-    return next_;
+    return next_.get();
 }
 
 Continuation I32LessEqualUnsigned::action(Instance& instance) {
@@ -1136,7 +1135,7 @@ Continuation I32LessEqualUnsigned::action(Instance& instance) {
     context.pushI32(result);
 
     TRACE_VERBOSE("i32.ge_u: ({}, {}) -> ({})", left, right, result);
-    return next_;
+    return next_.get();
 }
 
 Continuation I32GreaterEqualSigned::action(Instance& instance) {
@@ -1148,7 +1147,7 @@ Continuation I32GreaterEqualSigned::action(Instance& instance) {
     context.pushI32(result);
 
     TRACE_VERBOSE("i32.ge_s: ({}, {}) -> ({})", left, right, result);
-    return next_;
+    return next_.get();
 }
 
 Continuation I32GreaterEqualUnsigned::action(Instance& instance) {
@@ -1160,7 +1159,7 @@ Continuation I32GreaterEqualUnsigned::action(Instance& instance) {
     context.pushI32(result);
 
     TRACE_VERBOSE("i32.ge_u: ({}, {}) -> ({})", left, right, result);
-    return next_;
+    return next_.get();
 }
 
 Continuation I64EqualZero::action(Instance& instance) {
@@ -1171,7 +1170,7 @@ Continuation I64EqualZero::action(Instance& instance) {
     context.pushI32(result);
 
     TRACE_VERBOSE("i64.eqz: ({}) -> ({})", val, result);
-    return next_;
+    return next_.get();
 }
 
 Continuation I64Equal::action(Instance& instance) {
@@ -1183,7 +1182,7 @@ Continuation I64Equal::action(Instance& instance) {
     context.pushI32(result);
 
     TRACE_VERBOSE("i64.eq: ({}, {}) -> ({})", left, right, result);
-    return next_;
+    return next_.get();
 }
 
 Continuation I64NotEqual::action(Instance& instance) {
@@ -1195,7 +1194,7 @@ Continuation I64NotEqual::action(Instance& instance) {
     context.pushI32(result);
 
     TRACE_VERBOSE("i64.ne: ({}, {}) -> ({})", left, right, result);
-    return next_;
+    return next_.get();
 }
 
 Continuation I64LessThanSigned::action(Instance& instance) {
@@ -1207,7 +1206,7 @@ Continuation I64LessThanSigned::action(Instance& instance) {
     context.pushI32(result);
 
     TRACE_VERBOSE("i64.lt_s: ({}, {}) -> ({})", left, right, result);
-    return next_;
+    return next_.get();
 }
 
 Continuation I64LessThanUnsigned::action(Instance& instance) {
@@ -1219,7 +1218,7 @@ Continuation I64LessThanUnsigned::action(Instance& instance) {
     context.pushI32(result);
 
     TRACE_VERBOSE("i64.lt_u: ({}, {}) -> ({})", left, right, result);
-    return next_;
+    return next_.get();
 }
 
 Continuation I64GreaterThanSigned::action(Instance& instance) {
@@ -1231,7 +1230,7 @@ Continuation I64GreaterThanSigned::action(Instance& instance) {
     context.pushI32(result);
 
     TRACE_VERBOSE("i64.gt_s: ({}, {}) -> ({})", left, right, result);
-    return next_;
+    return next_.get();
 }
 
 Continuation I64GreaterThanUnsigned::action(Instance& instance) {
@@ -1243,7 +1242,7 @@ Continuation I64GreaterThanUnsigned::action(Instance& instance) {
     context.pushI32(result);
 
     TRACE_VERBOSE("i64.gt_u: ({}, {}) -> ({})", left, right, result);
-    return next_;
+    return next_.get();
 }
 
 Continuation I64LessEqualSigned::action(Instance& instance) {
@@ -1255,7 +1254,7 @@ Continuation I64LessEqualSigned::action(Instance& instance) {
     context.pushI32(result);
 
     TRACE_VERBOSE("i64.le_s: ({}, {}) -> ({})", left, right, result);
-    return next_;
+    return next_.get();
 }
 
 Continuation I64LessEqualUnsigned::action(Instance& instance) {
@@ -1267,7 +1266,7 @@ Continuation I64LessEqualUnsigned::action(Instance& instance) {
     context.pushI32(result);
 
     TRACE_VERBOSE("i64.le_u: ({}, {}) -> ({})", left, right, result);
-    return next_;
+    return next_.get();
 }
 
 Continuation I64GreaterEqualSigned::action(Instance& instance) {
@@ -1279,7 +1278,7 @@ Continuation I64GreaterEqualSigned::action(Instance& instance) {
     context.pushI32(result);
 
     TRACE_VERBOSE("i64.ge_s: ({}, {}) -> ({})", left, right, result);
-    return next_;
+    return next_.get();
 }
 
 Continuation I64GreaterEqualUnsigned::action(Instance& instance) {
@@ -1291,7 +1290,7 @@ Continuation I64GreaterEqualUnsigned::action(Instance& instance) {
     context.pushI32(result);
 
     TRACE_VERBOSE("i64.ge_u: ({}, {}) -> ({})", left, right, result);
-    return next_;
+    return next_.get();
 }
 
 Continuation F32Equal::action(Instance& instance) {
@@ -1303,7 +1302,7 @@ Continuation F32Equal::action(Instance& instance) {
     context.pushI32(result);
 
     TRACE_VERBOSE("f32.eq: ({}, {}) -> ({})", left, right, result);
-    return next_;
+    return next_.get();
 }
 
 Continuation F32NotEqual::action(Instance& instance) {
@@ -1315,7 +1314,7 @@ Continuation F32NotEqual::action(Instance& instance) {
     context.pushI32(result);
 
     TRACE_VERBOSE("f32.ne: ({}, {}) -> ({})", left, right, result);
-    return next_;
+    return next_.get();
 }
 
 Continuation F32LessThan::action(Instance& instance) {
@@ -1327,7 +1326,7 @@ Continuation F32LessThan::action(Instance& instance) {
     context.pushI32(result);
 
     TRACE_VERBOSE("f32.lt: ({}, {}) -> ({})", left, right, result);
-    return next_;
+    return next_.get();
 }
 
 Continuation F32GreaterThan::action(Instance& instance) {
@@ -1339,7 +1338,7 @@ Continuation F32GreaterThan::action(Instance& instance) {
     context.pushI32(result);
 
     TRACE_VERBOSE("f32.gt: ({}, {}) -> ({})", left, right, result);
-    return next_;
+    return next_.get();
 }
 
 Continuation F32LessEqual::action(Instance& instance) {
@@ -1351,7 +1350,7 @@ Continuation F32LessEqual::action(Instance& instance) {
     context.pushI32(result);
 
     TRACE_VERBOSE("f32.le: ({}, {}) -> ({})", left, right, result);
-    return next_;
+    return next_.get();
 }
 
 Continuation F32GreaterEqual::action(Instance& instance) {
@@ -1363,7 +1362,7 @@ Continuation F32GreaterEqual::action(Instance& instance) {
     context.pushI32(result);
 
     TRACE_VERBOSE("f32.ge: ({}, {}) -> ({})", left, right, result);
-    return next_;
+    return next_.get();
 }
 
 Continuation F64Equal::action(Instance& instance) {
@@ -1375,7 +1374,7 @@ Continuation F64Equal::action(Instance& instance) {
     context.pushI32(result);
 
     TRACE_VERBOSE("f64.eq: ({}, {}) -> ({})", left, right, result);
-    return next_;
+    return next_.get();
 }
 
 Continuation F64NotEqual::action(Instance& instance) {
@@ -1387,7 +1386,7 @@ Continuation F64NotEqual::action(Instance& instance) {
     context.pushI32(result);
 
     TRACE_VERBOSE("f64.ne: ({}, {}) -> ({})", left, right, result);
-    return next_;
+    return next_.get();
 }
 
 Continuation F64LessThan::action(Instance& instance) {
@@ -1399,7 +1398,7 @@ Continuation F64LessThan::action(Instance& instance) {
     context.pushI32(result);
 
     TRACE_VERBOSE("f64.lt: ({}, {}) -> ({})", left, right, result);
-    return next_;
+    return next_.get();
 }
 
 Continuation F64GreaterThan::action(Instance& instance) {
@@ -1411,7 +1410,7 @@ Continuation F64GreaterThan::action(Instance& instance) {
     context.pushI32(result);
 
     TRACE_VERBOSE("f64.gt: ({}, {}) -> ({})", left, right, result);
-    return next_;
+    return next_.get();
 }
 
 Continuation F64LessEqual::action(Instance& instance) {
@@ -1423,7 +1422,7 @@ Continuation F64LessEqual::action(Instance& instance) {
     context.pushI32(result);
 
     TRACE_VERBOSE("f64.le: ({}, {}) -> ({})", left, right, result);
-    return next_;
+    return next_.get();
 }
 
 Continuation F64GreaterEqual::action(Instance& instance) {
@@ -1435,7 +1434,7 @@ Continuation F64GreaterEqual::action(Instance& instance) {
     context.pushI32(result);
 
     TRACE_VERBOSE("f64.ge: ({}, {}) -> ({})", left, right, result);
-    return next_;
+    return next_.get();
 }
 
 Continuation I32CountLeadingZeros::action(Instance& instance) {
@@ -1446,7 +1445,7 @@ Continuation I32CountLeadingZeros::action(Instance& instance) {
     context.pushI32(result);
 
     TRACE_VERBOSE("i32.clz: ({}) -> ({})", val, result);
-    return next_;
+    return next_.get();
 }
 
 Continuation I32CountTrailingZeros::action(Instance& instance) {
@@ -1457,7 +1456,7 @@ Continuation I32CountTrailingZeros::action(Instance& instance) {
     context.pushI32(result);
 
     TRACE_VERBOSE("i32.ctz: ({}) -> ({})", val, result);
-    return next_;
+    return next_.get();
 }
 
 Continuation I32PopCount::action(Instance& instance) {
@@ -1468,7 +1467,7 @@ Continuation I32PopCount::action(Instance& instance) {
     context.pushI32(result);
 
     TRACE_VERBOSE("i32.popcnt: ({}) -> ({})", val, result);
-    return next_;
+    return next_.get();
 }
 
 Continuation I32Add::action(Instance& instance) {
@@ -1483,7 +1482,7 @@ Continuation I32Add::action(Instance& instance) {
         "{}: i32.add: ({}, {}) -> ({})",
         instance.getGlobalState().getDebugInfo().getFormattedLocation(addr_),
         left, right, result);
-    return next_;
+    return next_.get();
 }
 
 void I32Add::consume(Instance& instance, Value right) {
@@ -1503,7 +1502,7 @@ Continuation I32Sub::action(Instance& instance) {
         "{}: i32.sub: ({}, {}) -> ({})",
         instance.getGlobalState().getDebugInfo().getFormattedLocation(addr_),
         left, right, result);
-    return next_;
+    return next_.get();
 }
 
 void I32Sub::consume(Instance& instance, Value right) {
@@ -1520,7 +1519,7 @@ Continuation I32Mul::action(Instance& instance) {
     context.pushI32(result);
 
     TRACE_VERBOSE("i32.mul: ({}, {}) -> ({})", left, right, result);
-    return next_;
+    return next_.get();
 }
 
 Continuation I32DivideSigned::action(Instance& instance) {
@@ -1540,7 +1539,7 @@ Continuation I32DivideSigned::action(Instance& instance) {
 
     TRACE_VERBOSE("i32.div_s: (left={}, right={}) -> ({})", left, right,
                   result);
-    return next_;
+    return next_.get();
 }
 
 Continuation I32DivideUnsigned::action(Instance& instance) {
@@ -1556,7 +1555,7 @@ Continuation I32DivideUnsigned::action(Instance& instance) {
 
     TRACE_VERBOSE("i32.div_u: (left={}, right={}) -> ({})", left, right,
                   result);
-    return next_;
+    return next_.get();
 }
 
 Continuation I32RemainderSigned::action(Instance& instance) {
@@ -1571,7 +1570,7 @@ Continuation I32RemainderSigned::action(Instance& instance) {
     context.pushI32(result);
 
     TRACE_VERBOSE("i32.rem_s: ({}, {}) -> ({})", left, right, result);
-    return next_;
+    return next_.get();
 }
 
 Continuation I32RemainderUnsigned::action(Instance& instance) {
@@ -1587,7 +1586,7 @@ Continuation I32RemainderUnsigned::action(Instance& instance) {
 
     TRACE_VERBOSE("i32.rem_u: (left={}, right={}) -> ({})", left, right,
                   result);
-    return next_;
+    return next_.get();
 }
 
 Continuation I32And::action(Instance& instance) {
@@ -1599,7 +1598,7 @@ Continuation I32And::action(Instance& instance) {
     context.pushI32(result);
 
     TRACE_VERBOSE("i32.and: ({}, {}) -> ({})", left, right, result);
-    return next_;
+    return next_.get();
 }
 
 Continuation I32Or::action(Instance& instance) {
@@ -1611,7 +1610,7 @@ Continuation I32Or::action(Instance& instance) {
     context.pushI32(result);
 
     TRACE_VERBOSE("i32.or: ({}, {}) -> ({})", left, right, result);
-    return next_;
+    return next_.get();
 }
 
 Continuation I32Xor::action(Instance& instance) {
@@ -1623,7 +1622,7 @@ Continuation I32Xor::action(Instance& instance) {
     context.pushI32(result);
 
     TRACE_VERBOSE("i32.xor: ({}, {}) -> ({})", left, right, result);
-    return next_;
+    return next_.get();
 }
 
 Continuation I32ShiftLeft::action(Instance& instance) {
@@ -1635,7 +1634,7 @@ Continuation I32ShiftLeft::action(Instance& instance) {
     context.pushI32(result);
 
     TRACE_VERBOSE("i32.shl: ({}, {}) -> ({})", left, right, result);
-    return next_;
+    return next_.get();
 }
 
 Continuation I32ShiftRightSigned::action(Instance& instance) {
@@ -1647,7 +1646,7 @@ Continuation I32ShiftRightSigned::action(Instance& instance) {
     context.pushI32(result);
 
     TRACE_VERBOSE("i32.shr_s: ({}, {}) -> ({})", left, right, result);
-    return next_;
+    return next_.get();
 }
 
 Continuation I32ShiftRightUnsigned::action(Instance& instance) {
@@ -1659,7 +1658,7 @@ Continuation I32ShiftRightUnsigned::action(Instance& instance) {
     context.pushI32(result);
 
     TRACE_VERBOSE("i32.shr_u: ({}, {}) -> ({})", left, right, result);
-    return next_;
+    return next_.get();
 }
 
 Continuation I64CountLeadingZeros::action(Instance& instance) {
@@ -1676,7 +1675,7 @@ Continuation I64CountLeadingZeros::action(Instance& instance) {
     context.pushI64(result);
 
     TRACE_VERBOSE("i64.clz: ({}) -> ({})", val, result);
-    return next_;
+    return next_.get();
 }
 
 Continuation I64CountTrailingZeros::action(Instance& instance) {
@@ -1693,7 +1692,7 @@ Continuation I64CountTrailingZeros::action(Instance& instance) {
     context.pushI64(result);
 
     TRACE_VERBOSE("i64.ctz: ({}) -> ({})", val, result);
-    return next_;
+    return next_.get();
 }
 
 Continuation I64Add::action(Instance& instance) {
@@ -1705,7 +1704,7 @@ Continuation I64Add::action(Instance& instance) {
     context.pushI64(result);
 
     TRACE_VERBOSE("i64.add: ({}, {}) -> ({})", left, right, result);
-    return next_;
+    return next_.get();
 }
 
 Continuation I64Sub::action(Instance& instance) {
@@ -1717,7 +1716,7 @@ Continuation I64Sub::action(Instance& instance) {
     context.pushI64(result);
 
     TRACE_VERBOSE("i64.sub: ({}, {}) -> ({})", left, right, result);
-    return next_;
+    return next_.get();
 }
 
 Continuation I64Mul::action(Instance& instance) {
@@ -1729,7 +1728,7 @@ Continuation I64Mul::action(Instance& instance) {
     context.pushI64(result);
 
     TRACE_VERBOSE("i64.mul: ({}, {}) -> ({})", left, right, result);
-    return next_;
+    return next_.get();
 }
 
 Continuation I64DivideSigned::action(Instance& instance) {
@@ -1748,7 +1747,7 @@ Continuation I64DivideSigned::action(Instance& instance) {
     context.pushI64(result);
 
     TRACE_VERBOSE("i64.div_s: ({}, {}) -> ({})", left, right, result);
-    return next_;
+    return next_.get();
 }
 
 Continuation I64DivideUnsigned::action(Instance& instance) {
@@ -1764,7 +1763,7 @@ Continuation I64DivideUnsigned::action(Instance& instance) {
 
     TRACE_VERBOSE("i64.div_u: (left={}, right={}) -> ({})", left, right,
                   result);
-    return next_;
+    return next_.get();
 }
 
 Continuation I64RemainderSigned::action(Instance& instance) {
@@ -1779,7 +1778,7 @@ Continuation I64RemainderSigned::action(Instance& instance) {
     context.pushI64(result);
 
     TRACE_VERBOSE("i64.rem_s: ({}, {}) -> ({})", left, right, result);
-    return next_;
+    return next_.get();
 }
 
 Continuation I64RemainderUnsigned::action(Instance& instance) {
@@ -1795,7 +1794,7 @@ Continuation I64RemainderUnsigned::action(Instance& instance) {
 
     TRACE_VERBOSE("i64.rem_u: (left={}, right={}) -> ({})", left, right,
                   result);
-    return next_;
+    return next_.get();
 }
 
 Continuation I64And::action(Instance& instance) {
@@ -1807,7 +1806,7 @@ Continuation I64And::action(Instance& instance) {
     context.pushI64(result);
 
     TRACE_VERBOSE("i64.and: ({}, {}) -> ({})", left, right, result);
-    return next_;
+    return next_.get();
 }
 
 Continuation I64Or::action(Instance& instance) {
@@ -1819,7 +1818,7 @@ Continuation I64Or::action(Instance& instance) {
     context.pushI64(result);
 
     TRACE_VERBOSE("i64.or: ({}, {}) -> ({})", left, right, result);
-    return next_;
+    return next_.get();
 }
 
 Continuation I64Xor::action(Instance& instance) {
@@ -1831,7 +1830,7 @@ Continuation I64Xor::action(Instance& instance) {
     context.pushI64(result);
 
     TRACE_VERBOSE("i64.xor: ({}, {}) -> ({})", left, right, result);
-    return next_;
+    return next_.get();
 }
 
 Continuation I64ShiftLeft::action(Instance& instance) {
@@ -1843,7 +1842,7 @@ Continuation I64ShiftLeft::action(Instance& instance) {
     context.pushI64(result);
 
     TRACE_VERBOSE("i64.shl: ({}, {}) -> ({})", left, right, result);
-    return next_;
+    return next_.get();
 }
 
 Continuation I64ShiftRightSigned::action(Instance& instance) {
@@ -1855,7 +1854,7 @@ Continuation I64ShiftRightSigned::action(Instance& instance) {
     context.pushI64(result);
 
     TRACE_VERBOSE("i64.shr_s: ({}, {}) -> ({})", left, right, result);
-    return next_;
+    return next_.get();
 }
 
 Continuation I64ShiftRightUnsigned::action(Instance& instance) {
@@ -1867,7 +1866,7 @@ Continuation I64ShiftRightUnsigned::action(Instance& instance) {
     context.pushI64(result);
 
     TRACE_VERBOSE("i64.shr_u: ({}, {}) -> ({})", left, right, result);
-    return next_;
+    return next_.get();
 }
 
 Continuation I64RotateLeft::action(Instance& instance) {
@@ -1879,7 +1878,7 @@ Continuation I64RotateLeft::action(Instance& instance) {
     context.pushI64(static_cast<int64_t>(result));
 
     TRACE_VERBOSE("i64.rotl: ({}, {}) -> ({})", x, y, result);
-    return next_;
+    return next_.get();
 }
 
 Continuation I64RotateRight::action(Instance& instance) {
@@ -1891,7 +1890,7 @@ Continuation I64RotateRight::action(Instance& instance) {
     context.pushI64(static_cast<int64_t>(result));
 
     TRACE_VERBOSE("i64.rotr: ({}, {}) -> ({})", x, y, result);
-    return next_;
+    return next_.get();
 }
 
 Continuation F32Mul::action(Instance& instance) {
@@ -1903,7 +1902,7 @@ Continuation F32Mul::action(Instance& instance) {
     context.push(result);
 
     TRACE_VERBOSE("f32.mul: ({}, {}) -> ({})", left, right, result);
-    return next_;
+    return next_.get();
 }
 
 Continuation F32Div::action(Instance& instance) {
@@ -1915,7 +1914,7 @@ Continuation F32Div::action(Instance& instance) {
     context.push(result);
 
     TRACE_VERBOSE("f32.div: ({}, {}) -> ({})", left, right, result);
-    return next_;
+    return next_.get();
 }
 
 Continuation F64Mul::action(Instance& instance) {
@@ -1927,7 +1926,7 @@ Continuation F64Mul::action(Instance& instance) {
     context.push(result);
 
     TRACE_VERBOSE("f64.mul: ({}, {}) -> ({})", left, right, result);
-    return next_;
+    return next_.get();
 }
 
 Continuation F64Div::action(Instance& instance) {
@@ -1939,7 +1938,7 @@ Continuation F64Div::action(Instance& instance) {
     context.push(result);
 
     TRACE_VERBOSE("f64.div: ({}, {}) -> ({})", left, right, result);
-    return next_;
+    return next_.get();
 }
 
 Continuation F64CopySign::action(Instance& instance) {
@@ -1951,7 +1950,7 @@ Continuation F64CopySign::action(Instance& instance) {
     context.push(result);
 
     TRACE_VERBOSE("f64.copysign: ({}, {}) -> ({})", x, y, result);
-    return next_;
+    return next_.get();
 }
 
 Continuation I32WrapI64::action(Instance& instance) {
@@ -1962,7 +1961,7 @@ Continuation I32WrapI64::action(Instance& instance) {
     context.pushI32(result);
 
     TRACE_VERBOSE("i32.wrap_i64: ({}) -> ({})", val, result);
-    return next_;
+    return next_.get();
 }
 
 Continuation I64ExtendI32Signed::action(Instance& instance) {
@@ -1972,7 +1971,7 @@ Continuation I64ExtendI32Signed::action(Instance& instance) {
     context.pushI64(val);
 
     TRACE_VERBOSE("i64.extend_i32_s: ({}) -> ({})", val, val);
-    return next_;
+    return next_.get();
 }
 
 Continuation I64ExtendI32Unsigned::action(Instance& instance) {
@@ -1982,7 +1981,7 @@ Continuation I64ExtendI32Unsigned::action(Instance& instance) {
     context.pushI64(val);
 
     TRACE_VERBOSE("extend_i32_u: ({}) -> ({})", val, val);
-    return next_;
+    return next_.get();
 }
 
 Continuation F32ConvertI32Signed::action(Instance& instance) {
@@ -1992,7 +1991,7 @@ Continuation F32ConvertI32Signed::action(Instance& instance) {
     context.push(static_cast<float>(val));
 
     TRACE_VERBOSE("f32.convert_s_i32: ({}) -> ({})", val, static_cast<float>(val));
-    return next_;
+    return next_.get();
 }
 
 Continuation F32DemoteF64::action(Instance& instance) {
@@ -2002,7 +2001,7 @@ Continuation F32DemoteF64::action(Instance& instance) {
     context.push(static_cast<float>(val));
 
     TRACE_VERBOSE("f32.demote_f64: ({}) -> ({})", val, static_cast<float>(val));
-    return next_;
+    return next_.get();
 }
 
 Continuation F64ConvertI32Signed::action(Instance& instance) {
@@ -2012,7 +2011,7 @@ Continuation F64ConvertI32Signed::action(Instance& instance) {
     context.push(static_cast<double>(val));
 
     TRACE_VERBOSE("f64.convert_i32_s: ({}) -> ({})", val, static_cast<double>(val));
-    return next_;
+    return next_.get();
 }
 
 Continuation F64PromoteF32::action(Instance& instance) {
@@ -2022,27 +2021,27 @@ Continuation F64PromoteF32::action(Instance& instance) {
     context.push(static_cast<double>(val));
 
     TRACE_VERBOSE("f64.promote_f32: ({}) -> ({})", val, static_cast<double>(val));
-    return next_;
+    return next_.get();
 }
 
 Continuation I32ReinterpretF32::action(Instance& instance) {
     TRACE_VERBOSE("i32.reinterpret_f32");
-    return next_;
+    return next_.get();
 }
 
 Continuation I64ReinterpretF64::action(Instance& instance) {
     TRACE_VERBOSE("i64.reinterpret_f64");
-    return next_;
+    return next_.get();
 }
 
 Continuation F32ReinterpretI32::action(Instance& instance) {
     TRACE_VERBOSE("f32.reinterpret_i32");
-    return next_;
+    return next_.get();
 }
 
 Continuation F64ReinterpretI64::action(Instance& instance) {
     TRACE_VERBOSE("f64.reinterpret_i64");
-    return next_;
+    return next_.get();
 }
 
 Continuation I32Extend8Signed::action(Instance& instance) {
@@ -2053,7 +2052,7 @@ Continuation I32Extend8Signed::action(Instance& instance) {
     context.push(result);
 
     TRACE_VERBOSE("i32.extend8_s: ({}) -> ({})", val, result);
-    return next_;
+    return next_.get();
 }
 
 Continuation I32Extend16Signed::action(Instance& instance) {
@@ -2064,7 +2063,7 @@ Continuation I32Extend16Signed::action(Instance& instance) {
     context.push(result);
 
     TRACE_VERBOSE("i32.extend16_s: ({}) -> ({})", val, result);
-    return next_;
+    return next_.get();
 }
 
 Continuation I64Extend8Signed::action(Instance& instance) {
@@ -2075,7 +2074,7 @@ Continuation I64Extend8Signed::action(Instance& instance) {
     context.push(result);
 
     TRACE_VERBOSE("i64.extend8_s: ({}) -> ({})", val, result);
-    return next_;
+    return next_.get();
 }
 
 Continuation I64Extend16Signed::action(Instance& instance) {
@@ -2086,7 +2085,7 @@ Continuation I64Extend16Signed::action(Instance& instance) {
     context.push(result);
 
     TRACE_VERBOSE("i64.extend16_s: ({}) -> ({})", val, result);
-    return next_;
+    return next_.get();
 }
 
 Continuation I64Extend32Signed::action(Instance& instance) {
@@ -2097,7 +2096,7 @@ Continuation I64Extend32Signed::action(Instance& instance) {
     context.push(result);
 
     TRACE_VERBOSE("i64.extend32_s: ({}) -> ({})", val, result);
-    return next_;
+    return next_.get();
 }
 
 /***********************/
@@ -2132,7 +2131,7 @@ Continuation I32Load::action(Instance& instance) {
     context.pushI32(value);
 
     TRACE_VERBOSE("i32.load {} {}: ({}) -> ({})", align_, offset_, base, val);
-    return next_;
+    return next_.get();
 }
 
 I64Load::I64Load(const grammar::I64Load& i64_load)
@@ -2166,7 +2165,7 @@ Continuation I64Load::action(Instance& instance) {
     context.pushI64(value);
 
     TRACE_VERBOSE("i64.load {} {}: ({}) -> ({})", align_, offset_, base, val);
-    return next_;
+    return next_.get();
 }
 
 F32Load::F32Load(const grammar::F32Load& f32_load)
@@ -2188,7 +2187,7 @@ Continuation F32Load::action(Instance& instance) {
     context.push(value);
 
     TRACE_VERBOSE("f32.load {} {}: ({}) -> ({})", align_, offset_, base, val);
-    return next_;
+    return next_.get();
 }
 
 F64Load::F64Load(const grammar::F64Load& f64_load)
@@ -2210,7 +2209,7 @@ Continuation F64Load::action(Instance& instance) {
     context.push(val);
 
     TRACE_VERBOSE("f64.load {} {}: ({}) -> ({})", align_, offset_, base, val);
-    return next_;
+    return next_.get();
 }
 
 I32Load8Signed::I32Load8Signed(const grammar::I32Load8Signed& i32_load8_s)
@@ -2240,7 +2239,7 @@ Continuation I32Load8Signed::action(Instance& instance) {
     context.pushI32(value);
     TRACE_VERBOSE("i32.load8_s {} {}: ({}) -> ({})", align_, offset_, base,
                   val);
-    return next_;
+    return next_.get();
 }
 
 I32Load8Unsigned::I32Load8Unsigned(const grammar::I32Load8Unsigned& i32_load8_u)
@@ -2269,7 +2268,7 @@ Continuation I32Load8Unsigned::action(Instance& instance) {
     context.pushI32(value);
     TRACE_VERBOSE("i32.load8_u {} {}: ({}) -> ({})", align_, offset_, base,
                   val);
-    return next_;
+    return next_.get();
 }
 
 I32Load16Signed::I32Load16Signed(
@@ -2294,7 +2293,7 @@ Continuation I32Load16Signed::action(Instance& instance) {
 
     TRACE_VERBOSE("i32.load16_s align={} offset={}: (base={}) -> (val={})",
                   align_, offset_, base, val);
-    return next_;
+    return next_.get();
 }
 
 I32Load16Unsigned::I32Load16Unsigned(
@@ -2332,7 +2331,7 @@ Continuation I32Load16Unsigned::action(Instance& instance) {
 
     TRACE_VERBOSE("i32.load16_u align={} offset={}: (base={}) -> (val={})",
                   align_, offset_, base, val);
-    return next_;
+    return next_.get();
 }
 
 I64Load8Signed::I64Load8Signed(
@@ -2356,7 +2355,7 @@ Continuation I64Load8Signed::action(Instance& instance) {
 
     TRACE_VERBOSE("i64.load8_s align={} offset={}: (base={}) -> (val={})",
                   align_, offset_, base, val);
-    return next_;
+    return next_.get();
 }
 
 I64Load8Unsigned::I64Load8Unsigned(
@@ -2380,7 +2379,7 @@ Continuation I64Load8Unsigned::action(Instance& instance) {
 
     TRACE_VERBOSE("i64.load8_u align={} offset={}: (base={}) -> (val={})",
                   align_, offset_, base, val);
-    return next_;
+    return next_.get();
 }
 
 I64Load16Signed::I64Load16Signed(
@@ -2404,7 +2403,7 @@ Continuation I64Load16Signed::action(Instance& instance) {
 
     TRACE_VERBOSE("i64.load16_s align={} offset={}: (base={}) -> (val={})",
                   align_, offset_, base, val);
-    return next_;
+    return next_.get();
 }
 
 I64Load16Unsigned::I64Load16Unsigned(
@@ -2428,7 +2427,7 @@ Continuation I64Load16Unsigned::action(Instance& instance) {
 
     TRACE_VERBOSE("i64.load16_u align={} offset={}: (base={}) -> (val={})",
                   align_, offset_, base, val);
-    return next_;
+    return next_.get();
 }
 
 I64Load32Signed::I64Load32Signed(
@@ -2452,7 +2451,7 @@ Continuation I64Load32Signed::action(Instance& instance) {
 
     TRACE_VERBOSE("i64.load32_s align={} offset={}: (base={}) -> (val={})",
                   align_, offset_, base, val);
-    return next_;
+    return next_.get();
 }
 
 I64Load32Unsigned::I64Load32Unsigned(
@@ -2476,7 +2475,7 @@ Continuation I64Load32Unsigned::action(Instance& instance) {
 
     TRACE_VERBOSE("i64.load32_u align={} offset={}: (base={}) -> (val={})",
                   align_, offset_, base, val);
-    return next_;
+    return next_.get();
 }
 
 I32Store::I32Store(const grammar::I32Store& i32_store)
@@ -2515,7 +2514,7 @@ Continuation I32Store::action(Instance& instance) {
 
     TRACE_VERBOSE("i32.store {} {}: ({}, {}) -> ()", align_, offset_, base,
                   val);
-    return next_;
+    return next_.get();
 }
 
 I64Store::I64Store(const grammar::I64Store& i64_store)
@@ -2550,7 +2549,7 @@ Continuation I64Store::action(Instance& instance) {
 
     TRACE_VERBOSE("i64.store {} {}: ({}, {}) -> ()", align_, offset_, base,
                   val);
-    return next_;
+    return next_.get();
 }
 
 F32Store::F32Store(const grammar::F32Store& f32_store)
@@ -2570,7 +2569,7 @@ Continuation F32Store::action(Instance& instance) {
 
     TRACE_VERBOSE("f32.store {} {}: ({}, {}) -> ()", align_, offset_, base,
                   val);
-    return next_;
+    return next_.get();
 }
 
 F64Store::F64Store(const grammar::F64Store& f64_store)
@@ -2590,7 +2589,7 @@ Continuation F64Store::action(Instance& instance) {
 
     TRACE_VERBOSE("f64.store {} {}: ({}, {}) -> ()", align_, offset_, base,
                   val);
-    return next_;
+    return next_.get();
 }
 
 I32Store8::I32Store8(const grammar::I32Store8& i32_store8)
@@ -2625,7 +2624,7 @@ Continuation I32Store8::action(Instance& instance) {
 
     TRACE_VERBOSE("i32.store8 {} {}: ({}, {}) -> ()", align_, offset_, base,
                   val);
-    return next_;
+    return next_.get();
 }
 
 I32Store16::I32Store16(const grammar::I32Store16& i32_store16)
@@ -2660,7 +2659,7 @@ Continuation I32Store16::action(Instance& instance) {
 
     TRACE_VERBOSE("i32.store16 align={} offset={}: (base={}, val={}) -> ()",
                   align_, offset_, base, val & 0xFFFF);
-    return next_;
+    return next_.get();
 }
 
 I64Store8::I64Store8(const grammar::I64Store8& i64_store8)
@@ -2681,7 +2680,7 @@ Continuation I64Store8::action(Instance& instance) {
 
     TRACE_VERBOSE("i64.store8 align={} offset={}: (base={}, val={}) -> ()",
                   align_, offset_, base, val & 0xFF);
-    return next_;
+    return next_.get();
 }
 
 I64Store16::I64Store16(const grammar::I64Store16& i64_store16)
@@ -2702,7 +2701,7 @@ Continuation I64Store16::action(Instance& instance) {
 
     TRACE_VERBOSE("i64.store16 align={} offset={}: (base={}, val={}) -> ()",
                   align_, offset_, base, val & 0xFFFF);
-    return next_;
+    return next_.get();
 }
 
 I64Store32::I64Store32(const grammar::I64Store32& i64_store32)
@@ -2723,7 +2722,7 @@ Continuation I64Store32::action(Instance& instance) {
 
     TRACE_VERBOSE("i64.store32 align={} offset={}: (base={}, val={}) -> ()",
                   align_, offset_, base, val & 0xFFFFFFFF);
-    return next_;
+    return next_.get();
 }
 
 MemoryGrow::MemoryGrow(const grammar::MemoryGrow& mem_grow)
@@ -2736,7 +2735,7 @@ Continuation MemoryGrow::action(Instance& instance) {
     Memory& memory = instance.getGlobalState().getMemory();
 
     context.pushI32(memory.grow(delta));
-    return next_;
+    return next_.get();
 }
 
 MemoryInit::MemoryInit(const grammar::MemoryInit& mem_init)
@@ -2759,7 +2758,7 @@ Continuation MemoryInit::action(Instance& instance) {
     bool result = memory.store(dst_offset, src_buffer);
     assert(result);
 
-    return next_;
+    return next_.get();
 }
 
 DataDrop::DataDrop(const grammar::DataDrop& data_drop)
@@ -2767,7 +2766,7 @@ DataDrop::DataDrop(const grammar::DataDrop& data_drop)
 
 Continuation DataDrop::action(Instance& instance) {
     instance.getGlobalState().dropSegment(segment_idx_);
-    return next_;
+    return next_.get();
 }
 
 Continuation MemoryCopy::action(Instance& instance) {
@@ -2820,7 +2819,7 @@ Continuation MemoryCopy::action(Instance& instance) {
     }
 
     TRACE_VERBOSE("memory.copy: (dst={}, src={}, count={})", dst, src, count);
-    return next_;
+    return next_.get();
 }
 
 Continuation MemoryFill::action(Instance& instance) {
@@ -2858,7 +2857,7 @@ Continuation MemoryFill::action(Instance& instance) {
         }
     }
 
-    return next_;
+    return next_.get();
 };
 
 /******************************/
@@ -2889,7 +2888,7 @@ Continuation AtomicNotify::action(Instance& instance) {
     uint32_t notified = waiting_room.notify(offset, waiters);
 
     context.pushI32(static_cast<int32_t>(notified));
-    return next_;
+    return next_.get();
 }
 
 AtomicWait32::AtomicWait32(const grammar::AtomicWait32& atomic_wait32)
@@ -2907,7 +2906,7 @@ Continuation AtomicWait32::action(Instance& instance) {
 
             TRACE_VERBOSE("memory.atomic.wait32 epilogue {} {}: () -> ({})",
                           align_, offset_, 0);
-            return next_;
+            return next_.get();
         }
 
         if (context.getRemainingTime() == 0) {
@@ -2916,7 +2915,7 @@ Continuation AtomicWait32::action(Instance& instance) {
 
             TRACE_VERBOSE("memory.atomic.wait32 epilogue {} {}: () -> ({})",
                           align_, offset_, 2);
-            return next_;
+            return next_.get();
         }
 
         return idle_.get();
@@ -2947,7 +2946,7 @@ Continuation AtomicWait32::action(Instance& instance) {
 
         TRACE_VERBOSE("memory.atomic.wait32 epilogue {} {}: () -> ({})", align_,
                       offset_, 1);
-        return next_;
+        return next_.get();
     } else {
         waiting_room.block(context, offset);
         context.setTimeout(offset, timeout);
@@ -2985,7 +2984,7 @@ Continuation AtomicLoad::action(Instance& instance) {
 
     TRACE_VERBOSE("memory.atomic.load {} {}: ({}) -> ({})", align_, offset_,
                   base, val);
-    return next_;
+    return next_.get();
 }
 
 AtomicLoad8Unsigned::AtomicLoad8Unsigned(
@@ -3016,7 +3015,7 @@ Continuation AtomicLoad8Unsigned::action(Instance& instance) {
 
     TRACE_VERBOSE("memory.atomic.load8_u {} {}: ({}) -> ({})", align_, offset_,
                   base, val);
-    return next_;
+    return next_.get();
 }
 
 AtomicStore::AtomicStore(const grammar::AtomicStore& atomic_store)
@@ -3045,7 +3044,7 @@ Continuation AtomicStore::action(Instance& instance) {
 
     TRACE_VERBOSE("memory.atomic.store {} {}: ({}, {}) -> ()", align_, offset_,
                   val, base);
-    return next_;
+    return next_.get();
 }
 
 AtomicStore8::AtomicStore8(const grammar::AtomicStore8& atomic_store8)
@@ -3074,7 +3073,7 @@ Continuation AtomicStore8::action(Instance& instance) {
 
     TRACE_VERBOSE("memory.atomic.store8 {} {}: ({}, {}) -> ()", align_, offset_,
                   val, base);
-    return next_;
+    return next_.get();
 }
 
 AtomicAdd::AtomicAdd(const grammar::AtomicAdd& atomic_add)
@@ -3106,7 +3105,7 @@ Continuation AtomicAdd::action(Instance& instance) {
 
     TRACE_VERBOSE("i32.atomic.rmw.add {} {}: ({}, {}) -> ()", align_, offset_,
                   base, val, old);
-    return next_;
+    return next_.get();
 }
 
 AtomicExchange8Unsigned::AtomicExchange8Unsigned(
@@ -3138,7 +3137,7 @@ Continuation AtomicExchange8Unsigned::action(Instance& instance) {
 
     TRACE_VERBOSE("i32.atomic.rmw8.xchg_u {} {}: ({}, {}) -> ({})", align_,
                   offset_, val, base, old);
-    return next_;
+    return next_.get();
 }
 
 AtomicCompareExchange::AtomicCompareExchange(
@@ -3170,13 +3169,13 @@ Continuation AtomicCompareExchange::action(Instance& instance) {
                                 __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
 
     context.pushI32(expected);
-    return next_;
+    return next_.get();
 }
 
 Continuation Composite::action(Instance& instance) {
     Value val = producer_->produce(instance);
     consumer_->consume(instance, val);
-    return next_;
+    return next_.get();
 };
 
 } // namespace runtime

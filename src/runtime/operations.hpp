@@ -43,9 +43,9 @@ public:
            std::vector<Operation>& targets);
 
     virtual Operation addNext(Operation op);
-    void clearNext() { successor_.reset(); }
+    void clearNext() { next_.reset(); }
 
-    virtual Continuation action(Instance& instance) { return successor_.get(); }
+    virtual Continuation action(Instance& instance) { return next_.get(); }
     virtual Expected<Continuation> eval(Context& context) const {
         return Unexpected(ERROR("evaluate called on non constant expression"));
     }
@@ -66,8 +66,7 @@ public:
     std::string getFormattedAddress(Instance& instance) const;
 
 protected:
-    Operation successor_;
-    Continuation next_ = nullptr;
+    Operation next_;
     size_t addr_ = UINT32_MAX;
 
     OperationBase() = default;
