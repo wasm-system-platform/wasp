@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cassert>
+#include <cxxabi.h>
 #include <stack>
 
 #include "grammar/sections.hpp"
@@ -35,6 +36,8 @@ using Continuation = OperationBase*;
 
 class OperationBase : public std::enable_shared_from_this<OperationBase> {
 public:
+    using TypeId = const void*;
+
     virtual ~OperationBase() = default;
 
     static Operation
@@ -65,11 +68,18 @@ public:
         return type() == Derived::static_type();
     }
 
+    virtual TypeId type() const {
+        return nullptr;
+    }
+
+    virtual std::string getName() {
+        return "?";
+    }
+
     size_t getAddress() { return addr_; }
     std::string getFormattedAddress(Instance& instance) const;
 
 protected:
-    using TypeId = const void*;
 
     Operation next_;
     size_t addr_ = UINT32_MAX;
@@ -78,10 +88,6 @@ protected:
     OperationBase(size_t addr) : addr_(addr) {}
 
     Continuation trap(Instance& instance, std::string msg, size_t addr) const;
-
-    virtual TypeId type() const {
-        return nullptr;
-    }
 };
 
 template<typename Derived>
@@ -97,6 +103,19 @@ public:
     TypeId type() const override {
         return static_type();
     }
+
+    std::string getName() override {
+        int status = 0;
+        char* demangled = abi::__cxa_demangle(typeid(Derived).name(), nullptr, nullptr, &status);
+        std::string name = (status == 0) ? demangled : typeid(Derived).name();
+        std::free(demangled);
+
+        auto pos = name.rfind("::");
+        if (pos == std::string_view::npos)
+            return std::string(name);
+
+        return std::string(name.substr(pos + 2));
+    }
 };
 
 /**********************/
@@ -110,10 +129,10 @@ public:
     Continuation action(Instance& instance) override;
 };
 
-class Nop : public OperationBase {
+class Nop : public TaggedOperation<Nop> {
 public:
-    Nop(const grammar::Nop& nop) : OperationBase(nop.getAddress()) {}
-    Nop(size_t addr) : OperationBase(addr) {}
+    Nop(const grammar::Nop& nop) : TaggedOperation<Nop>(nop.getAddress()) {}
+    Nop(size_t addr) : TaggedOperation<Nop>(addr) {}
 
     void setAddress(size_t addr) { addr_ = addr; }
 };
@@ -129,7 +148,7 @@ public:
     }
 };
 
-class Block : public OperationBase {
+class Block : public TaggedOperation<Block> {
 public:
     Block(const grammar::Block& block,
           const std::vector<FunctionType>& func_types,
@@ -141,7 +160,7 @@ private:
     Operation body_;
 };
 
-class Loop : public OperationBase {
+class Loop : public TaggedOperation<Loop> {
 public:
     Loop(const grammar::Loop& loop, const std::vector<FunctionType>& func_types,
          std::vector<Operation>& branch_targets);
@@ -152,7 +171,7 @@ private:
     Operation body_;
 };
 
-class IfThen : public OperationBase {
+class IfThen : public TaggedOperation<IfThen> {
 public:
     IfThen(const grammar::IfElse& if_else,
            const std::vector<FunctionType>& func_types,
@@ -164,7 +183,7 @@ protected:
     Operation then_;
 };
 
-class IfElse : public OperationBase {
+class IfElse : public TaggedOperation<IfElse> {
 public:
     IfElse(const grammar::IfElse& if_else,
            const std::vector<FunctionType>& func_types,
@@ -177,7 +196,7 @@ private:
     Operation else_;
 };
 
-class Branch : public OperationBase {
+class Branch : public TaggedOperation<Branch> {
 public:
     Branch(const grammar::Branch& branch, std::vector<Operation>& targets);
 
@@ -189,7 +208,7 @@ private:
     Operation target_;
 };
 
-class BranchIf : public OperationBase {
+class BranchIf : public TaggedOperation<BranchIf> {
 public:
     BranchIf(const grammar::BranchIf& br_if, std::vector<Operation>& targets);
 
@@ -199,7 +218,7 @@ private:
     Operation target_;
 };
 
-class BranchTable : public OperationBase {
+class BranchTable : public TaggedOperation<BranchTable> {
 public:
     BranchTable(const grammar::BranchTable& br_table,
                 std::vector<Operation>& targets);
@@ -213,7 +232,7 @@ private:
     std::vector<Operation> containers_;
 };
 
-class Call : public OperationBase {
+class Call : public TaggedOperation<Call> {
 public:
     Call(const grammar::Call& call);
     Call(uint32_t func_idx, size_t addr);
@@ -226,7 +245,7 @@ public:
     Continuation action(Instance& instance) override;
 
 private:
-    class Epilogue : public OperationBase {
+    class Epilogue : public TaggedOperation<Epilogue> {
     public:
         Epilogue(uint32_t func_idx, size_t addr);
 
@@ -240,7 +259,7 @@ private:
     Operation epilogue_ = nullptr;
 };
 
-class CallIndirect : public OperationBase {
+class CallIndirect : public TaggedOperation<CallIndirect> {
 public:
     CallIndirect(const grammar::CallIndirect& call_indirect,
                  const std::vector<FunctionType>& func_types);
@@ -270,7 +289,7 @@ private:
     void destroyEpilogue(size_t idx);
 };
 
-class Return : public OperationBase {
+class Return : public TaggedOperation<Return> {
 public:
     Operation addNext(Operation next) override { return shared_from_this(); }
 
@@ -281,14 +300,14 @@ public:
 /* Parametric Instructions */
 /***************************/
 
-class Drop : public OperationBase {
+class Drop : public TaggedOperation<Drop> {
 public:
     Drop(const grammar::Drop& drop);
 
     Continuation action(Instance& instance) override;
 };
 
-class Select : public OperationBase {
+class Select : public TaggedOperation<Select> {
 public:
     Continuation action(Instance& instance) override;
 };
@@ -297,7 +316,7 @@ public:
 /* Variable Instructions */
 /*************************/
 
-class LocalGet : public OperationBase {
+class LocalGet : public TaggedOperation<LocalGet> {
 public:
     LocalGet(const grammar::LocalGet& local_get);
 
@@ -307,7 +326,7 @@ private:
     uint32_t local_idx_;
 };
 
-class LocalSet : public OperationBase {
+class LocalSet : public TaggedOperation<LocalSet> {
 public:
     LocalSet(const grammar::LocalSet& local_set);
 
@@ -317,7 +336,7 @@ private:
     uint32_t local_idx_;
 };
 
-class LocalTee : public OperationBase {
+class LocalTee : public TaggedOperation<LocalTee> {
 public:
     LocalTee(const grammar::LocalTee& local_tee);
 
@@ -327,7 +346,7 @@ private:
     uint32_t local_idx_;
 };
 
-class GlobalGet : public OperationBase {
+class GlobalGet : public TaggedOperation<GlobalGet> {
 public:
     GlobalGet(const grammar::GlobalGet& global_get);
 
@@ -351,7 +370,7 @@ private:
 /* Numeric Instructions */
 /************************/
 
-class I32Const : public OperationBase {
+class I32Const : public TaggedOperation<I32Const> {
 public:
     I32Const(const grammar::I32Const& i32_const);
 
@@ -395,112 +414,112 @@ private:
     double f_;
 };
 
-class I32EqualZero : public OperationBase {
+class I32EqualZero : public TaggedOperation<I32EqualZero> {
 public:
     Continuation action(Instance& instance) override;
 };
 
-class I32Equal : public OperationBase {
+class I32Equal : public TaggedOperation<I32Equal> {
 public:
     Continuation action(Instance& instance) override;
 };
 
-class I32NotEqual : public OperationBase {
+class I32NotEqual : public TaggedOperation<I32NotEqual> {
 public:
     Continuation action(Instance& instance) override;
 };
 
-class I32LessThanSigned : public OperationBase {
+class I32LessThanSigned : public TaggedOperation<I32LessThanSigned> {
 public:
     Continuation action(Instance& instance) override;
 };
 
-class I32LessThanUnsigned : public OperationBase {
+class I32LessThanUnsigned : public TaggedOperation<I32LessThanUnsigned> {
 public:
     Continuation action(Instance& instance) override;
 };
 
-class I32GreaterThanSigned : public OperationBase {
+class I32GreaterThanSigned : public TaggedOperation<I32GreaterThanSigned> {
 public:
     Continuation action(Instance& instance) override;
 };
 
-class I32GreaterThanUnsigned : public OperationBase {
+class I32GreaterThanUnsigned : public TaggedOperation<I32GreaterThanUnsigned> {
 public:
     Continuation action(Instance& instance) override;
 };
 
-class I32LessEqualSigned : public OperationBase {
+class I32LessEqualSigned : public TaggedOperation<I32LessEqualSigned> {
 public:
     Continuation action(Instance& instance) override;
 };
 
-class I32LessEqualUnsigned : public OperationBase {
+class I32LessEqualUnsigned : public TaggedOperation<I32LessEqualUnsigned> {
 public:
     Continuation action(Instance& instance) override;
 };
 
-class I32GreaterEqualSigned : public OperationBase {
+class I32GreaterEqualSigned : public TaggedOperation<I32GreaterEqualSigned> {
 public:
     Continuation action(Instance& instance) override;
 };
 
-class I32GreaterEqualUnsigned : public OperationBase {
+class I32GreaterEqualUnsigned : public TaggedOperation<I32GreaterEqualUnsigned> {
 public:
     Continuation action(Instance& instance) override;
 };
 
-class I64EqualZero : public OperationBase {
+class I64EqualZero : public TaggedOperation<I64EqualZero> {
 public:
     Continuation action(Instance& instance) override;
 };
 
-class I64Equal : public OperationBase {
+class I64Equal : public TaggedOperation<I64Equal> {
 public:
     Continuation action(Instance& instance) override;
 };
 
-class I64NotEqual : public OperationBase {
+class I64NotEqual : public TaggedOperation<I64NotEqual> {
 public:
     Continuation action(Instance& instance) override;
 };
 
-class I64LessThanSigned : public OperationBase {
+class I64LessThanSigned : public TaggedOperation<I64LessThanSigned> {
 public:
     Continuation action(Instance& instance) override;
 };
 
-class I64LessThanUnsigned : public OperationBase {
+class I64LessThanUnsigned : public TaggedOperation<I64LessThanUnsigned> {
 public:
     Continuation action(Instance& instance) override;
 };
 
-class I64GreaterThanSigned : public OperationBase {
+class I64GreaterThanSigned : public TaggedOperation<I64GreaterThanSigned> {
 public:
     Continuation action(Instance& instance) override;
 };
 
-class I64GreaterThanUnsigned : public OperationBase {
+class I64GreaterThanUnsigned : public TaggedOperation<I64GreaterThanUnsigned> {
 public:
     Continuation action(Instance& instance) override;
 };
 
-class I64LessEqualSigned : public OperationBase {
+class I64LessEqualSigned : public TaggedOperation<I64LessEqualSigned> {
 public:
     Continuation action(Instance& instance) override;
 };
 
-class I64LessEqualUnsigned : public OperationBase {
+class I64LessEqualUnsigned : public TaggedOperation<I64LessEqualUnsigned> {
 public:
     Continuation action(Instance& instance) override;
 };
 
-class I64GreaterEqualSigned : public OperationBase {
+class I64GreaterEqualSigned : public TaggedOperation<I64GreaterEqualSigned> {
 public:
     Continuation action(Instance& instance) override;
 };
 
-class I64GreaterEqualUnsigned : public OperationBase {
+class I64GreaterEqualUnsigned : public TaggedOperation<I64GreaterEqualUnsigned> {
 public:
     Continuation action(Instance& instance) override;
 };
@@ -580,10 +599,10 @@ public:
     Continuation action(Instance& instance) override;
 };
 
-class I32Add : public OperationBase {
+class I32Add : public TaggedOperation<I32Add> {
 public:
     I32Add(const grammar::I32Add& i32_add)
-        : OperationBase(i32_add.getAddress()) {}
+        : TaggedOperation<I32Add>(i32_add.getAddress()) {}
 
     Continuation action(Instance& instance) override;
     void consume(Instance& instance, Value right) override;
@@ -591,10 +610,10 @@ public:
     bool isConsumer() const override { return true; }
 };
 
-class I32Sub : public OperationBase {
+class I32Sub : public TaggedOperation<I32Sub> {
 public:
     I32Sub(const grammar::I32Sub& i32_sub)
-        : OperationBase(i32_sub.getAddress()) {}
+        : TaggedOperation<I32Sub>(i32_sub.getAddress()) {}
 
     Continuation action(Instance& instance) override;
     void consume(Instance& instance, Value right) override;
@@ -602,142 +621,142 @@ public:
     bool isConsumer() const override { return true; }
 };
 
-class I32Mul : public OperationBase {
+class I32Mul : public TaggedOperation<I32Mul> {
 public:
     Continuation action(Instance& instance) override;
 };
 
-class I32DivideSigned : public OperationBase {
+class I32DivideSigned : public TaggedOperation<I32DivideSigned> {
 public:
     Continuation action(Instance& instance) override;
 };
 
-class I32DivideUnsigned : public OperationBase {
+class I32DivideUnsigned : public TaggedOperation<I32DivideUnsigned> {
 public:
     Continuation action(Instance& instance) override;
 };
 
-class I32RemainderSigned : public OperationBase {
+class I32RemainderSigned : public TaggedOperation<I32RemainderSigned> {
 public:
     Continuation action(Instance& instance) override;
 };
 
-class I32RemainderUnsigned : public OperationBase {
+class I32RemainderUnsigned : public TaggedOperation<I32RemainderUnsigned> {
 public:
     Continuation action(Instance& instance) override;
 };
 
-class I32And : public OperationBase {
+class I32And : public TaggedOperation<I32And> {
 public:
     Continuation action(Instance& instance) override;
 };
 
-class I32Or : public OperationBase {
+class I32Or : public TaggedOperation<I32Or> {
 public:
     Continuation action(Instance& instance) override;
 };
 
-class I32Xor : public OperationBase {
+class I32Xor : public TaggedOperation<I32Xor> {
 public:
     Continuation action(Instance& instance) override;
 };
 
-class I32ShiftLeft : public OperationBase {
+class I32ShiftLeft : public TaggedOperation<I32ShiftLeft> {
 public:
     Continuation action(Instance& instance) override;
 };
 
-class I32ShiftRightSigned : public OperationBase {
+class I32ShiftRightSigned : public TaggedOperation<I32ShiftRightSigned> {
 public:
     Continuation action(Instance& instance) override;
 };
 
-class I32ShiftRightUnsigned : public OperationBase {
+class I32ShiftRightUnsigned : public TaggedOperation<I32ShiftRightUnsigned> {
 public:
     Continuation action(Instance& instance) override;
 };
 
-class I64CountLeadingZeros : public OperationBase {
+class I64CountLeadingZeros : public TaggedOperation<I64CountLeadingZeros> {
 public:
     Continuation action(Instance& instance) override;
 };
 
-class I64CountTrailingZeros : public OperationBase {
+class I64CountTrailingZeros : public TaggedOperation<I64CountTrailingZeros> {
 public:
     Continuation action(Instance& instance) override;
 };
 
-class I64Add : public OperationBase {
+class I64Add : public TaggedOperation<I64Add> {
 public:
     Continuation action(Instance& instance) override;
 };
 
-class I64Sub : public OperationBase {
+class I64Sub : public TaggedOperation<I64Sub> {
 public:
     Continuation action(Instance& instance) override;
 };
 
-class I64Mul : public OperationBase {
+class I64Mul : public TaggedOperation<I64Mul> {
 public:
     Continuation action(Instance& instance) override;
 };
 
-class I64DivideSigned : public OperationBase {
+class I64DivideSigned : public TaggedOperation<I64DivideSigned> {
 public:
     Continuation action(Instance& instance) override;
 };
 
-class I64DivideUnsigned : public OperationBase {
+class I64DivideUnsigned : public TaggedOperation<I64DivideUnsigned> {
 public:
     Continuation action(Instance& instance) override;
 };
 
-class I64RemainderSigned : public OperationBase {
+class I64RemainderSigned : public TaggedOperation<I64RemainderSigned> {
 public:
     Continuation action(Instance& instance) override;
 };
 
-class I64RemainderUnsigned : public OperationBase {
+class I64RemainderUnsigned : public TaggedOperation<I64RemainderUnsigned> {
 public:
     Continuation action(Instance& instance) override;
 };
 
-class I64And : public OperationBase {
+class I64And : public TaggedOperation<I64And> {
 public:
     Continuation action(Instance& instance) override;
 };
 
-class I64Or : public OperationBase {
+class I64Or : public TaggedOperation<I64Or> {
 public:
     Continuation action(Instance& instance) override;
 };
 
-class I64Xor : public OperationBase {
+class I64Xor : public TaggedOperation<I64Xor> {
 public:
     Continuation action(Instance& instance) override;
 };
 
-class I64ShiftLeft : public OperationBase {
+class I64ShiftLeft : public TaggedOperation<I64ShiftLeft> {
 public:
     Continuation action(Instance& instance) override;
 };
 
-class I64ShiftRightSigned : public OperationBase {
+class I64ShiftRightSigned : public TaggedOperation<I64ShiftRightSigned> {
 public:
     Continuation action(Instance& instance) override;
 };
 
-class I64ShiftRightUnsigned : public OperationBase {
+class I64ShiftRightUnsigned : public TaggedOperation<I64ShiftRightUnsigned> {
 public:
     Continuation action(Instance& instance) override;
 };
 
-class I64RotateLeft : public OperationBase {
+class I64RotateLeft : public TaggedOperation<I64RotateLeft> {
 public:
     Continuation action(Instance& instance) override;
 };
 
-class I64RotateRight : public OperationBase {
+class I64RotateRight : public TaggedOperation<I64RotateRight> {
 public:
     Continuation action(Instance& instance) override;
 };
@@ -851,7 +870,7 @@ public:
 /* Memory Instructions */
 /***********************/
 
-class I32Load : public OperationBase {
+class I32Load : public TaggedOperation<I32Load> {
 public:
     I32Load(const grammar::I32Load& i32_load);
 
@@ -862,7 +881,7 @@ private:
     uint32_t align_;
 };
 
-class I64Load : public OperationBase {
+class I64Load : public TaggedOperation<I64Load> {
 public:
     I64Load(const grammar::I64Load& i64_load);
 
@@ -1005,7 +1024,7 @@ private:
     uint32_t align_;
 };
 
-class I32Store : public OperationBase {
+class I32Store : public TaggedOperation<I32Store> {
 public:
     I32Store(const grammar::I32Store& i32_store);
 
@@ -1016,7 +1035,7 @@ private:
     uint32_t align_;
 };
 
-class I64Store : public OperationBase {
+class I64Store : public TaggedOperation<I64Store> {
 public:
     I64Store(const grammar::I64Store& i64_store);
 
@@ -1247,20 +1266,6 @@ public:
 private:
     uint32_t offset_;
     uint32_t align_;
-};
-
-/* Optimized Operations */
-
-class Composite : public OperationBase {
-public:
-    Composite(const Operation& producer, const Operation& consumer)
-        : producer_(producer), consumer_(consumer) {}
-
-    Continuation action(Instance& instance) override;
-
-private:
-    Operation producer_;
-    Operation consumer_;
 };
 
 } // namespace runtime

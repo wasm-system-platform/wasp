@@ -22,6 +22,7 @@ sp_sources = files(
     'src/runtime/device_manager.cpp',
     'src/runtime/kernel.cpp',
     'src/runtime/process.cpp',
+    'src/runtime/optimization.cpp',
     # 'src/devices/timer.cpp',
     'src/devices/keyboard.cpp',
     'src/hw/mem/mmu.cpp',

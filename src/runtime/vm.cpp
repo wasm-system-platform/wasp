@@ -2,6 +2,7 @@
 #include <fmt/format.h>
 
 #include "runtime/vm.hpp"
+#include "runtime/optimization.hpp"
 
 namespace runtime {
 
@@ -207,6 +208,7 @@ Expected<std::vector<Function>> GlobalState::createFunctions(
         funcs.push_back(Function::create(*type_exp, func_types, functions[i]));
     }
 
+    printStats();
     return funcs;
 }
 

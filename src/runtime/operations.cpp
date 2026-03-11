@@ -6,6 +6,7 @@
 #include "runtime/operations.hpp"
 #include "runtime/vm.hpp"
 #include "runtime/kernel.hpp"
+#include "runtime/optimization.hpp"
 
 namespace runtime {
 
@@ -558,9 +559,8 @@ Operation OperationBase::addNext(Operation op) {
     if (next_) {
         next_ = next_->addNext(op);
     } else {
-        /* optimization possible */
-        if (isProducer() && op->isConsumer()) {
-            return std::make_shared<Composite>(shared_from_this(), op);
+        if (canMerge(shared_from_this(), op)) {
+            return merge(shared_from_this(), op);
         }
 
         next_ = op;
@@ -624,7 +624,7 @@ Continuation Block::action(Instance& instance) {
 Loop::Loop(const grammar::Loop& loop,
            const std::vector<FunctionType>& func_types,
            std::vector<Operation>& targets)
-    : OperationBase(loop.getAddress()) {
+    : TaggedOperation<Loop>(loop.getAddress()) {
     body_ = std::make_shared<Label>(addr_);
     next_ = std::make_shared<Label>(addr_);
 
@@ -646,7 +646,7 @@ Continuation Loop::action(Instance& instance) {
 IfThen::IfThen(const grammar::IfElse& if_else,
                const std::vector<FunctionType>& func_types,
                std::vector<Operation>& branch_targets)
-    : OperationBase(if_else.getAddress()) {
+    : TaggedOperation<IfThen>(if_else.getAddress()) {
     next_ = std::make_shared<Label>(addr_);
 
     branch_targets.insert(branch_targets.begin(), next_);
@@ -676,7 +676,7 @@ Continuation IfThen::action(Instance& instance) {
 IfElse::IfElse(const grammar::IfElse& if_else,
                const std::vector<FunctionType>& func_types,
                std::vector<Operation>& branch_targets)
-    : OperationBase(if_else.getAddress()) {
+    : TaggedOperation<IfElse>(if_else.getAddress()) {
     next_ = std::make_shared<Label>(addr_);
 
     branch_targets.insert(branch_targets.begin(), next_);
@@ -716,7 +716,7 @@ Continuation Branch::action(Instance& instance) {
 
 BranchIf::BranchIf(const grammar::BranchIf& br_if,
                    std::vector<Operation>& targets)
-    : OperationBase(br_if.getAddress()), target_(targets[br_if.getLabelIdx()]) {
+    : TaggedOperation<BranchIf>(br_if.getAddress()), target_(targets[br_if.getLabelIdx()]) {
 }
 
 Continuation BranchIf::action(Instance& instance) {
@@ -753,7 +753,7 @@ Continuation BranchTable::action(Instance& instance) {
 Call::Call(const grammar::Call& call)
     : Call(call.getFuncIdx(), call.getAddress()) {}
 Call::Call(uint32_t func_idx, size_t addr)
-    : OperationBase(addr), func_idx_(func_idx),
+    : TaggedOperation<Call>(addr), func_idx_(func_idx),
       epilogue_(std::make_shared<Epilogue>(func_idx, addr)) {}
 
 Continuation Call::action(Instance& instance) {
@@ -770,7 +770,7 @@ Continuation Call::action(Instance& instance) {
     return func.enterFrame(instance.getActiveContext());
 }
 
-Call::Epilogue::Epilogue(uint32_t func_idx, size_t addr) : OperationBase(addr), func_idx_(func_idx) {}
+Call::Epilogue::Epilogue(uint32_t func_idx, size_t addr) : TaggedOperation<Epilogue>(addr), func_idx_(func_idx) {}
 
 Continuation Call::Epilogue::action(Instance& instance) {
     if (instance.is<Process>()) {
@@ -787,7 +787,7 @@ Continuation Call::Epilogue::action(Instance& instance) {
 
 CallIndirect::CallIndirect(const grammar::CallIndirect& call_indirect,
                            const std::vector<FunctionType>& func_types)
-    : OperationBase(call_indirect.getAddress()),
+    : TaggedOperation<CallIndirect>(call_indirect.getAddress()),
       signature_(func_types[call_indirect.getTypeIdx()].getSignature()) {
     assert(call_indirect.getTableIdx() == 0);
 }
@@ -879,7 +879,7 @@ Continuation Return::action(Instance& instance) {
 /* Parametric Instructions */
 /***************************/
 
-Drop::Drop(const grammar::Drop& drop) : OperationBase(drop.getAddress()) {}
+Drop::Drop(const grammar::Drop& drop) : TaggedOperation<Drop>(drop.getAddress()) {}
 
 Continuation Drop::action(Instance& instance) {
     instance.getActiveContext().drop();
@@ -906,7 +906,7 @@ Continuation Select::action(Instance& instance) {
 /*************************/
 
 LocalGet::LocalGet(const grammar::LocalGet& local_get)
-    : OperationBase(local_get.getAddress()),
+    : TaggedOperation<LocalGet>(local_get.getAddress()),
       local_idx_(local_get.getLocalIdx()) {}
 
 Continuation LocalGet::action(Instance& instance) {
@@ -922,7 +922,7 @@ Continuation LocalGet::action(Instance& instance) {
 }
 
 LocalSet::LocalSet(const grammar::LocalSet& local_set)
-    : OperationBase(local_set.getAddress()),
+    : TaggedOperation<LocalSet>(local_set.getAddress()),
       local_idx_(local_set.getLocalIdx()) {}
 
 Continuation LocalSet::action(Instance& instance) {
@@ -938,7 +938,7 @@ Continuation LocalSet::action(Instance& instance) {
 }
 
 LocalTee::LocalTee(const grammar::LocalTee& local_tee)
-    : OperationBase(local_tee.getAddress()),
+    : TaggedOperation<LocalTee>(local_tee.getAddress()),
       local_idx_(local_tee.getLocalIdx()) {}
 
 Continuation LocalTee::action(Instance& instance) {
@@ -979,7 +979,7 @@ Continuation GlobalSet::action(Instance& instance) {
 /************************/
 
 I32Const::I32Const(const grammar::I32Const& i32_const)
-    : OperationBase(i32_const.getAddress()), i_(i32_const.getVal()) {}
+    : TaggedOperation<I32Const>(i32_const.getAddress()), i_(i32_const.getVal()) {}
 
 Continuation I32Const::action(Instance& instance) {
     instance.getActiveContext().pushI32(i_);
@@ -2095,7 +2095,7 @@ Continuation I64Extend32Signed::action(Instance& instance) {
 /***********************/
 
 I32Load::I32Load(const grammar::I32Load& i32_load)
-    : OperationBase(i32_load.getAddress()),
+    : TaggedOperation<I32Load>(i32_load.getAddress()),
       offset_(i32_load.getMemArg().getOffset()),
       align_(i32_load.getMemArg().getAlign()) {}
 
@@ -2470,7 +2470,7 @@ Continuation I64Load32Unsigned::action(Instance& instance) {
 }
 
 I32Store::I32Store(const grammar::I32Store& i32_store)
-    : OperationBase(i32_store.getAddress()),
+    : TaggedOperation<I32Store>(i32_store.getAddress()),
       offset_(i32_store.getMemArg().getOffset()),
       align_(i32_store.getMemArg().getAlign()) {}
 
@@ -3162,11 +3162,5 @@ Continuation AtomicCompareExchange::action(Instance& instance) {
     context.pushI32(expected);
     return next_.get();
 }
-
-Continuation Composite::action(Instance& instance) {
-    Value val = producer_->produce(instance);
-    consumer_->consume(instance, val);
-    return next_.get();
-};
 
 } // namespace runtime
