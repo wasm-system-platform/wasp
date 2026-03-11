@@ -61,11 +61,16 @@ public:
     template <class Derived> Derived& as() {
         return reinterpret_cast<Derived&>(*this);
     }
+    template <class Derived> bool is() {
+        return type() == Derived::static_type();
+    }
 
     size_t getAddress() { return addr_; }
     std::string getFormattedAddress(Instance& instance) const;
 
 protected:
+    using TypeId = const void*;
+
     Operation next_;
     size_t addr_ = UINT32_MAX;
 
@@ -73,6 +78,25 @@ protected:
     OperationBase(size_t addr) : addr_(addr) {}
 
     Continuation trap(Instance& instance, std::string msg, size_t addr) const;
+
+    virtual TypeId type() const {
+        return nullptr;
+    }
+};
+
+template<typename Derived>
+class TaggedOperation : public OperationBase {
+public:
+    using OperationBase::OperationBase;
+
+    static TypeId static_type() {
+        static int id;
+        return &id;
+    }
+
+    TypeId type() const override {
+        return static_type();
+    }
 };
 
 /**********************/
@@ -94,28 +118,27 @@ public:
     void setAddress(size_t addr) { addr_ = addr; }
 };
 
+class Label : public TaggedOperation<Label> {
+public:
+    Label(size_t addr) : TaggedOperation<Label>(addr) {
+        next_ = std::make_shared<Nop>(addr);
+    }
+
+    Continuation action(Instance& instance) override {
+        return next_->action(instance);
+    }
+};
+
 class Block : public OperationBase {
 public:
     Block(const grammar::Block& block,
           const std::vector<FunctionType>& func_types,
           std::vector<Operation>& branch_targets);
 
-    Operation addNext(Operation next) override {
-        if (!next_added_) {
-            end_->as<Nop>().setAddress(next->getAddress());
-            next_added_ = true;
-        }
-
-        end_->addNext(next);
-        return shared_from_this();
-    }
-
     Continuation action(Instance& instance) override;
 
 private:
-    Operation start_;
-    Operation end_ = std::make_shared<Nop>(addr_);
-    bool next_added_ = false;
+    Operation body_;
 };
 
 class Loop : public OperationBase {
@@ -123,16 +146,10 @@ public:
     Loop(const grammar::Loop& loop, const std::vector<FunctionType>& func_types,
          std::vector<Operation>& branch_targets);
 
-    Operation addNext(Operation next) override {
-        end_->addNext(next);
-        return shared_from_this();
-    }
-
     Continuation action(Instance& instance) override;
 
 private:
-    Operation start_ = std::make_shared<Nop>(addr_);
-    Operation end_ = std::make_shared<Nop>(addr_);
+    Operation body_;
 };
 
 class IfThen : public OperationBase {
@@ -145,7 +162,6 @@ public:
 
 protected:
     Operation then_;
-    Operation end_ = std::make_shared<Nop>(addr_);
 };
 
 class IfElse : public OperationBase {
@@ -159,7 +175,6 @@ public:
 private:
     Operation then_;
     Operation else_;
-    Operation end_ = std::make_shared<Nop>(addr_);
 };
 
 class Branch : public OperationBase {

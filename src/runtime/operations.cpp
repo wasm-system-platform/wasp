@@ -605,114 +605,105 @@ Continuation Unreachable::action(Instance& instance) {
 Block::Block(const grammar::Block& block,
              const std::vector<FunctionType>& func_types,
              std::vector<Operation>& targets) {
-    targets.insert(targets.begin(), end_);
+    next_ = std::make_shared<Label>(addr_);
+
+    targets.insert(targets.begin(), next_);
 
     const std::vector<grammar::Instruction>& instructions =
         block.getInstruction();
-    start_ = OperationBase::create(instructions, func_types, targets);
-    start_->addNext(end_);
+    body_ = OperationBase::create(instructions, func_types, targets);
+    body_->addNext(next_);
 
     targets.erase(targets.begin());
 }
 
 Continuation Block::action(Instance& instance) {
-    TRACE_VERBOSE("block[{}]", (void*)end_.get());
-    return start_.get();
+    return body_->action(instance);
 }
 
 Loop::Loop(const grammar::Loop& loop,
            const std::vector<FunctionType>& func_types,
            std::vector<Operation>& targets)
     : OperationBase(loop.getAddress()) {
-    targets.insert(targets.begin(), start_);
+    body_ = std::make_shared<Label>(addr_);
+    next_ = std::make_shared<Label>(addr_);
+
+    targets.insert(targets.begin(), body_);
 
     const std::vector<grammar::Instruction>& instructions =
         loop.getInstruction();
 
-    Operation body = OperationBase::create(instructions, func_types, targets);
-    body->addNext(end_);
+    body_ = body_->addNext(OperationBase::create(instructions, func_types, targets));
+    body_ = body_->addNext(next_);
 
-    start_->addNext(body);
     targets.erase(targets.begin());
 }
 
 Continuation Loop::action(Instance& instance) {
-    TRACE_VERBOSE("{}: loop", getFormattedAddres(instance));
-
-    // use epilogue to enforce interrupt handler
-    instance.getActiveContext().getEpilogues().push(start_);
-    return nullptr;
+    return body_->action(instance);
 }
 
 IfThen::IfThen(const grammar::IfElse& if_else,
                const std::vector<FunctionType>& func_types,
                std::vector<Operation>& branch_targets)
     : OperationBase(if_else.getAddress()) {
-    branch_targets.insert(branch_targets.begin(), end_);
+    next_ = std::make_shared<Label>(addr_);
+
+    branch_targets.insert(branch_targets.begin(), next_);
     
     then_ = OperationBase::create(if_else.getThenExpr().getInstructions(),
                                   func_types, branch_targets);
-    then_->addNext(end_);
+    then_ = then_->addNext(next_);
 
     branch_targets.erase(branch_targets.begin());
 }
 
 Continuation IfThen::action(Instance& instance) {
     Context& ctxt = instance.getActiveContext();
-
     int32_t cond = ctxt.pop().i32;
-    if (cond) {
-        if (next_)
-            ctxt.getEpilogues().push(next_);
-
-        TRACE_VERBOSE(
-            "{}: if --> cond=true",
-            instance.getGlobalState().getDebugInfo().getFormattedLocation(
-                addr_));
-        return then_.get();
-    }
 
     TRACE_VERBOSE(
-        "{}: if --> cond=false",
-        instance.getGlobalState().getDebugInfo().getFormattedLocation(addr_));
-    return next_.get();
+            "{}: if --> cond={}",
+            instance.getGlobalState().getDebugInfo().getFormattedLocation(
+                addr_), cond);
+
+    if (cond)
+        return then_->action(instance);
+
+    return next_->action(instance);
 }
 
 IfElse::IfElse(const grammar::IfElse& if_else,
                const std::vector<FunctionType>& func_types,
                std::vector<Operation>& branch_targets)
     : OperationBase(if_else.getAddress()) {
-    branch_targets.insert(branch_targets.begin(), end_);
+    next_ = std::make_shared<Label>(addr_);
+
+    branch_targets.insert(branch_targets.begin(), next_);
     
     then_ = OperationBase::create(if_else.getThenExpr().getInstructions(),
                                   func_types, branch_targets);
-    then_->addNext(end_);
+    then_ = then_->addNext(next_);
 
     else_ = OperationBase::create(if_else.getElseExpr().getInstructions(),
                                   func_types, branch_targets);
-    else_->addNext(end_);
+    else_ = else_->addNext(next_);
 
     branch_targets.erase(branch_targets.begin());
 }
 
 Continuation IfElse::action(Instance& instance) {
     Context& ctxt = instance.getActiveContext();
-    if (next_)
-        ctxt.getEpilogues().push(next_);
-
     int32_t cond = ctxt.pop().i32;
-    if (cond) {
-        TRACE_VERBOSE(
-            "{}: if else --> cond=true",
-            instance.getGlobalState().getDebugInfo().getFormattedLocation(
-                addr_));
-        return then_.get();
-    }
 
     TRACE_VERBOSE(
-        "{}: if else --> cond=false",
+        "{}: if else --> cond={}",
         instance.getGlobalState().getDebugInfo().getFormattedLocation(addr_));
-    return else_.get();
+
+    if (cond)
+        return then_->action(instance);
+
+    return else_->action(instance);
 }
 
 Branch::Branch(const grammar::Branch& branch, std::vector<Operation>& targets)
