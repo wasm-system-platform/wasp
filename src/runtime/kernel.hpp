@@ -14,23 +14,18 @@ public:
     static Expected<std::shared_ptr<Kernel>>
     create(const std::string& kernel_path, const std::string& rootfs_path);
 
-    MemoryManagementUnit& getMMU() {
-        return *mmu_;
-    }
+    MemoryManagementUnit& getMMU() { return *mmu_; }
 
-    void switchToInstance(Instance& instance) {
-        active_instance_ = &instance;
-    }
-    void switchBack() {
-        active_instance_ = this;
-    }
+    void switchToInstance(Instance& instance) { active_instance_ = &instance; }
+    void switchBack() { active_instance_ = this; }
 
     Continuation callPageFaultHandler();
 
     bool functionExists(uint32_t idx, size_t signature);
-    
+
 protected:
-    Kernel(GlobalState&& global_state, std::shared_ptr<Exports>& exports, const grammar::Module& module)
+    Kernel(GlobalState&& global_state, std::shared_ptr<Exports>& exports,
+           const grammar::Module& module)
         : TaggedInstance<Kernel>(std::move(global_state), exports, module) {}
 
 private:
@@ -52,4 +47,4 @@ private:
     void run(OperationBase& operation) override;
 };
 
-}
+} // namespace runtime

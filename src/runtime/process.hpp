@@ -9,7 +9,8 @@ class Sigsetjmp;
 class Process : public TaggedInstance<Process> {
 public:
     static Expected<std::shared_ptr<Process>>
-    create(std::span<const char>& program_bytes, Instance& instance, uint32_t id);
+    create(std::span<const char>& program_bytes, Instance& instance,
+           uint32_t id);
 
     Kernel& getKernel() { return kernel_; }
 
@@ -23,12 +24,14 @@ public:
     const Operation& getEntry() { return entry_; }
 
 protected:
-    Process(GlobalState&& global_state,
-            std::shared_ptr<Exports>& exports,
+    Process(GlobalState&& global_state, std::shared_ptr<Exports>& exports,
             const grammar::Module& module, Kernel& kernel, uint32_t id)
-                : TaggedInstance<Process>(std::move(global_state), exports, module),  kernel_(kernel), id_(id) {}
+        : TaggedInstance<Process>(std::move(global_state), exports, module),
+          kernel_(kernel), id_(id) {}
 
-    Process(Process& process, uint32_t new_id) : TaggedInstance<Process>(process), kernel_(process.kernel_), id_(new_id) {}  
+    Process(Process& process, uint32_t new_id)
+        : TaggedInstance<Process>(process), kernel_(process.kernel_),
+          id_(new_id) {}
 
 private:
     Kernel& kernel_;
@@ -39,9 +42,11 @@ private:
     Operation entry_;
 
     static Expected<Imports>
-    createImports(Instance& instance, std::shared_ptr<Sigsetjmp>& env_sigsetjmp_op_out);
- 
-    Expected<void> validateExports(std::shared_ptr<Sigsetjmp>& env_sigsetjmp_op);
+    createImports(Instance& instance,
+                  std::shared_ptr<Sigsetjmp>& env_sigsetjmp_op_out);
+
+    Expected<void>
+    validateExports(std::shared_ptr<Sigsetjmp>& env_sigsetjmp_op);
 };
 
-}
+} // namespace runtime

@@ -14,17 +14,20 @@ class ProcessManager {
 public:
     ProcessManager(Kernel& kernel) : kernel_(kernel) {}
 
-    Errno createProcess(Instance& instance, std::span<const char>& program_bytes, uint32_t& pid);
+    Errno createProcess(Instance& instance,
+                        std::span<const char>& program_bytes, uint32_t& pid);
     Errno runProcess(uint32_t pid, Instance& instance, uint32_t execve_stack);
     Errno cloneProcess(uint32_t pid, uint32_t& clone_pid);
     Errno resumeProcess(uint32_t pid, Kernel& kernel, int32_t retval);
     Instance& getProcess(uint32_t pid);
 
-    Errno readMemory(uint32_t pid, uint32_t kbuf, uint32_t pbuf, uint32_t count);
-    Errno readMemoryCString(uint32_t pid, uint32_t kbuf, uint32_t pbuf, uint32_t maxlen);
+    Errno readMemory(uint32_t pid, uint32_t kbuf, uint32_t pbuf,
+                     uint32_t count);
+    Errno readMemoryCString(uint32_t pid, uint32_t kbuf, uint32_t pbuf,
+                            uint32_t maxlen);
 
-    Errno writeMemory(uint32_t pid, uint32_t kbuf, uint32_t pbuf, uint32_t count);
-
+    Errno writeMemory(uint32_t pid, uint32_t kbuf, uint32_t pbuf,
+                      uint32_t count);
 
     const std::shared_ptr<runtime::ProcessManager>& getContext(size_t id);
 

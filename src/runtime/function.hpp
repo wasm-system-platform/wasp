@@ -13,7 +13,8 @@ class Function {
 public:
     static constexpr uint32_t NULL_IDX = UINT32_MAX;
 
-    Function(Operation&& body, size_t num_params, std::vector<Value>&& locals, size_t signature, std::string formatted_type = "");
+    Function(Operation&& body, size_t num_params, std::vector<Value>&& locals,
+             size_t signature, std::string formatted_type = "");
 
     static Function create(const FunctionType& type,
                            const std::vector<FunctionType>& types,

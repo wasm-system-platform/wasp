@@ -14,29 +14,27 @@ class VectorMemory {
 public:
     VectorMemory(uint16_t num_pages) : data_(num_pages * 65'536) {}
 
-    template<typename T>
-    T* ptr(uint32_t offset) {
+    template <typename T> T* ptr(uint32_t offset) {
         return reinterpret_cast<T*>(data_.data() + offset);
     }
 
-    template<Scalar T>
-    T load(uint32_t offset) {
+    template <Scalar T> T load(uint32_t offset) {
         return *reinterpret_cast<T*>(data_.data() + offset);
     }
 
-    template<ContiguousBuffer T>
-    void load(uint32_t offset, T& dst_buffer) {
-        std::memcpy(dst_buffer.data(), data_.data() + offset, dst_buffer.size());
+    template <ContiguousBuffer T> void load(uint32_t offset, T& dst_buffer) {
+        std::memcpy(dst_buffer.data(), data_.data() + offset,
+                    dst_buffer.size());
     }
 
-    template<Scalar T>
-    void store(uint32_t offset, T value) {
+    template <Scalar T> void store(uint32_t offset, T value) {
         *reinterpret_cast<T*>(data_.data() + offset) = value;
     }
 
-    template<ContiguousBuffer T>
+    template <ContiguousBuffer T>
     void store(uint32_t offset, const T& src_buffer) {
-        std::memcpy(data_.data() + offset, src_buffer.data(), src_buffer.size());
+        std::memcpy(data_.data() + offset, src_buffer.data(),
+                    src_buffer.size());
     }
 
     void fill(uint32_t offset, uint8_t value, uint32_t count) {
@@ -52,6 +50,6 @@ private:
     std::vector<uint8_t> data_;
 };
 
-}
+} // namespace mem
 
-}
+} // namespace hw

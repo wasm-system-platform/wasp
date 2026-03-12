@@ -3,11 +3,11 @@
 #include "hw/mem/mmu.hpp"
 #include "runtime/context.hpp"
 #include "runtime/instance.hpp"
-#include "runtime/operations.hpp"
-#include "runtime/vm.hpp"
 #include "runtime/kernel.hpp"
-#include "runtime/optimization.hpp"
+#include "runtime/operations.hpp"
 #include "runtime/operations_impl.hpp"
+#include "runtime/optimization.hpp"
+#include "runtime/vm.hpp"
 
 namespace runtime {
 
@@ -449,8 +449,7 @@ OperationBase::create(const std::vector<grammar::Instruction>& instructions,
                 std::make_shared<I32Store16>(inst->as<grammar::I32Store16>());
             break;
         case grammar::I64Store8::OPCODE:
-            next =
-                std::make_shared<I64Store8>(inst->as<grammar::I64Store8>());
+            next = std::make_shared<I64Store8>(inst->as<grammar::I64Store8>());
             break;
         case grammar::I64Store16::OPCODE:
             next =
@@ -482,7 +481,8 @@ OperationBase::create(const std::vector<grammar::Instruction>& instructions,
                 next = std::make_shared<MemoryCopy>();
                 break;
             case grammar::MemoryFill::MEM_OPCODE:
-                next = std::make_shared<MemoryFill>(inst->as<grammar::MemoryFill>());
+                next = std::make_shared<MemoryFill>(
+                    inst->as<grammar::MemoryFill>());
                 break;
             default:
                 fmt::println("unknown memory opcode 0xFC 0x{:02X}", mem_opcode);
@@ -579,7 +579,8 @@ Continuation OperationBase::trap(Instance& instance, std::string msg,
     const Operation* epilogues = ctxt.getEpilogues().data();
     for (size_t i = ctxt.getEpilogues().size() - 1; i > 0; i--) {
         const Operation& epilogue = epilogues[i];
-        if (epilogue == nullptr) break;
+        if (epilogue == nullptr)
+            break;
         fmt::println("  {}: at {}", i, epilogue->getFormattedAddress(instance));
     }
 
@@ -634,7 +635,8 @@ Loop::Loop(const grammar::Loop& loop,
     const std::vector<grammar::Instruction>& instructions =
         loop.getInstruction();
 
-    body_ = body_->addNext(OperationBase::create(instructions, func_types, targets));
+    body_ = body_->addNext(
+        OperationBase::create(instructions, func_types, targets));
     body_ = body_->addNext(next_);
 
     targets.erase(targets.begin());
@@ -651,7 +653,7 @@ IfThen::IfThen(const grammar::IfElse& if_else,
     next_ = std::make_shared<Label>(addr_);
 
     branch_targets.insert(branch_targets.begin(), next_);
-    
+
     then_ = OperationBase::create(if_else.getThenExpr().getInstructions(),
                                   func_types, branch_targets);
     then_ = then_->addNext(next_);
@@ -664,9 +666,9 @@ Continuation IfThen::action(Instance& instance) {
     int32_t cond = ctxt.pop().i32;
 
     TRACE_VERBOSE(
-            "{}: if --> cond={}",
-            instance.getGlobalState().getDebugInfo().getFormattedLocation(
-                addr_), cond);
+        "{}: if --> cond={}",
+        instance.getGlobalState().getDebugInfo().getFormattedLocation(addr_),
+        cond);
 
     if (cond)
         return then_->action(instance);
@@ -681,7 +683,7 @@ IfElse::IfElse(const grammar::IfElse& if_else,
     next_ = std::make_shared<Label>(addr_);
 
     branch_targets.insert(branch_targets.begin(), next_);
-    
+
     then_ = OperationBase::create(if_else.getThenExpr().getInstructions(),
                                   func_types, branch_targets);
     then_ = then_->addNext(next_);
@@ -717,16 +719,18 @@ Continuation Branch::action(Instance& instance) {
 
 BranchIf::BranchIf(const grammar::BranchIf& br_if,
                    std::vector<Operation>& targets)
-    : TaggedOperation<BranchIf>(br_if.getAddress()), target_(targets[br_if.getLabelIdx()]) {
-}
+    : TaggedOperation<BranchIf>(br_if.getAddress()),
+      target_(targets[br_if.getLabelIdx()]) {}
 
 Continuation BranchIf::action(Instance& instance) {
     int32_t cond = instance.getActiveContext().pop().i32;
     if (instance.is<Process>()) {
-        TRACE("{:{}}{}: br_if --> {}: (cond={}) -> () is_kernel={}",
-          "", instance.getActiveContext().getEpilogues().size(),
-          instance.getGlobalState().getDebugInfo().getFormattedLocation(addr_),
-          target_->getFormattedAddress(instance), cond, instance.as<Process>().getKernel().is<Kernel>());
+        TRACE("{:{}}{}: br_if --> {}: (cond={}) -> () is_kernel={}", "",
+              instance.getActiveContext().getEpilogues().size(),
+              instance.getGlobalState().getDebugInfo().getFormattedLocation(
+                  addr_),
+              target_->getFormattedAddress(instance), cond,
+              instance.as<Process>().getKernel().is<Kernel>());
     }
 
     if (cond)
@@ -763,22 +767,25 @@ Continuation Call::action(Instance& instance) {
     instance.getActiveContext().getEpilogues().push(epilogue_);
 
     if (instance.is<Process>()) {
-        TRACE("{:{}}{}: call {} is_kernel={}",
-          "", instance.getActiveContext().getEpilogues().size(),
-          instance.getGlobalState().getDebugInfo().getFormattedLocation(addr_),
-          func_idx_, instance.as<Process>().getKernel().is<Kernel>());
+        TRACE("{:{}}{}: call {} is_kernel={}", "",
+              instance.getActiveContext().getEpilogues().size(),
+              instance.getGlobalState().getDebugInfo().getFormattedLocation(
+                  addr_),
+              func_idx_, instance.as<Process>().getKernel().is<Kernel>());
     }
     return func.enterFrame(instance.getActiveContext());
 }
 
-Call::Epilogue::Epilogue(uint32_t func_idx, size_t addr) : TaggedOperation<Epilogue>(addr), func_idx_(func_idx) {}
+Call::Epilogue::Epilogue(uint32_t func_idx, size_t addr)
+    : TaggedOperation<Epilogue>(addr), func_idx_(func_idx) {}
 
 Continuation Call::Epilogue::action(Instance& instance) {
     if (instance.is<Process>()) {
-        TRACE("{:{}}{}: ret {} is_kernel={}",
-          "", instance.getActiveContext().getEpilogues().size(),
-          instance.getGlobalState().getDebugInfo().getFormattedLocation(addr_),
-          func_idx_, instance.as<Process>().getKernel().is<Kernel>());
+        TRACE("{:{}}{}: ret {} is_kernel={}", "",
+              instance.getActiveContext().getEpilogues().size(),
+              instance.getGlobalState().getDebugInfo().getFormattedLocation(
+                  addr_),
+              func_idx_, instance.as<Process>().getKernel().is<Kernel>());
     }
 
     Function& func = instance.getGlobalState().getFunction(func_idx_);
@@ -825,10 +832,11 @@ Continuation CallIndirect::action(Instance& instance) {
     instance.getActiveContext().getEpilogues().push(epilogue);
 
     if (instance.is<Process>()) {
-        TRACE("{:{}}{}: call_indirect: (element_idx={}) -> ()",
-          "", instance.getActiveContext().getEpilogues().size(),
-          instance.getGlobalState().getDebugInfo().getFormattedLocation(addr_),
-          element_idx);
+        TRACE("{:{}}{}: call_indirect: (element_idx={}) -> ()", "",
+              instance.getActiveContext().getEpilogues().size(),
+              instance.getGlobalState().getDebugInfo().getFormattedLocation(
+                  addr_),
+              element_idx);
     }
 
     return func.enterFrame(context);
@@ -860,10 +868,11 @@ CallIndirect::Epilogue::Epilogue(size_t idx, Function& func,
 
 Continuation CallIndirect::Epilogue::action(Instance& instance) {
     if (instance.is<Process>()) {
-        TRACE("{:{}}{}: ret is_kernel={}",
-          "", instance.getActiveContext().getEpilogues().size(),
-          instance.getGlobalState().getDebugInfo().getFormattedLocation(addr_),
-          instance.as<Process>().getKernel().is<Kernel>());
+        TRACE("{:{}}{}: ret is_kernel={}", "",
+              instance.getActiveContext().getEpilogues().size(),
+              instance.getGlobalState().getDebugInfo().getFormattedLocation(
+                  addr_),
+              instance.as<Process>().getKernel().is<Kernel>());
     }
 
     func_.leaveFrame(instance.getActiveContext());
@@ -880,7 +889,8 @@ Continuation Return::action(Instance& instance) {
 /* Parametric Instructions */
 /***************************/
 
-Drop::Drop(const grammar::Drop& drop) : TaggedOperation<Drop>(drop.getAddress()) {}
+Drop::Drop(const grammar::Drop& drop)
+    : TaggedOperation<Drop>(drop.getAddress()) {}
 
 Continuation Drop::action(Instance& instance) {
     instance.getActiveContext().drop();
@@ -968,7 +978,8 @@ Continuation GlobalSet::action(Instance& instance) {
 /************************/
 
 I32Const::I32Const(const grammar::I32Const& i32_const)
-    : TaggedOperation<I32Const>(i32_const.getAddress()), i_(i32_const.getVal()) {}
+    : TaggedOperation<I32Const>(i32_const.getAddress()),
+      i_(i32_const.getVal()) {}
 
 Continuation I32Const::action(Instance& instance) {
     Value i = impl(*this, instance);
@@ -1459,11 +1470,6 @@ Continuation I32Add::action(Instance& instance) {
     return next_.get();
 }
 
-void I32Add::consume(Instance& instance, Value right) {
-    Value& top = instance.getActiveContext().getStack().peek();
-    top.i32 = top.i32 + right.i32;
-};
-
 Continuation I32Sub::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
@@ -1478,11 +1484,6 @@ Continuation I32Sub::action(Instance& instance) {
         left, right, result);
     return next_.get();
 }
-
-void I32Sub::consume(Instance& instance, Value right) {
-    Value& top = instance.getActiveContext().getStack().peek();
-    top.i32 = top.i32 - right.i32;
-};
 
 Continuation I32Mul::action(Instance& instance) {
     Context& context = instance.getActiveContext();
@@ -1964,7 +1965,8 @@ Continuation F32ConvertI32Signed::action(Instance& instance) {
     int32_t val = context.pop().i32;
     context.push(static_cast<float>(val));
 
-    TRACE_VERBOSE("f32.convert_s_i32: ({}) -> ({})", val, static_cast<float>(val));
+    TRACE_VERBOSE("f32.convert_s_i32: ({}) -> ({})", val,
+                  static_cast<float>(val));
     return next_.get();
 }
 
@@ -1984,7 +1986,8 @@ Continuation F64ConvertI32Signed::action(Instance& instance) {
     int32_t val = context.pop().i32;
     context.push(static_cast<double>(val));
 
-    TRACE_VERBOSE("f64.convert_i32_s: ({}) -> ({})", val, static_cast<double>(val));
+    TRACE_VERBOSE("f64.convert_i32_s: ({}) -> ({})", val,
+                  static_cast<double>(val));
     return next_.get();
 }
 
@@ -1994,7 +1997,8 @@ Continuation F64PromoteF32::action(Instance& instance) {
     float val = context.pop().f32;
     context.push(static_cast<double>(val));
 
-    TRACE_VERBOSE("f64.promote_f32: ({}) -> ({})", val, static_cast<double>(val));
+    TRACE_VERBOSE("f64.promote_f32: ({}) -> ({})", val,
+                  static_cast<double>(val));
     return next_.get();
 }
 
@@ -2093,9 +2097,12 @@ Continuation I32Load::action(Instance& instance) {
         Memory& memory = instance.getGlobalState().getMemory();
 
         if (!memory.load(offset, value))
-            return trap(instance, "i32.load out of bounds memory address", addr_);
+            return trap(instance, "i32.load out of bounds memory address",
+                        addr_);
     } else {
-        Kernel& kernel = instance.is<Kernel>() ? instance.as<Kernel>() : instance.as<Process>().getKernel();
+        Kernel& kernel = instance.is<Kernel>()
+                             ? instance.as<Kernel>()
+                             : instance.as<Process>().getKernel();
         MemoryManagementUnit& mmu = kernel.getMMU();
         if (!mmu.load(offset, value)) {
             return trap(instance, "i32.load invalid memory access", addr_);
@@ -2122,12 +2129,15 @@ Continuation I64Load::action(Instance& instance) {
     if (offset < VIRT_MEMORY) {
         Memory& memory = instance.getGlobalState().getMemory();
         if (!memory.load(offset, value))
-            return trap(instance, "i64.load out of bounds memory address", offset);
+            return trap(instance, "i64.load out of bounds memory address",
+                        offset);
     } else {
-        Kernel& kernel = instance.is<Kernel>() ? instance.as<Kernel>() : instance.as<Process>().getKernel();
+        Kernel& kernel = instance.is<Kernel>()
+                             ? instance.as<Kernel>()
+                             : instance.as<Process>().getKernel();
         MemoryManagementUnit& mmu = kernel.getMMU();
         if (!mmu.load(offset, value)) {
-            // repeat the operation after handling the page fault 
+            // repeat the operation after handling the page fault
             context.push(base);
             context.getEpilogues().push(shared_from_this());
 
@@ -2201,9 +2211,12 @@ Continuation I32Load8Signed::action(Instance& instance) {
         Memory& memory = instance.getGlobalState().getMemory();
 
         if (!memory.load(offset, value))
-            return trap(instance, "i32.load8_s out of bounds memory address", addr_);
+            return trap(instance, "i32.load8_s out of bounds memory address",
+                        addr_);
     } else {
-        Kernel& kernel = instance.is<Kernel>() ? instance.as<Kernel>() : instance.as<Process>().getKernel();
+        Kernel& kernel = instance.is<Kernel>()
+                             ? instance.as<Kernel>()
+                             : instance.as<Process>().getKernel();
         MemoryManagementUnit& mmu = kernel.getMMU();
         if (!mmu.load(offset, value)) {
             return trap(instance, "i32.load8_s invalid memory access", addr_);
@@ -2230,9 +2243,12 @@ Continuation I32Load8Unsigned::action(Instance& instance) {
     if (offset < VIRT_MEMORY) {
         Memory& memory = instance.getGlobalState().getMemory();
         if (!memory.load(offset, value))
-            return trap(instance, "i32.load8_u out of bounds memory address", addr_);
+            return trap(instance, "i32.load8_u out of bounds memory address",
+                        addr_);
     } else {
-        Kernel& kernel = instance.is<Kernel>() ? instance.as<Kernel>() : instance.as<Process>().getKernel();
+        Kernel& kernel = instance.is<Kernel>()
+                             ? instance.as<Kernel>()
+                             : instance.as<Process>().getKernel();
         MemoryManagementUnit& mmu = kernel.getMMU();
         if (!mmu.load(offset, value)) {
             return trap(instance, "i32.load8_u invalid memory access", addr_);
@@ -2245,8 +2261,7 @@ Continuation I32Load8Unsigned::action(Instance& instance) {
     return next_.get();
 }
 
-I32Load16Signed::I32Load16Signed(
-    const grammar::I32Load16Signed& i32_load16_s)
+I32Load16Signed::I32Load16Signed(const grammar::I32Load16Signed& i32_load16_s)
     : offset_(i32_load16_s.getMemArg().getOffset()),
       align_(i32_load16_s.getMemArg().getAlign()) {}
 
@@ -2289,7 +2304,9 @@ Continuation I32Load16Unsigned::action(Instance& instance) {
             return trap(instance, "i32.load16_u out of bounds memory address",
                         offset);
     } else {
-        Kernel& kernel = instance.is<Kernel>() ? instance.as<Kernel>() : instance.as<Process>().getKernel();
+        Kernel& kernel = instance.is<Kernel>()
+                             ? instance.as<Kernel>()
+                             : instance.as<Process>().getKernel();
         MemoryManagementUnit& mmu = kernel.getMMU();
         if (!mmu.load(offset, value)) {
             // repeat the operation after handling the page fault
@@ -2308,8 +2325,7 @@ Continuation I32Load16Unsigned::action(Instance& instance) {
     return next_.get();
 }
 
-I64Load8Signed::I64Load8Signed(
-    const grammar::I64Load8Signed& i64_load8_s)
+I64Load8Signed::I64Load8Signed(const grammar::I64Load8Signed& i64_load8_s)
     : offset_(i64_load8_s.getOffset()), align_(i64_load8_s.getAlign()) {}
 
 Continuation I64Load8Signed::action(Instance& instance) {
@@ -2332,8 +2348,7 @@ Continuation I64Load8Signed::action(Instance& instance) {
     return next_.get();
 }
 
-I64Load8Unsigned::I64Load8Unsigned(
-    const grammar::I64Load8Unsigned& i64_load8_u)
+I64Load8Unsigned::I64Load8Unsigned(const grammar::I64Load8Unsigned& i64_load8_u)
     : offset_(i64_load8_u.getOffset()), align_(i64_load8_u.getAlign()) {}
 
 Continuation I64Load8Unsigned::action(Instance& instance) {
@@ -2356,8 +2371,7 @@ Continuation I64Load8Unsigned::action(Instance& instance) {
     return next_.get();
 }
 
-I64Load16Signed::I64Load16Signed(
-    const grammar::I64Load16Signed& i64_load16_s)
+I64Load16Signed::I64Load16Signed(const grammar::I64Load16Signed& i64_load16_s)
     : offset_(i64_load16_s.getOffset()), align_(i64_load16_s.getAlign()) {}
 
 Continuation I64Load16Signed::action(Instance& instance) {
@@ -2404,8 +2418,7 @@ Continuation I64Load16Unsigned::action(Instance& instance) {
     return next_.get();
 }
 
-I64Load32Signed::I64Load32Signed(
-    const grammar::I64Load32Signed& i64_load32_s)
+I64Load32Signed::I64Load32Signed(const grammar::I64Load32Signed& i64_load32_s)
     : offset_(i64_load32_s.getOffset()), align_(i64_load32_s.getAlign()) {}
 
 Continuation I64Load32Signed::action(Instance& instance) {
@@ -2468,9 +2481,12 @@ Continuation I32Store::action(Instance& instance) {
     if (offset < VIRT_MEMORY) {
         Memory& memory = instance.getGlobalState().getMemory();
         if (!memory.store(offset, value))
-            return trap(instance, "i32.store out of bounds memory address", addr_);
+            return trap(instance, "i32.store out of bounds memory address",
+                        addr_);
     } else {
-        Kernel& kernel = instance.is<Kernel>() ? instance.as<Kernel>() : instance.as<Process>().getKernel();
+        Kernel& kernel = instance.is<Kernel>()
+                             ? instance.as<Kernel>()
+                             : instance.as<Process>().getKernel();
         MemoryManagementUnit& mmu = kernel.getMMU();
         if (!mmu.store(offset, value)) {
             // repeat the operation after handling the page fault
@@ -2506,16 +2522,19 @@ Continuation I64Store::action(Instance& instance) {
     if (offset < VIRT_MEMORY) {
         Memory& memory = instance.getGlobalState().getMemory();
         if (!memory.store(offset, value))
-            return trap(instance, "i64.store out of bounds memory address", offset);
+            return trap(instance, "i64.store out of bounds memory address",
+                        offset);
     } else {
-        Kernel& kernel = instance.is<Kernel>() ? instance.as<Kernel>() : instance.as<Process>().getKernel();
+        Kernel& kernel = instance.is<Kernel>()
+                             ? instance.as<Kernel>()
+                             : instance.as<Process>().getKernel();
         MemoryManagementUnit& mmu = kernel.getMMU();
         if (!mmu.store(offset, value)) {
             // repeat the operation after handling the page fault
             context.pushI32(base);
             context.pushI64(value);
             context.getEpilogues().push(shared_from_this());
-            
+
             // trigger page fault handling
             return mmu.fault(instance, offset, true);
         }
@@ -2581,16 +2600,19 @@ Continuation I32Store8::action(Instance& instance) {
     if (offset < VIRT_MEMORY) {
         Memory& memory = instance.getGlobalState().getMemory();
         if (!memory.store(offset, static_cast<uint8_t>(value & 0xFF)))
-            return trap(instance, "i32.store8 out of bounds memory address", offset);
+            return trap(instance, "i32.store8 out of bounds memory address",
+                        offset);
     } else {
-        Kernel& kernel = instance.is<Kernel>() ? instance.as<Kernel>() : instance.as<Process>().getKernel();
+        Kernel& kernel = instance.is<Kernel>()
+                             ? instance.as<Kernel>()
+                             : instance.as<Process>().getKernel();
         MemoryManagementUnit& mmu = kernel.getMMU();
         if (!mmu.store(offset, static_cast<uint8_t>(value & 0xFF))) {
             // repeat the operation after handling the page fault
             context.pushI32(base);
             context.pushI32(value);
             context.getEpilogues().push(shared_from_this());
-            
+
             // trigger page fault handling
             return mmu.fault(instance, offset, true);
         }
@@ -2616,16 +2638,19 @@ Continuation I32Store16::action(Instance& instance) {
     if (offset < VIRT_MEMORY) {
         Memory& memory = instance.getGlobalState().getMemory();
         if (!memory.store(offset, static_cast<uint16_t>(value & 0xFFFF)))
-            return trap(instance, "i32.store16 out of bounds memory address", offset);
+            return trap(instance, "i32.store16 out of bounds memory address",
+                        offset);
     } else {
-        Kernel& kernel = instance.is<Kernel>() ? instance.as<Kernel>() : instance.as<Process>().getKernel();
+        Kernel& kernel = instance.is<Kernel>()
+                             ? instance.as<Kernel>()
+                             : instance.as<Process>().getKernel();
         MemoryManagementUnit& mmu = kernel.getMMU();
         if (!mmu.store(offset, static_cast<int16_t>(value & 0xFFFF))) {
             // repeat the operation after handling the page fault
             context.pushI32(base);
             context.pushI32(value);
             context.getEpilogues().push(shared_from_this());
-            
+
             // trigger page fault handling
             return mmu.fault(instance, offset, true);
         }
@@ -2650,7 +2675,8 @@ Continuation I64Store8::action(Instance& instance) {
 
     Memory& memory = instance.getGlobalState().getMemory();
     if (!memory.store(offset, static_cast<uint8_t>(val & 0xFF)))
-        return trap(instance, "i64.store8 out of bounds memory address", offset);
+        return trap(instance, "i64.store8 out of bounds memory address",
+                    offset);
 
     TRACE_VERBOSE("i64.store8 align={} offset={}: (base={}, val={}) -> ()",
                   align_, offset_, base, val & 0xFF);
@@ -2671,7 +2697,8 @@ Continuation I64Store16::action(Instance& instance) {
 
     Memory& memory = instance.getGlobalState().getMemory();
     if (!memory.store(offset, static_cast<uint16_t>(value & 0xFFFF)))
-        return trap(instance, "i64.store16 out of bounds memory address", offset);
+        return trap(instance, "i64.store16 out of bounds memory address",
+                    offset);
 
     TRACE_VERBOSE("i64.store16 align={} offset={}: (base={}, val={}) -> ()",
                   align_, offset_, base, val & 0xFFFF);
@@ -2692,7 +2719,8 @@ Continuation I64Store32::action(Instance& instance) {
 
     Memory& memory = instance.getGlobalState().getMemory();
     if (!memory.store(offset, static_cast<uint32_t>(value & 0xFFFFFFFF)))
-        return trap(instance, "i64.store32 out of bounds memory address", offset);
+        return trap(instance, "i64.store32 out of bounds memory address",
+                    offset);
 
     TRACE_VERBOSE("i64.store32 align={} offset={}: (base={}, val={}) -> ()",
                   align_, offset_, base, val & 0xFFFFFFFF);
@@ -2749,7 +2777,7 @@ Continuation MemoryCopy::action(Instance& instance) {
     uint32_t count = static_cast<uint32_t>(context.pop().i32);
     uint32_t src_offset = static_cast<uint32_t>(context.pop().i32);
     uint32_t dst_offset = static_cast<uint32_t>(context.pop().i32);
-    
+
     std::vector<uint8_t> buffer(count);
 
     if (src_offset < VIRT_MEMORY) {
@@ -2758,7 +2786,9 @@ Continuation MemoryCopy::action(Instance& instance) {
             return trap(instance, "memory.copy out of bounds memory address",
                         addr_);
     } else {
-        Kernel& kernel = instance.is<Kernel>() ? instance.as<Kernel>() : instance.as<Process>().getKernel();
+        Kernel& kernel = instance.is<Kernel>()
+                             ? instance.as<Kernel>()
+                             : instance.as<Process>().getKernel();
         MemoryManagementUnit& mmu = kernel.getMMU();
         if (!mmu.load(src_offset, buffer)) {
             // repeat the operation after handling the page fault
@@ -2766,7 +2796,7 @@ Continuation MemoryCopy::action(Instance& instance) {
             context.pushI32(src_offset);
             context.pushI32(count);
             context.getEpilogues().push(shared_from_this());
-            
+
             // trigger page fault handling
             return mmu.fault(instance, src_offset, false);
         }
@@ -2778,7 +2808,9 @@ Continuation MemoryCopy::action(Instance& instance) {
             return trap(instance, "memory.copy out of bounds memory address",
                         addr_);
     } else {
-        Kernel& kernel = instance.is<Kernel>() ? instance.as<Kernel>() : instance.as<Process>().getKernel();
+        Kernel& kernel = instance.is<Kernel>()
+                             ? instance.as<Kernel>()
+                             : instance.as<Process>().getKernel();
         MemoryManagementUnit& mmu = kernel.getMMU();
         if (!mmu.store(dst_offset, buffer)) {
             // repeat the operation after handling the page fault
@@ -2786,7 +2818,7 @@ Continuation MemoryCopy::action(Instance& instance) {
             context.pushI32(src_offset);
             context.pushI32(count);
             context.getEpilogues().push(shared_from_this());
-            
+
             // trigger page fault handling
             return mmu.fault(instance, dst_offset, true);
         }
@@ -2805,19 +2837,24 @@ Continuation MemoryFill::action(Instance& instance) {
 
     if (dst_offset < VIRT_MEMORY && dst_offset + count > VIRT_MEMORY) {
         return trap(instance,
-                    fmt::format(
-                        "memory.fill crosses into invalid memory region: dst=0x{:x} count={}",
-                        dst_offset, count),
+                    fmt::format("memory.fill crosses into invalid memory "
+                                "region: dst=0x{:x} count={}",
+                                dst_offset, count),
                     addr_);
     }
 
     if (dst_offset < VIRT_MEMORY) {
         Memory& memory = instance.getGlobalState().getMemory();
         if (!memory.fill(dst_offset, value, count))
-            return trap(instance, fmt::format("memory.fill out of bounds memory address: dst=0x{:x} count={}", dst_offset, count),
+            return trap(instance,
+                        fmt::format("memory.fill out of bounds memory address: "
+                                    "dst=0x{:x} count={}",
+                                    dst_offset, count),
                         addr_);
     } else {
-        Kernel& kernel = instance.is<Kernel>() ? instance.as<Kernel>() : instance.as<Process>().getKernel();
+        Kernel& kernel = instance.is<Kernel>()
+                             ? instance.as<Kernel>()
+                             : instance.as<Process>().getKernel();
         MemoryManagementUnit& mmu = kernel.getMMU();
         if (!mmu.fill(dst_offset, value, count)) {
             // repeat the operation after handling the page fault
@@ -2825,7 +2862,7 @@ Continuation MemoryFill::action(Instance& instance) {
             context.pushI32(value);
             context.pushI32(count);
             context.getEpilogues().push(shared_from_this());
-            
+
             // trigger page fault handling
             return mmu.fault(instance, dst_offset, true);
         }
@@ -3042,7 +3079,7 @@ Continuation AtomicStore8::action(Instance& instance) {
     if (!memory.ptr(offset, &value_ptr))
         return trap(instance,
                     "memory.atomic.store8 out of bounds memory address", addr_);
-;
+    ;
     __atomic_store_n(value_ptr, value, __ATOMIC_SEQ_CST);
 
     TRACE_VERBOSE("memory.atomic.store8 {} {}: ({}, {}) -> ()", align_, offset_,
@@ -3072,8 +3109,8 @@ Continuation AtomicAdd::action(Instance& instance) {
         return trap(instance, "i32.atomic.rmw.add out of bounds memory address",
                     addr_);
 
-    uint32_t old =
-        __atomic_fetch_add(value_ptr, static_cast<uint32_t>(value), __ATOMIC_SEQ_CST);
+    uint32_t old = __atomic_fetch_add(value_ptr, static_cast<uint32_t>(value),
+                                      __ATOMIC_SEQ_CST);
 
     context.pushI32(static_cast<int32_t>(old));
 

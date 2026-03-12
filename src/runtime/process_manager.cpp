@@ -7,10 +7,13 @@ namespace runtime {
 
 using hw::mem::VIRT_MEMORY;
 
-Errno ProcessManager::createProcess(Instance& instance, std::span<const char>& program_bytes, uint32_t& pid) {
+Errno ProcessManager::createProcess(Instance& instance,
+                                    std::span<const char>& program_bytes,
+                                    uint32_t& pid) {
     pid = allocateProcessId();
 
-    Expected<std::shared_ptr<Process>> process_exp = Process::create(program_bytes, instance, pid);
+    Expected<std::shared_ptr<Process>> process_exp =
+        Process::create(program_bytes, instance, pid);
     if (!process_exp) {
         fmt::println("error: {}", process_exp.error().toString());
         freeProcessId(pid);
@@ -22,7 +25,8 @@ Errno ProcessManager::createProcess(Instance& instance, std::span<const char>& p
     return Errno::SUCCESS;
 }
 
-Errno ProcessManager::runProcess(uint32_t pid, Instance& instance, uint32_t execve_stack) {
+Errno ProcessManager::runProcess(uint32_t pid, Instance& instance,
+                                 uint32_t execve_stack) {
     if (pid >= processes_.size())
         return Errno::INVALID_ARGUMENT;
 
@@ -30,7 +34,7 @@ Errno ProcessManager::runProcess(uint32_t pid, Instance& instance, uint32_t exec
     if (!proc)
         return Errno::INVALID_ARGUMENT;
 
-    ContextManager& ctxt_manager = ContextManager::instance();    
+    ContextManager& ctxt_manager = ContextManager::instance();
     Context& ctxt = ctxt_manager.createEmpty();
 
     ctxt.getEpilogues().push(nullptr);
@@ -67,10 +71,11 @@ Errno ProcessManager::cloneProcess(uint32_t pid, uint32_t& clone_pid) {
     return result;
 }
 
-Errno ProcessManager::resumeProcess(uint32_t pid, Kernel& kernel, int32_t retval) {
+Errno ProcessManager::resumeProcess(uint32_t pid, Kernel& kernel,
+                                    int32_t retval) {
     if (pid >= processes_.size())
         return Errno::INVALID_ARGUMENT;
-    
+
     std::shared_ptr<Process>& proc = processes_[pid];
     if (!proc)
         return Errno::INVALID_ARGUMENT;
@@ -89,11 +94,10 @@ Errno ProcessManager::resumeProcess(uint32_t pid, Kernel& kernel, int32_t retval
     return Errno::SUCCESS;
 }
 
-Instance& ProcessManager::getProcess(uint32_t pid) {
-    return *processes_[pid];
-}
+Instance& ProcessManager::getProcess(uint32_t pid) { return *processes_[pid]; }
 
-Errno ProcessManager::readMemory(uint32_t pid, uint32_t kbuffer_offset, uint32_t pbuffer_offset, uint32_t count) {
+Errno ProcessManager::readMemory(uint32_t pid, uint32_t kbuffer_offset,
+                                 uint32_t pbuffer_offset, uint32_t count) {
     std::shared_lock lock(mutex_);
 
     if (pid >= processes_.size()) {
@@ -114,12 +118,15 @@ Errno ProcessManager::readMemory(uint32_t pid, uint32_t kbuffer_offset, uint32_t
 
         if (offset < VIRT_MEMORY) {
             if (!proc_memory.load(offset, tbuffer[i])) {
-                fmt::println("Invalid process memory access: addr=0x{:08X}", offset);
+                fmt::println("Invalid process memory access: addr=0x{:08X}",
+                             offset);
                 return Errno::BAD_ADDRESS;
             }
         } else {
             if (!mmu.load(offset, tbuffer[i])) {
-                fmt::println("Invalid process memory access: addr=0x{:08X} count={}", offset, count);
+                fmt::println(
+                    "Invalid process memory access: addr=0x{:08X} count={}",
+                    offset, count);
                 return Errno::BAD_ADDRESS;
             }
         }
@@ -129,7 +136,9 @@ Errno ProcessManager::readMemory(uint32_t pid, uint32_t kbuffer_offset, uint32_t
     return Errno::SUCCESS;
 }
 
-Errno ProcessManager::readMemoryCString(uint32_t pid, uint32_t kbuffer_offset, uint32_t pbuffer_offset, uint32_t maxlen) {
+Errno ProcessManager::readMemoryCString(uint32_t pid, uint32_t kbuffer_offset,
+                                        uint32_t pbuffer_offset,
+                                        uint32_t maxlen) {
     std::shared_lock lock(mutex_);
 
     if (pid >= processes_.size())
@@ -179,7 +188,8 @@ Errno ProcessManager::readMemoryCString(uint32_t pid, uint32_t kbuffer_offset, u
     return Errno::SUCCESS;
 }
 
-Errno ProcessManager::writeMemory(uint32_t pid, uint32_t kbuffer_offset, uint32_t pbuffer_offset, uint32_t count) {
+Errno ProcessManager::writeMemory(uint32_t pid, uint32_t kbuffer_offset,
+                                  uint32_t pbuffer_offset, uint32_t count) {
     std::shared_lock lock(mutex_);
 
     if (pid >= processes_.size()) {

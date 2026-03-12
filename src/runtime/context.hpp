@@ -16,10 +16,10 @@ public:
     size_t size() const { return top; }
 
     Value& peek() { return data_[top - 1]; }
-    
+
     inline Value pop() { return data_[--top]; }
-    
-    template<size_t num_values>
+
+    template <size_t num_values>
     inline void pop(std::array<Value, num_values>& out) {
         top -= num_values;
         std::memcpy(out.data(), &data_[top], sizeof(Value) * num_values);
@@ -27,7 +27,7 @@ public:
 
     inline void push(Value value) { data_[top++] = value; }
 
-    template<size_t num_values>
+    template <size_t num_values>
     inline void push(const std::array<Value, num_values>& in) {
         std::memcpy(&data_[top], in.data(), sizeof(Value) * num_values);
         top += num_values;
@@ -70,9 +70,7 @@ public:
         stack_[frame_pointer_ + idx] = value;
     }
 
-    size_t getFramePointersSize() const {
-        return frame_pointers_.size();
-    }
+    size_t getFramePointersSize() const { return frame_pointers_.size(); }
 
 private:
     size_t stack_pointer_ = 0;
@@ -104,12 +102,11 @@ public:
     enum class RunState { rdy, running, waiting, in_syscall, suspended };
 
     Context(size_t id) : id_(id) {}
-    Context(const Context& other, size_t id) : 
-        id_(id),
-        locals_(std::make_unique<Locals>(*other.locals_)),
-        stack_(std::make_unique<Stack>(*other.stack_)),
-        epilogues_(std::make_unique<Epilogues>(*other.epilogues_)),
-        run_state_(other.run_state_) {}
+    Context(const Context& other, size_t id)
+        : id_(id), locals_(std::make_unique<Locals>(*other.locals_)),
+          stack_(std::make_unique<Stack>(*other.stack_)),
+          epilogues_(std::make_unique<Epilogues>(*other.epilogues_)),
+          run_state_(other.run_state_) {}
 
     inline size_t getId() const { return id_; }
 

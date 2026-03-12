@@ -18,12 +18,13 @@ Context& ContextManager::createEmpty() {
     return ctxt;
 }
 
-Errno ContextManager::createTrampoline(Kernel& kernel, uint32_t entry_func_idx, int32_t param1, uint32_t& out_id) {
+Errno ContextManager::createTrampoline(Kernel& kernel, uint32_t entry_func_idx,
+                                       int32_t param1, uint32_t& out_id) {
     static const size_t entry_signature =
         std::hash<FunctionType>()(FunctionType::ConsumerI32());
-    static const std::shared_ptr<CallIndirect> entry
-        = std::make_shared<CallIndirect>(entry_signature);
-    
+    static const std::shared_ptr<CallIndirect> entry =
+        std::make_shared<CallIndirect>(entry_signature);
+
     if (!kernel.functionExists(entry_func_idx, entry_signature)) {
         fmt::println("oof");
         return Errno::INVALID_ARGUMENT;
@@ -31,7 +32,7 @@ Errno ContextManager::createTrampoline(Kernel& kernel, uint32_t entry_func_idx, 
 
     Context& ctxt = createEmpty();
     out_id = ctxt.getId();
-    
+
     ctxt.pushI32(param1);
     ctxt.pushI32(entry_func_idx);
 

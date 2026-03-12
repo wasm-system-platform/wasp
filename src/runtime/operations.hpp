@@ -52,11 +52,6 @@ public:
     virtual Expected<Continuation> eval(Context& context) const {
         return Unexpected(ERROR("evaluate called on non constant expression"));
     }
-    virtual Value produce(Instance& instance) { assert(false); }
-    virtual void consume(Instance& instance, Value value) { assert(false); }
-
-    virtual bool isProducer() const { return false; }
-    virtual bool isConsumer() const { return false; }
 
     template <class Derived> const Derived& as() const {
         return reinterpret_cast<const Derived&>(*this);
@@ -68,19 +63,14 @@ public:
         return type() == Derived::static_type();
     }
 
-    virtual TypeId type() const {
-        return nullptr;
-    }
+    virtual TypeId type() const { return nullptr; }
 
-    virtual std::string getName() {
-        return "?";
-    }
+    virtual std::string getName() { return "?"; }
 
     size_t getAddress() { return addr_; }
     std::string getFormattedAddress(Instance& instance) const;
 
 protected:
-
     Operation next_;
     size_t addr_ = UINT32_MAX;
 
@@ -90,8 +80,7 @@ protected:
     Continuation trap(Instance& instance, std::string msg, size_t addr) const;
 };
 
-template<typename Derived>
-class TaggedOperation : public OperationBase {
+template <typename Derived> class TaggedOperation : public OperationBase {
 public:
     using OperationBase::OperationBase;
 
@@ -100,13 +89,12 @@ public:
         return &id;
     }
 
-    TypeId type() const override {
-        return static_type();
-    }
+    TypeId type() const override { return static_type(); }
 
     std::string getName() override {
         int status = 0;
-        char* demangled = abi::__cxa_demangle(typeid(Derived).name(), nullptr, nullptr, &status);
+        char* demangled = abi::__cxa_demangle(typeid(Derived).name(), nullptr,
+                                              nullptr, &status);
         std::string name = (status == 0) ? demangled : typeid(Derived).name();
         std::free(demangled);
 
@@ -327,8 +315,7 @@ private:
 
     static Value impl(LocalGet& local_get, Instance& instance);
 
-    template<size_t>
-    friend class GenericProducer_LocalGet;
+    template <size_t> friend class GenericProducer_LocalGet;
 
     friend class LocalGet_LocalGet;
     friend class LocalSet_LocalGet;
@@ -391,8 +378,6 @@ public:
 
     Continuation action(Instance& instance) override;
     Expected<Continuation> eval(Context& context) const override;
-
-    bool isProducer() const override { return true; }
 
 private:
     int32_t i_;
@@ -482,7 +467,8 @@ public:
     Continuation action(Instance& instance) override;
 };
 
-class I32GreaterEqualUnsigned : public TaggedOperation<I32GreaterEqualUnsigned> {
+class I32GreaterEqualUnsigned
+    : public TaggedOperation<I32GreaterEqualUnsigned> {
 public:
     Continuation action(Instance& instance) override;
 };
@@ -537,7 +523,8 @@ public:
     Continuation action(Instance& instance) override;
 };
 
-class I64GreaterEqualUnsigned : public TaggedOperation<I64GreaterEqualUnsigned> {
+class I64GreaterEqualUnsigned
+    : public TaggedOperation<I64GreaterEqualUnsigned> {
 public:
     Continuation action(Instance& instance) override;
 };
@@ -623,9 +610,6 @@ public:
         : TaggedOperation<I32Add>(i32_add.getAddress()) {}
 
     Continuation action(Instance& instance) override;
-    void consume(Instance& instance, Value right) override;
-
-    bool isConsumer() const override { return true; }
 };
 
 class I32Sub : public TaggedOperation<I32Sub> {
@@ -634,9 +618,6 @@ public:
         : TaggedOperation<I32Sub>(i32_sub.getAddress()) {}
 
     Continuation action(Instance& instance) override;
-    void consume(Instance& instance, Value right) override;
-
-    bool isConsumer() const override { return true; }
 };
 
 class I32Mul : public TaggedOperation<I32Mul> {
@@ -1175,7 +1156,8 @@ public:
 
 class MemoryFill : public OperationBase {
 public:
-    MemoryFill(const grammar::MemoryFill& mem_fill) : OperationBase(mem_fill.getAddress()) {}
+    MemoryFill(const grammar::MemoryFill& mem_fill)
+        : OperationBase(mem_fill.getAddress()) {}
 
     Continuation action(Instance& instance) override;
 };

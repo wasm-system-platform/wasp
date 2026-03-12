@@ -63,8 +63,7 @@ protected:
     static Expected<std::shared_ptr<Exports>>
     createExports(const grammar::Module& module);
 
-    Instance(GlobalState&& global_state,
-             std::shared_ptr<Exports>& exports,
+    Instance(GlobalState&& global_state, std::shared_ptr<Exports>& exports,
              const grammar::Module& module);
 
 private:
@@ -75,18 +74,15 @@ private:
 
     void invoke(size_t func_idx);
     void invokeIndirect(uint32_t element_idx, size_t signature);
-    
+
     virtual void run(OperationBase& entry);
 
-    virtual TypeId type() const {
-        return nullptr;
-    }
+    virtual TypeId type() const { return nullptr; }
 
     friend class Process;
 };
 
-template<typename Derived>
-class TaggedInstance : public Instance {
+template <typename Derived> class TaggedInstance : public Instance {
 public:
     using Instance::Instance;
 
@@ -95,9 +91,7 @@ public:
         return &id;
     }
 
-    TypeId type() const override {
-        return static_type();
-    }
+    TypeId type() const override { return static_type(); }
 };
 
 } // namespace runtime

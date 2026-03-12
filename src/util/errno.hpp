@@ -2,7 +2,6 @@
 
 #include <cstdint>
 
-
 enum class Errno : int32_t {
     SUCCESS = 0,
     INVALID_ARGUMENT = 1,

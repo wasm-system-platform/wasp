@@ -1,7 +1,7 @@
 #pragma once
 
-#include <span>
 #include <mutex>
+#include <span>
 
 #include "devices/device.hpp"
 #include "runtime/interrupts.hpp"
@@ -15,7 +15,8 @@ public:
 
     ~DeviceManager();
 
-    void registerController(const std::shared_ptr<InterruptController>& controller) {
+    void
+    registerController(const std::shared_ptr<InterruptController>& controller) {
         const std::lock_guard<std::mutex> guard(guard_);
         controllers_.emplace_back(controller);
     }
@@ -40,4 +41,4 @@ private:
     void tick(size_t counter);
 };
 
-}
+} // namespace runtime

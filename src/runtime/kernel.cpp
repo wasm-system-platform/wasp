@@ -1,7 +1,7 @@
 #include "runtime/kernel.hpp"
+#include "devices/keyboard.hpp"
 #include "hw/wasm_disk.hpp"
 #include "runtime/context_manager.hpp"
-#include "devices/keyboard.hpp"
 #include <iostream>
 
 namespace runtime {
@@ -12,7 +12,8 @@ Kernel::create(const std::string& kernel_path, const std::string& rootfs_path) {
     kernel_fstream.open("kernel.wasm", std::ios::in | std::ios::binary);
 
     // parse module
-    Expected<grammar::Module> module_exp = grammar::Module::parse(kernel_fstream);
+    Expected<grammar::Module> module_exp =
+        grammar::Module::parse(kernel_fstream);
     if (!module_exp)
         return Unexpected(PROPAGATE(module_exp));
 
@@ -22,21 +23,25 @@ Kernel::create(const std::string& kernel_path, const std::string& rootfs_path) {
         return Unexpected(PROPAGATE(imports_exp));
 
     // create global state (functions, memories, debug info, ...)
-    Expected<GlobalState> global_state_exp = GlobalState::create(*module_exp, *imports_exp);
+    Expected<GlobalState> global_state_exp =
+        GlobalState::create(*module_exp, *imports_exp);
     if (!global_state_exp)
         return Unexpected(PROPAGATE(global_state_exp));
 
     // create exports (entry points)
-    Expected<std::shared_ptr<Exports>> exports_exp = Instance::createExports(*module_exp);
+    Expected<std::shared_ptr<Exports>> exports_exp =
+        Instance::createExports(*module_exp);
     if (!exports_exp)
         return Unexpected(PROPAGATE(exports_exp));
 
     class Builder : public Kernel {
     public:
-        Builder(GlobalState&& global_state, std::shared_ptr<Exports>& exports, const grammar::Module& module)
+        Builder(GlobalState&& global_state, std::shared_ptr<Exports>& exports,
+                const grammar::Module& module)
             : Kernel(std::move(global_state), exports, module) {}
     };
-    std::shared_ptr<Kernel> kernel = std::make_shared<Builder>(std::move(*global_state_exp), *exports_exp, *module_exp);
+    std::shared_ptr<Kernel> kernel = std::make_shared<Builder>(
+        std::move(*global_state_exp), *exports_exp, *module_exp);
 
     // check if all handlers are there (interrupt, syscall, page fault)
     Expected<void> result = kernel->validateExports();
@@ -76,7 +81,7 @@ bool Kernel::functionExists(uint32_t idx, size_t signature) {
 
 Expected<Imports> Kernel::createImports(const std::string& rootfs_path) {
     // Interrupts
-    std::function<int32_t(Instance& instance)> interrupts_enable_func =
+    std::function<int32_t(Instance & instance)> interrupts_enable_func =
         [](Instance& instance) -> int32_t {
         return instance.as<Kernel>().controller_->enableInterrupts();
     };
@@ -99,15 +104,14 @@ Expected<Imports> Kernel::createImports(const std::string& rootfs_path) {
         Function::createExternal(interrupts_disable_func);
     Function interrupts_enabled =
         Function::createExternal(interrupts_enabled_func);
-    Function interrupt_idle =
-        Function::createExternal(interrupt_idle_func);
+    Function interrupt_idle = Function::createExternal(interrupt_idle_func);
 
     // Terminal
     std::function<void(Instance&, int32_t, int32_t)> terminal_write_func =
         [](Instance& instance, uint32_t buffer_offset, uint32_t len) -> void {
         Memory& memory = instance.getGlobalState().getMemory();
         std::vector<uint8_t> buffer(len);
-        
+
         if (memory.load(buffer_offset, buffer)) {
             std::string_view msg(reinterpret_cast<char*>(buffer.data()), len);
             std::cout << msg << std::flush;
@@ -119,10 +123,11 @@ Expected<Imports> Kernel::createImports(const std::string& rootfs_path) {
     // Console
     std::function<int32_t(Instance&, int32_t, int32_t, int32_t)>
         console_out_func = [](Instance& instance, uint32_t buffer_offset,
-                              uint32_t len, uint32_t nwritten_offset) -> int32_t {
+                              uint32_t len,
+                              uint32_t nwritten_offset) -> int32_t {
         Memory& memory = instance.getGlobalState().getMemory();
         std::vector<uint8_t> buffer(len);
-        
+
         if (!memory.load(buffer_offset, buffer) ||
             !memory.store(nwritten_offset, len)) {
             return static_cast<int32_t>(Errno::BAD_ADDRESS);
@@ -141,7 +146,7 @@ Expected<Imports> Kernel::createImports(const std::string& rootfs_path) {
            int32_t level) -> void {
         Memory& memory = instance.getGlobalState().getMemory();
         std::vector<uint8_t> buffer(len);
-        
+
         if (memory.load(buffer_offset, buffer)) {
             std::string_view msg(reinterpret_cast<char*>(buffer.data()), len);
             std::cerr << msg << std::flush;
@@ -155,9 +160,10 @@ Expected<Imports> Kernel::createImports(const std::string& rootfs_path) {
         [](Instance& instance) -> uint32_t {
         return instance.getActiveContext().getId();
     };
-    std::function<int32_t(Instance&, int32_t, int32_t, int32_t)> context_create_func =
-        [](Instance& instance, uint32_t entry_func_idx,
-           int32_t param1, uint32_t cid_out_offset) -> int32_t {
+    std::function<int32_t(Instance&, int32_t, int32_t, int32_t)>
+        context_create_func = [](Instance& instance, uint32_t entry_func_idx,
+                                 int32_t param1,
+                                 uint32_t cid_out_offset) -> int32_t {
         Memory& memory = instance.getGlobalState().getMemory();
         if (!memory.contains(cid_out_offset, sizeof(int32_t))) {
             return static_cast<int32_t>(Errno::BAD_ADDRESS);
@@ -166,8 +172,9 @@ Expected<Imports> Kernel::createImports(const std::string& rootfs_path) {
         uint32_t cid;
 
         ContextManager& mgr = ContextManager::instance();
-        auto result = mgr.createTrampoline(instance.as<Kernel>(), entry_func_idx, param1, cid);
-        
+        auto result = mgr.createTrampoline(instance.as<Kernel>(),
+                                           entry_func_idx, param1, cid);
+
         if (result != Errno::SUCCESS)
             return static_cast<int32_t>(result);
 
@@ -193,7 +200,8 @@ Expected<Imports> Kernel::createImports(const std::string& rootfs_path) {
         std::make_shared<WasmDisk>(std::move(*disk_exp));
 
     std::function<int32_t(Instance&, int32_t, int32_t)> disk_read_func =
-        [disk](Instance& instance, uint32_t buffer_offset, uint32_t count) -> int32_t {
+        [disk](Instance& instance, uint32_t buffer_offset,
+               uint32_t count) -> int32_t {
         Memory& memory = instance.getGlobalState().getMemory();
         if (!memory.contains(buffer_offset, count)) {
             return static_cast<int32_t>(Errno::BAD_ADDRESS);
@@ -233,7 +241,8 @@ Expected<Imports> Kernel::createImports(const std::string& rootfs_path) {
     Function disk_seekg = Function::createExternal(disk_seekg_func);
 
     std::function<int32_t(Instance&, int32_t, int32_t)> disk_write_func =
-        [disk](Instance& instance, uint32_t buffer_offset, uint32_t count) -> int32_t {
+        [disk](Instance& instance, uint32_t buffer_offset,
+               uint32_t count) -> int32_t {
         Memory& memory = instance.getGlobalState().getMemory();
         if (!memory.contains(buffer_offset, count)) {
             return static_cast<int32_t>(Errno::BAD_ADDRESS);
@@ -273,9 +282,10 @@ Expected<Imports> Kernel::createImports(const std::string& rootfs_path) {
     Function disk_seekp = Function::createExternal(disk_seekg_func);
 
     // Process
-    std::function<int32_t(Instance&, int32_t, int32_t, int32_t)> process_load_func =
-        [](Instance& instance, uint32_t program_offset,
-           uint32_t program_size, uint32_t pid_offset) -> int32_t {
+    std::function<int32_t(Instance&, int32_t, int32_t, int32_t)>
+        process_load_func = [](Instance& instance, uint32_t program_offset,
+                               uint32_t program_size,
+                               uint32_t pid_offset) -> int32_t {
         Memory& memory = instance.getGlobalState().getMemory();
         if (!memory.contains(program_offset, program_size)) {
             return static_cast<int32_t>(Errno::BAD_ADDRESS);
@@ -291,14 +301,16 @@ Expected<Imports> Kernel::createImports(const std::string& rootfs_path) {
         }
 
         ProcessManager& proc_manager = *instance.as<Kernel>().proccess_manager_;
-        return static_cast<int32_t>(proc_manager.createProcess(instance, program_bytes, *pid_ptr));
+        return static_cast<int32_t>(
+            proc_manager.createProcess(instance, program_bytes, *pid_ptr));
     };
     std::function<void(Instance&, int32_t)> process_unload_func =
         [](Instance& instance, uint32_t pid) -> void {};
     std::function<int32_t(Instance&, int32_t, int32_t)> process_run_func =
         [](Instance& instance, uint32_t pid, uint32_t execve_stack) -> int32_t {
         ProcessManager& proc_mgr = *instance.as<Kernel>().proccess_manager_;
-        return static_cast<int32_t>(proc_mgr.runProcess(pid, instance, execve_stack));
+        return static_cast<int32_t>(
+            proc_mgr.runProcess(pid, instance, execve_stack));
     };
     std::function<void(Instance&, int32_t)> process_terminate_func =
         [](Instance& instance, uint32_t pid) -> void {
@@ -307,9 +319,10 @@ Expected<Imports> Kernel::createImports(const std::string& rootfs_path) {
         proc.getActiveContext().setRunState(Context::RunState::rdy);
     };
     std::function<int32_t(Instance&, int32_t, int32_t)> process_clone_func =
-        [](Instance& instance, uint32_t pid, uint32_t child_pid_offset) -> int32_t {
+        [](Instance& instance, uint32_t pid,
+           uint32_t child_pid_offset) -> int32_t {
         uint32_t* child_pid_ptr;
-        
+
         Memory& memory = instance.getGlobalState().getMemory();
         if (!memory.ptr(child_pid_offset, &child_pid_ptr)) {
             return static_cast<int32_t>(Errno::BAD_ADDRESS);
@@ -322,22 +335,29 @@ Expected<Imports> Kernel::createImports(const std::string& rootfs_path) {
         [](Instance& instance, uint32_t pid, int32_t retval) -> int32_t {
         Kernel& kernel = instance.as<Kernel>();
         ProcessManager& proc_mgr = *kernel.proccess_manager_;
-        return static_cast<int32_t>(proc_mgr.resumeProcess(pid, kernel, retval));
+        return static_cast<int32_t>(
+            proc_mgr.resumeProcess(pid, kernel, retval));
     };
     std::function<int32_t(Instance&, int32_t, int32_t, int32_t, int32_t)>
-        process_read_memory_func = [](Instance& instance, int pid, uint32_t kbuf, uint32_t pbuf, uint32_t count) -> int32_t {
+        process_read_memory_func = [](Instance& instance, int pid,
+                                      uint32_t kbuf, uint32_t pbuf,
+                                      uint32_t count) -> int32_t {
         ProcessManager& proc_mgr = *instance.as<Kernel>().proccess_manager_;
         Errno result = proc_mgr.readMemory(pid, kbuf, pbuf, count);
         return static_cast<int32_t>(result);
     };
     std::function<int32_t(Instance&, int32_t, int32_t, int32_t, int32_t)>
-        process_read_memory_cstring_func = [](Instance& instance, int pid, uint32_t kbuf, uint32_t pbuf, uint32_t maxlen) -> int32_t {
+        process_read_memory_cstring_func = [](Instance& instance, int pid,
+                                              uint32_t kbuf, uint32_t pbuf,
+                                              uint32_t maxlen) -> int32_t {
         ProcessManager& proc_mgr = *instance.as<Kernel>().proccess_manager_;
         Errno result = proc_mgr.readMemoryCString(pid, kbuf, pbuf, maxlen);
         return static_cast<int32_t>(result);
     };
     std::function<int32_t(Instance&, int32_t, int32_t, int32_t, int32_t)>
-        process_write_memory_func = [](Instance& instance, int pid, uint32_t kbuf, uint32_t pbuf, uint32_t count) -> int32_t {
+        process_write_memory_func = [](Instance& instance, int pid,
+                                       uint32_t kbuf, uint32_t pbuf,
+                                       uint32_t count) -> int32_t {
         ProcessManager& proc_mgr = *instance.as<Kernel>().proccess_manager_;
         Errno result = proc_mgr.writeMemory(pid, kbuf, pbuf, count);
         return static_cast<int32_t>(result);
@@ -350,20 +370,23 @@ Expected<Imports> Kernel::createImports(const std::string& rootfs_path) {
         Function::createExternal(process_terminate_func);
     Function process_clone = Function::createExternal(process_clone_func);
     Function process_resume = Function::createExternal(process_resume_func);
-    Function process_read_memory = Function::createExternal(process_read_memory_func);
-    Function process_read_memory_cstring = Function::createExternal(process_read_memory_cstring_func);
-    Function process_write_memory = Function::createExternal(process_write_memory_func);
+    Function process_read_memory =
+        Function::createExternal(process_read_memory_func);
+    Function process_read_memory_cstring =
+        Function::createExternal(process_read_memory_cstring_func);
+    Function process_write_memory =
+        Function::createExternal(process_write_memory_func);
 
     // Devices
     std::function<int64_t(Instance&)> timer_get_time_func =
         [](Instance& instance) -> int64_t {
-        //return instance.getTimer().getTime();
+        // return instance.getTimer().getTime();
         return 0;
     };
 
     std::function<void(Instance&, int32_t)> timer_set_interval_func =
         [](Instance& instance, uint32_t timout) -> void {
-        //instance.getTimer().setInterval(timout);
+        // instance.getTimer().setInterval(timout);
     };
 
     Function timer_get_time = Function::createExternal(timer_get_time_func);
@@ -384,61 +407,71 @@ Expected<Imports> Kernel::createImports(const std::string& rootfs_path) {
             return static_cast<uint32_t>(Errno::BAD_ADDRESS);
         }
 
-        return static_cast<int32_t>(instance.as<Kernel>().mmu_->createTable(*ptable_idx_ptr));
+        return static_cast<int32_t>(
+            instance.as<Kernel>().mmu_->createTable(*ptable_idx_ptr));
     };
     std::function<int32_t(Instance&, int32_t)> mmu_destroy_table_func =
         [](Instance& instance, uint32_t ptable_idx) -> int32_t {
-        return static_cast<int32_t>(instance.as<Kernel>().mmu_->destroyTable(ptable_idx));
+        return static_cast<int32_t>(
+            instance.as<Kernel>().mmu_->destroyTable(ptable_idx));
     };
     std::function<int32_t(Instance&, int32_t)> mmu_switch_table_func =
         [](Instance& instance, int32_t table_idx) -> int32_t {
-        return static_cast<int32_t>(instance.as<Kernel>().mmu_->loadTable(table_idx));
+        return static_cast<int32_t>(
+            instance.as<Kernel>().mmu_->loadTable(table_idx));
     };
-    std::function<int32_t(Instance&, int32_t, int32_t, int32_t, int32_t)> mmu_map_page_func =
-        [](Instance& instance, int32_t ptable_idx, uint32_t virt_addr, uint32_t offset, int32_t prot) -> int32_t {
-        return static_cast<int32_t>(instance.as<Kernel>().mmu_->mapPage(ptable_idx, virt_addr, offset, prot));
+    std::function<int32_t(Instance&, int32_t, int32_t, int32_t, int32_t)>
+        mmu_map_page_func = [](Instance& instance, int32_t ptable_idx,
+                               uint32_t virt_addr, uint32_t offset,
+                               int32_t prot) -> int32_t {
+        return static_cast<int32_t>(instance.as<Kernel>().mmu_->mapPage(
+            ptable_idx, virt_addr, offset, prot));
     };
-    std::function<int32_t(Instance&, int32_t, int32_t, int32_t, int32_t)> mmu_unmap_page_func =
-        [](Instance& instance, int32_t table_idx, uint32_t virt_addr, uint32_t offset_offset, int32_t prot_offset) -> int32_t {
+    std::function<int32_t(Instance&, int32_t, int32_t, int32_t, int32_t)>
+        mmu_unmap_page_func = [](Instance& instance, int32_t table_idx,
+                                 uint32_t virt_addr, uint32_t offset_offset,
+                                 int32_t prot_offset) -> int32_t {
         uint32_t* offset_ptr;
         int32_t* prot_ptr;
-        
+
         Memory& memory = instance.getGlobalState().getMemory();
-        if (!memory.ptr(offset_offset, &offset_ptr) || !memory.ptr(prot_offset, &prot_ptr))
+        if (!memory.ptr(offset_offset, &offset_ptr) ||
+            !memory.ptr(prot_offset, &prot_ptr))
             return static_cast<int32_t>(Errno::BAD_ADDRESS);
 
-        return static_cast<int32_t>(instance.as<Kernel>().mmu_->unmapPage(table_idx, virt_addr, offset_ptr, prot_ptr));
+        return static_cast<int32_t>(instance.as<Kernel>().mmu_->unmapPage(
+            table_idx, virt_addr, offset_ptr, prot_ptr));
     };
-    std::function<int32_t(Instance&, int32_t, int32_t, int32_t, int32_t)> mmu_get_page_func =
-        [](Instance& instance, int32_t table_idx, uint32_t virt_addr, uint32_t offset_offset, int32_t prot_offset) -> int32_t {
+    std::function<int32_t(Instance&, int32_t, int32_t, int32_t, int32_t)>
+        mmu_get_page_func = [](Instance& instance, int32_t table_idx,
+                               uint32_t virt_addr, uint32_t offset_offset,
+                               int32_t prot_offset) -> int32_t {
         uint32_t* offset_ptr;
         int32_t* prot_ptr;
-        
+
         Memory& memory = instance.getGlobalState().getMemory();
-        if (!memory.ptr(offset_offset, &offset_ptr) || !memory.ptr(prot_offset, &prot_ptr))
+        if (!memory.ptr(offset_offset, &offset_ptr) ||
+            !memory.ptr(prot_offset, &prot_ptr))
             return static_cast<int32_t>(Errno::BAD_ADDRESS);
 
-        return static_cast<int32_t>(instance.as<Kernel>().mmu_->getPage(table_idx, virt_addr, offset_ptr, prot_ptr));
+        return static_cast<int32_t>(instance.as<Kernel>().mmu_->getPage(
+            table_idx, virt_addr, offset_ptr, prot_ptr));
     };
 
-    Function mmu_active_table =
-        Function::createExternal(mmu_active_table_func);
-    Function mmu_create_table =
-        Function::createExternal(mmu_create_table_func);
+    Function mmu_active_table = Function::createExternal(mmu_active_table_func);
+    Function mmu_create_table = Function::createExternal(mmu_create_table_func);
     Function mmu_destroy_table =
         Function::createExternal(mmu_destroy_table_func);
-    Function mmu_switch_table =
-        Function::createExternal(mmu_switch_table_func);
-    Function mmu_map_page =
-        Function::createExternal(mmu_map_page_func);
-    Function mmu_unmap_page =
-        Function::createExternal(mmu_unmap_page_func);
-    Function mmu_get_page =
-        Function::createExternal(mmu_get_page_func);
+    Function mmu_switch_table = Function::createExternal(mmu_switch_table_func);
+    Function mmu_map_page = Function::createExternal(mmu_map_page_func);
+    Function mmu_unmap_page = Function::createExternal(mmu_unmap_page_func);
+    Function mmu_get_page = Function::createExternal(mmu_get_page_func);
 
     // Device
-    std::function<int32_t(Instance&, int32_t, int32_t, int32_t, int32_t)> device_io_func =
-        [](Instance& instance, uint32_t port, int32_t cmd, uint32_t buffer_offset, uint32_t buffer_size) -> int32_t {
+    std::function<int32_t(Instance&, int32_t, int32_t, int32_t, int32_t)>
+        device_io_func = [](Instance& instance, uint32_t port, int32_t cmd,
+                            uint32_t buffer_offset,
+                            uint32_t buffer_size) -> int32_t {
         Memory& memory = instance.getGlobalState().getMemory();
         if (!memory.contains(buffer_offset, buffer_size))
             return static_cast<int32_t>(Errno::BAD_ADDRESS);
@@ -447,11 +480,11 @@ Expected<Imports> Kernel::createImports(const std::string& rootfs_path) {
         memory.ptr(buffer_offset, &buffer_ptr);
 
         std::span<uint8_t> buffer = std::span<uint8_t>(buffer_ptr, buffer_size);
-        return static_cast<int32_t>(DeviceManager::instance().io(port, cmd, buffer));
+        return static_cast<int32_t>(
+            DeviceManager::instance().io(port, cmd, buffer));
     };
 
-    Function device_io =
-        Function::createExternal(device_io_func);
+    Function device_io = Function::createExternal(device_io_func);
 
     return Imports{
         {"interrupt.enable", interrupts_enable},
@@ -540,7 +573,8 @@ Expected<void> Kernel::setupInterruptController() {
                               FunctionType::ConsumerI32().toString(),
                               interrupt_handler.func_type.toString())));
 
-    controller_ = std::make_unique<InterruptController>(interrupt_handler.func_idx);
+    controller_ =
+        std::make_unique<InterruptController>(interrupt_handler.func_idx);
     return {};
 }
 
@@ -560,7 +594,8 @@ Expected<void> Kernel::setupMMU() {
                               FunctionType::ConsumerI32().toString(),
                               page_fault_handler.func_type.toString())));
 
-    mmu_ = std::make_unique<MemoryManagementUnit>(getGlobalState().getMemory(), page_fault_handler.func_idx);
+    mmu_ = std::make_unique<MemoryManagementUnit>(getGlobalState().getMemory(),
+                                                  page_fault_handler.func_idx);
     return {};
 }
 
@@ -593,15 +628,17 @@ void Kernel::run(OperationBase& entry) {
 
         // check irq
         if (!continuation && controller_->getInterruptsEnabled())
-            continuation = controller_->next(active_instance_->getActiveContext());
+            continuation =
+                controller_->next(active_instance_->getActiveContext());
 
         // check for epilogues
         if (!continuation)
-            continuation = active_instance_->getActiveContext().getEpilogues().pop().get();
+            continuation =
+                active_instance_->getActiveContext().getEpilogues().pop().get();
     }
 
     // reset program
     active_instance_->getActiveContext().setRunState(Context::RunState::rdy);
 }
 
-}
+} // namespace runtime

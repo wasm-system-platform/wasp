@@ -13,7 +13,8 @@ class ContextManager {
 public:
     static ContextManager& instance();
 
-    Errno createTrampoline(Kernel& kernel, uint32_t entry_func_idx, int32_t param1, uint32_t& out_id);
+    Errno createTrampoline(Kernel& kernel, uint32_t entry_func_idx,
+                           int32_t param1, uint32_t& out_id);
     Errno destroyContext(uint32_t id);
     Errno cloneContext(uint32_t cid, uint32_t& clone_cid_out);
     Errno switchContext(Instance& instance, uint32_t next_id);

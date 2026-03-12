@@ -11,7 +11,8 @@ public:
 protected:
     class Epilogue : public OperationBase {
     protected:
-        Epilogue(Instance& suspended_instance) : suspended_instance_(suspended_instance) {}
+        Epilogue(Instance& suspended_instance)
+            : suspended_instance_(suspended_instance) {}
 
         Instance& suspended_instance_;
     };
@@ -28,14 +29,16 @@ class InterruptController;
 
 class Interrupt : public Handler {
 public:
-    Interrupt(InterruptController& controller, uint32_t interrupt_handler_idx) : Handler(interrupt_handler_idx), controller_(controller) {}
+    Interrupt(InterruptController& controller, uint32_t interrupt_handler_idx)
+        : Handler(interrupt_handler_idx), controller_(controller) {}
 
     Continuation action(Instance& instance) override;
 
 private:
     class Epilogue : public Handler::Epilogue {
     public:
-        Epilogue(Instance& suspended_instance, Interrupt& parent) : Handler::Epilogue(suspended_instance), parent_(parent) {}
+        Epilogue(Instance& suspended_instance, Interrupt& parent)
+            : Handler::Epilogue(suspended_instance), parent_(parent) {}
 
         Continuation action(Instance& instance) override;
 
@@ -59,7 +62,8 @@ public:
 private:
     class Epilogue : public Handler::Epilogue {
     public:
-        Epilogue(Instance& suspended_instance, SysCall& parent) : Handler::Epilogue(suspended_instance), parent_(parent) {}
+        Epilogue(Instance& suspended_instance, SysCall& parent)
+            : Handler::Epilogue(suspended_instance), parent_(parent) {}
 
         Continuation action(Instance& instance) override;
 
@@ -74,14 +78,16 @@ private:
 
 class PageFault : public Handler {
 public:
-    PageFault(uint32_t page_fault_handler_idx) : Handler(page_fault_handler_idx) {}
+    PageFault(uint32_t page_fault_handler_idx)
+        : Handler(page_fault_handler_idx) {}
 
     Continuation action(Instance& instance) override;
 
 private:
     class Epilogue : public Handler::Epilogue {
     public:
-        Epilogue(Instance& suspended_instance, PageFault& parent) : Handler::Epilogue(suspended_instance), parent_(parent) {}
+        Epilogue(Instance& suspended_instance, PageFault& parent)
+            : Handler::Epilogue(suspended_instance), parent_(parent) {}
 
         Continuation action(Instance& instance) override;
 
@@ -91,4 +97,3 @@ private:
 };
 
 } // namespace runtime
-

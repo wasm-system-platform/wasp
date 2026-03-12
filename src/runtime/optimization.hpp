@@ -10,4 +10,4 @@ Operation merge(const Operation& first, const Operation& second);
 
 void printStats();
 
-}
+} // namespace runtime

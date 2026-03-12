@@ -73,8 +73,7 @@ Function Function::createExternal(
             external_func(instance, a, b);
         });
 
-    size_t signature =
-        std::hash<FunctionType>()(FunctionType::ConsumerI32x2());
+    size_t signature = std::hash<FunctionType>()(FunctionType::ConsumerI32x2());
     return Function(std::move(body), 2, {int32_t(0), int32_t(0)}, signature);
 }
 
@@ -90,8 +89,7 @@ Function Function::createExternal(
             external_func(instance, a, b, c);
         });
 
-    size_t signature =
-        std::hash<FunctionType>()(FunctionType::ConsumerI32x3());
+    size_t signature = std::hash<FunctionType>()(FunctionType::ConsumerI32x3());
     return Function(std::move(body), 3, {int32_t(0), int32_t(0), int32_t(0)},
                     signature);
 }
@@ -151,8 +149,7 @@ Function Function::createExternal(
             context.pushI32(result);
         });
 
-    size_t signature =
-        std::hash<FunctionType>()(FunctionType::ProducerI32x2());
+    size_t signature = std::hash<FunctionType>()(FunctionType::ProducerI32x2());
     return Function(std::move(body), 2, {int32_t(0), int32_t(0)}, signature);
 }
 

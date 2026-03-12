@@ -11,7 +11,7 @@ struct JumpBuffer {
     Continuation setjmp_epilogue;
     Continuation return_epilogue;
     size_t validator;
-    
+
     void computeValidator(Context& context) {
         size_t hash = 0;
         hash_combine(hash, stack_size);
@@ -55,8 +55,7 @@ struct JumpBuffer {
     }
 
 private:
-    template <class T>
-    void hashCombine(size_t& hash, const T& v) const {
+    template <class T> void hashCombine(size_t& hash, const T& v) const {
         std::hash<T> hasher;
         hash ^= hasher(v) + 0x9e3779b9 + (hash << 6) + (hash >> 2);
     }
@@ -87,7 +86,7 @@ Continuation Sigsetjmp::action(Instance& instance) {
 
 Continuation Sigsetjmp::Epilogue::action(Instance& instance) {
     Context& context = instance.getActiveContext();
-    
+
     uint32_t jbuffer_offset = context.pop().i32;
 
     JumpBuffer* jbuffer;
@@ -126,29 +125,38 @@ Continuation Longjmp::action(Instance& instance) {
         return trap(instance, "longjmp out of bounds memory address", addr_);
 
     if (jbuffer->stack_size != context.getStack().size())
-        return trap(instance, "longjmp invalid program state: handle me", addr_);
+        return trap(instance, "longjmp invalid program state: handle me",
+                    addr_);
 
     if (context.getLocals().getFramePointersSize() < jbuffer->frames_size)
-        return trap(instance, "longjmp invalid program state: frame stack is too small", addr_);
+        return trap(instance,
+                    "longjmp invalid program state: frame stack is too small",
+                    addr_);
 
     while (context.getLocals().getFramePointersSize() > jbuffer->frames_size) {
         context.getLocals().popLocals();
     }
 
     if (context.getEpilogues().size() < jbuffer->epilogues_size)
-        return trap(instance, "longjmp invalid program state: epiloges stack is too small", addr_);
+        return trap(
+            instance,
+            "longjmp invalid program state: epiloges stack is too small",
+            addr_);
 
     context.getEpilogues().shrink(jbuffer->epilogues_size);
     context.getEpilogues().swap(jbuffer->return_epilogue->shared_from_this());
 
     if (!jbuffer->isValid(context))
-        return trap(instance, "longjmp invalid program state: corrupt jump buffer", addr_);
+        return trap(instance,
+                    "longjmp invalid program state: corrupt jump buffer",
+                    addr_);
 
-    uint32_t ubuffer_offset = jbuffer_offset + offsetof(JumpBuffer, user_buffer);
+    uint32_t ubuffer_offset =
+        jbuffer_offset + offsetof(JumpBuffer, user_buffer);
     context.pushI32(status ? status : 1);
     context.pushI32(ubuffer_offset);
     context.pushI32(status ? status : 1);
     return jbuffer->setjmp_epilogue;
 }
 
-}
+} // namespace runtime

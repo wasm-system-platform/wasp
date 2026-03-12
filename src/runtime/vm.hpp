@@ -78,7 +78,8 @@ private:
     size_t code_start_;
 
     DebugInfoInstance(std::vector<LineInfoSegment>&& line_info_segments,
-                      const std::vector<std::string>& src_files, size_t code_start);
+                      const std::vector<std::string>& src_files,
+                      size_t code_start);
 };
 
 /*********/
@@ -92,9 +93,7 @@ public:
     create(const grammar::Module& module,
            const std::unordered_map<std::string, Function>& imports);
 
-    Memory& getMemory() {
-        return memory_;
-    }
+    Memory& getMemory() { return memory_; }
 
     inline std::vector<std::vector<uint8_t>>& getData() {
         return segments_.getSegments();
@@ -116,14 +115,15 @@ public:
 
     inline Function& getFunction(uint32_t idx) { return funcs_[idx]; }
     bool hasFunctionIndirect(uint32_t idx) {
-        if (idx >= indirect_funcs_.size() || indirect_funcs_[idx] >= funcs_.size())
+        if (idx >= indirect_funcs_.size() ||
+            indirect_funcs_[idx] >= funcs_.size())
             return false;
 
-        return true;    
+        return true;
     }
     Function& getFunctionIndirect(uint32_t idx) {
         return funcs_[indirect_funcs_[idx]];
-    } 
+    }
 
     const DebugInfoInstance& getDebugInfo() const { return *debug_info_; }
 
@@ -137,9 +137,8 @@ private:
     std::shared_ptr<DebugInfoInstance> debug_info_;
 
     GlobalState(std::vector<Function>&& funcs,
-                std::vector<uint32_t>&& indirect_funcs,
-                Memory&& memory, const GlobalInstances& globals,
-                const DataInstances& segments,
+                std::vector<uint32_t>&& indirect_funcs, Memory&& memory,
+                const GlobalInstances& globals, const DataInstances& segments,
                 const DebugInfoInstance&& debug_info)
         : funcs_(std::move(funcs)), indirect_funcs_(std::move(indirect_funcs)),
           memory_(std::move(memory)), globals_(globals), segments_(segments),

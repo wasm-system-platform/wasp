@@ -1,7 +1,7 @@
 #include <fmt/format.h>
 
-#include "runtime/instance.hpp"
 #include "runtime/context_manager.hpp"
+#include "runtime/instance.hpp"
 
 namespace runtime {
 
@@ -66,7 +66,8 @@ Expected<int32_t> Instance::callRet(const std::string& name, int32_t a,
     return active_context_->pop().i32;
 }
 
-Expected<std::shared_ptr<Instance::Exports>> Instance::createExports(const grammar::Module& module) {
+Expected<std::shared_ptr<Instance::Exports>>
+Instance::createExports(const grammar::Module& module) {
     grammar::TypeSection type_section = module.getTypeSection();
     grammar::ImportSection import_section = module.getImportSection();
     grammar::FunctionSection function_section = module.getFunctionSection();
@@ -89,7 +90,7 @@ Expected<std::shared_ptr<Instance::Exports>> Instance::createExports(const gramm
 
         size_t signature = signature_hasher(func_type);
         exports->emplace(func.getName(),
-                        Export{func.getIdx(), func_type, signature});
+                         Export{func.getIdx(), func_type, signature});
     }
 
     return exports;
@@ -99,7 +100,7 @@ Instance::Instance(GlobalState&& global_state,
                    std::shared_ptr<Exports>& exports,
                    const grammar::Module& module)
     : exports_(exports), global_state_(std::move(global_state)) {
-    
+
     if (module.hasStartSection()) {
         ContextManager& ctxt_manager = ContextManager::instance();
         Context& ctxt = ctxt_manager.createEmpty();
@@ -150,7 +151,7 @@ void Instance::invokeIndirect(uint32_t element_idx, size_t signature) {
 }
 
 void Instance::run(OperationBase& entry) {
-    assert(active_context_);    
+    assert(active_context_);
     Context::RunState state = active_context_->getRunState();
 
     assert(state == Context::RunState::rdy);

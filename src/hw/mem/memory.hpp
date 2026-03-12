@@ -7,19 +7,18 @@
 
 namespace hw::mem {
 
-template <typename Impl> 
-class BasicMemory {
+template <typename Impl> class BasicMemory {
 public:
     BasicMemory(uint16_t num_init_pages, uint16_t num_max_pages)
-        : num_max_pages_(num_max_pages), num_curr_pages_(num_init_pages), impl(num_init_pages) {}
+        : num_max_pages_(num_max_pages), num_curr_pages_(num_init_pages),
+          impl(num_init_pages) {}
 
     bool contains(uint32_t offset, uint32_t len) {
-        uint32_t size = num_curr_pages_ << UINT16_WIDTH; 
+        uint32_t size = num_curr_pages_ << UINT16_WIDTH;
         return offset <= size && len <= size - offset;
     }
 
-    template<typename T>
-    bool ptr(uint32_t offset, T** ptr_out) {
+    template <typename T> bool ptr(uint32_t offset, T** ptr_out) {
         if (!contains(offset, sizeof(T)))
             return false;
 
@@ -27,8 +26,7 @@ public:
         return true;
     }
 
-    template<Scalar T>
-    bool load(uint32_t offset, T& value_out) {
+    template <Scalar T> bool load(uint32_t offset, T& value_out) {
         if (!contains(offset, sizeof(T)))
             return false;
 
@@ -36,8 +34,7 @@ public:
         return true;
     }
 
-    template<ContiguousBuffer T>
-    bool load(uint32_t offset, T& dst_buffer) {
+    template <ContiguousBuffer T> bool load(uint32_t offset, T& dst_buffer) {
         if (!contains(offset, dst_buffer.size()))
             return false;
 
@@ -45,20 +42,19 @@ public:
         return true;
     }
 
-    template<Scalar T>
-    bool store(uint32_t offset, T value) {
+    template <Scalar T> bool store(uint32_t offset, T value) {
         if (!contains(offset, sizeof(T)))
             return false;
-    
+
         impl.store(offset, value);
         return true;
     }
 
-    template<ContiguousBuffer T>
+    template <ContiguousBuffer T>
     bool store(uint32_t offset, const T& src_buffer) {
         if (!contains(offset, sizeof(T)))
             return false;
-    
+
         impl.store(offset, src_buffer);
         return true;
     }
@@ -66,7 +62,7 @@ public:
     bool fill(uint32_t offset, uint8_t value, uint32_t count) {
         if (!contains(offset, count))
             return false;
-    
+
         impl.fill(offset, value, count);
         return true;
     }
@@ -93,13 +89,13 @@ private:
     Impl impl;
 };
 
-#if defined (MEMORY_VECTOR)
+#if defined(MEMORY_VECTOR)
 using Memory = BasicMemory<VectorMemory>;
-#elif defined (MEMORY_FILE)
+#elif defined(MEMORY_FILE)
 using Memory = BasicMemory<FileMemory>;
 #else
 // auto
 using Memory = BasicMemory<VectorMemory>;
 #endif
 
-}
+} // namespace hw::mem

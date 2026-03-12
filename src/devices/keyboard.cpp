@@ -21,8 +21,10 @@ bool Keyboard::tick() {
 
 Errno Keyboard::io(int32_t cmd, std::span<uint8_t>& buffer) {
     switch (cmd) {
-        case 1: return getInput(buffer);
-        default: return Errno::INVALID_ARGUMENT;
+    case 1:
+        return getInput(buffer);
+    default:
+        return Errno::INVALID_ARGUMENT;
     }
 }
 
@@ -33,7 +35,6 @@ Errno Keyboard::getInput(std::span<uint8_t>& buffer) {
     std::lock_guard<std::mutex> guard(guard_);
     if (input_.empty())
         return Errno::NO_DATA;
-
 
     buffer[0] = input_.front();
     input_.pop_front();

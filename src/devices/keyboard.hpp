@@ -14,9 +14,7 @@ public:
     Errno io(int32_t cmd, std::span<uint8_t>& buffer) override;
 
 private:
-    enum class Command {
-        get_input = 1
-    };
+    enum class Command { get_input = 1 };
 
     std::mutex guard_;
     std::list<char> input_;

@@ -1,5 +1,5 @@
-#include "runtime/instance.hpp"
 #include "runtime/handler.hpp"
+#include "runtime/instance.hpp"
 #include "runtime/interrupts.hpp"
 #include "runtime/kernel.hpp"
 
@@ -17,16 +17,19 @@ Continuation Interrupt::action(Instance& instance) {
     auto epilogue = std::make_shared<Epilogue>(instance, *this);
 
     if (instance.is<Kernel>()) {
-        // if we got interrupted in the kernel we can just call the handler directly
+        // if we got interrupted in the kernel we can just call the handler
+        // directly
         Kernel& kernel = instance.as<Kernel>();
-        Function interrupt_handler = kernel.getGlobalState().getFunction(handler_idx_);
+        Function interrupt_handler =
+            kernel.getGlobalState().getFunction(handler_idx_);
 
         instance_ctx.getEpilogues().push(epilogue);
 
         return interrupt_handler.enterFrame(instance_ctx);
     } else {
         Kernel& kernel = instance.as<Process>().getKernel();
-        Function interrupt_handler = kernel.getGlobalState().getFunction(handler_idx_);
+        Function interrupt_handler =
+            kernel.getGlobalState().getFunction(handler_idx_);
 
         uint32_t port = instance_ctx.getStack().pop().i32;
 
@@ -47,7 +50,7 @@ Continuation Interrupt::Epilogue::action(Instance& instance) {
     Function syscall_handler =
         instance.getGlobalState().getFunction(parent_.handler_idx_);
     syscall_handler.leaveFrame(kernel_ctx);
-    
+
     if (suspended_instance_.is<Process>()) {
         instance.as<Kernel>().switchToInstance(suspended_instance_);
     }
@@ -87,7 +90,8 @@ Continuation SysCall::action(Instance& instance) {
 
     auto epilogue = std::make_shared<Epilogue>(instance, *this);
     kernel_ctxt.getEpilogues().push(epilogue);
-    Function syscall_handler = kernel.getGlobalState().getFunction(handler_idx_);
+    Function syscall_handler =
+        kernel.getGlobalState().getFunction(handler_idx_);
 
     return syscall_handler.enterFrame(kernel_ctxt);
 }
@@ -110,7 +114,8 @@ Continuation SysCall::Epilogue::action(Instance& instance) {
     for (size_t i = proc_ctxt.getEpilogues().size() - 1; i > 0; i--) {
         const Operation& epilogue = epilogues[i];
         if (epilogue == nullptr) break;
-        fmt::println("  {}: at {}", i, epilogue->getFormattedAddress(suspended_instance_));
+        fmt::println("  {}: at {}", i,
+    epilogue->getFormattedAddress(suspended_instance_));
     }
     */
 
@@ -143,14 +148,15 @@ Continuation PageFault::action(Instance& instance) {
 
         // push epilogue to kernel epilogues
         kernel_ctx.getEpilogues().push(epilogue);
-        
+
         // switch to kernel instance
         kernel.switchBack();
-        
-        //call page fault handler
-        Function page_fault_handler = kernel.getGlobalState().getFunction(handler_idx_);
+
+        // call page fault handler
+        Function page_fault_handler =
+            kernel.getGlobalState().getFunction(handler_idx_);
         return page_fault_handler.enterFrame(kernel_ctx);
-    } 
+    }
     // pagefault is triggered by the kernel
     else {
         // push arguments back to the instance stack
@@ -161,8 +167,9 @@ Continuation PageFault::action(Instance& instance) {
         // push epilogue to instance epilogues
         instance_ctx.getEpilogues().push(epilogue);
 
-        //call page fault handler
-        Function page_fault_handler = instance.getGlobalState().getFunction(handler_idx_);
+        // call page fault handler
+        Function page_fault_handler =
+            instance.getGlobalState().getFunction(handler_idx_);
         return page_fault_handler.enterFrame(instance_ctx);
     }
 }
@@ -179,7 +186,7 @@ Continuation PageFault::Epilogue::action(Instance& instance) {
         Context& proc_ctx = suspended_instance_.getActiveContext();
         assert(proc_ctx.getRunState() == Context::RunState::running);
         kernel.switchToInstance(suspended_instance_);
-    }    
+    }
 
     return nullptr;
 }

@@ -1,14 +1,15 @@
 #include <spanstream>
 
-#include "runtime/process.hpp"
-#include "runtime/kernel.hpp"
-#include "runtime/setjmp.hpp"
 #include "runtime/context_manager.hpp"
+#include "runtime/kernel.hpp"
+#include "runtime/process.hpp"
+#include "runtime/setjmp.hpp"
 
 namespace runtime {
 
 Expected<std::shared_ptr<Process>>
-Process::create(std::span<const char>& program_bytes, Instance &instance, uint32_t id) {
+Process::create(std::span<const char>& program_bytes, Instance& instance,
+                uint32_t id) {
     std::ispanstream program_stream(program_bytes);
 
     Expected<grammar::Module> module_exp =
@@ -23,22 +24,26 @@ Process::create(std::span<const char>& program_bytes, Instance &instance, uint32
         return Unexpected(PROPAGATE(imports_exp));
 
     // create global state (functions, memories, debug info, ...)
-    Expected<GlobalState> global_state_exp = GlobalState::create(*module_exp, *imports_exp);
+    Expected<GlobalState> global_state_exp =
+        GlobalState::create(*module_exp, *imports_exp);
     if (!global_state_exp)
         return Unexpected(PROPAGATE(global_state_exp));
 
     // create exports (entry points)
-    Expected<std::shared_ptr<Exports>> exports_exp = Instance::createExports(*module_exp);
+    Expected<std::shared_ptr<Exports>> exports_exp =
+        Instance::createExports(*module_exp);
     if (!exports_exp)
         return Unexpected(PROPAGATE(exports_exp));
-    
+
     class Builder : public Process {
     public:
-        Builder(GlobalState&& global_state, std::shared_ptr<Exports>& exports, const grammar::Module& module, Kernel& kernel, uint32_t id)
+        Builder(GlobalState&& global_state, std::shared_ptr<Exports>& exports,
+                const grammar::Module& module, Kernel& kernel, uint32_t id)
             : Process(std::move(global_state), exports, module, kernel, id) {}
     };
-    std::shared_ptr<Process> proc = std::make_shared<Builder>(std::move(*global_state_exp), *exports_exp, *module_exp, 
-        instance.as<Kernel>(), id);
+    std::shared_ptr<Process> proc =
+        std::make_shared<Builder>(std::move(*global_state_exp), *exports_exp,
+                                  *module_exp, instance.as<Kernel>(), id);
 
     Expected<void> result = proc->validateExports(sigsetjmp);
     if (!result)
@@ -54,7 +59,7 @@ Errno Process::clone(uint32_t new_id, std::shared_ptr<Process>& proc_out) {
     Errno result = ctx_mgr.cloneContext(getActiveContext().getId(), clone_cid);
     if (result != Errno::SUCCESS)
         return result;
-    
+
     class Builder : public Process {
     public:
         Builder(Process& process, uint32_t new_id) : Process(process, new_id) {}
@@ -65,7 +70,9 @@ Errno Process::clone(uint32_t new_id, std::shared_ptr<Process>& proc_out) {
     return Errno::SUCCESS;
 }
 
-Expected<Imports> Process::createImports(Instance& instance, std::shared_ptr<Sigsetjmp>& sigsetjmp_out) {
+Expected<Imports>
+Process::createImports(Instance& instance,
+                       std::shared_ptr<Sigsetjmp>& sigsetjmp_out) {
     auto it = instance.exports_->find("sys_call_handler");
     if (it == instance.exports_->end()) {
         return Unexpected(ERROR("kernel export 'sys_call_handler' not found"));
@@ -90,11 +97,13 @@ Expected<Imports> Process::createImports(Instance& instance, std::shared_ptr<Sig
 
     // setjmp/longjmp
     sigsetjmp_out = std::make_shared<Sigsetjmp>();
-    Function env_sigsetjmp(sigsetjmp_out, 2, {int32_t(0), int32_t(0)}, FunctionType::ProducerI32x2().getSignature());
-    
+    Function env_sigsetjmp(sigsetjmp_out, 2, {int32_t(0), int32_t(0)},
+                           FunctionType::ProducerI32x2().getSignature());
+
     std::shared_ptr<Longjmp> env_longjmp_op = std::make_shared<Longjmp>();
-    Function env_longjmp(env_longjmp_op, 2, {int32_t(0), int32_t(0)}, FunctionType::ConsumerI32x2().getSignature());
- 
+    Function env_longjmp(env_longjmp_op, 2, {int32_t(0), int32_t(0)},
+                         FunctionType::ConsumerI32x2().getSignature());
+
     return Imports{
         {"sys.call", sys_call},
         {"sys.execve_stack", sys_execve_stack},
@@ -112,44 +121,48 @@ Expected<void> Process::validateExports(std::shared_ptr<Sigsetjmp>& sigsetjmp) {
         if (start_sig == start.signature) {
             entry_ = std::make_shared<Call>(start.func_idx, UINT32_MAX);
         } else {
-            return Unexpected(ERROR(fmt::format("warning: _start has a wrong signature; "
-                              "expected signature '{}' but found '{}'",
-                              FunctionType::ConsumerI32x2().toString(),
-                              start.func_type.toString()).c_str()));
+            return Unexpected(
+                ERROR(fmt::format("warning: _start has a wrong signature; "
+                                  "expected signature '{}' but found '{}'",
+                                  FunctionType::ConsumerI32x2().toString(),
+                                  start.func_type.toString())
+                          .c_str()));
         }
     }
 
     it = exports_->find("sigsetjmp_prologue");
     if (it != exports_->end()) {
         Export& sigsetjmp_prologue = it->second;
-        size_t sigsetjmp_prologue_sig = FunctionType::ConsumerI32x2().getSignature();
+        size_t sigsetjmp_prologue_sig =
+            FunctionType::ConsumerI32x2().getSignature();
 
         if (sigsetjmp_prologue_sig == sigsetjmp_prologue.signature) {
             sigsetjmp->setPrologueFuncIdx(sigsetjmp_prologue.func_idx);
         } else {
             fmt::println("warning: sigsetjmp prologue has a wrong signature; "
-                              "expected signature '{}' but found '{}'",
-                              FunctionType::ConsumerI32x2().toString(),
-                              sigsetjmp_prologue.func_type.toString());
+                         "expected signature '{}' but found '{}'",
+                         FunctionType::ConsumerI32x2().toString(),
+                         sigsetjmp_prologue.func_type.toString());
         }
     }
 
     it = exports_->find("sigsetjmp_epilogue");
     if (it != exports_->end()) {
         Export& sigsetjmp_epilogue = it->second;
-        size_t sigsetjmp_epilogue_sig = FunctionType::ConsumerI32x2().getSignature();
+        size_t sigsetjmp_epilogue_sig =
+            FunctionType::ConsumerI32x2().getSignature();
 
         if (sigsetjmp_epilogue_sig == sigsetjmp_epilogue.signature) {
             sigsetjmp->setEpilogueFuncIdx(sigsetjmp_epilogue.func_idx);
         } else {
             fmt::println("warning: sigsetjmp epilogue has a wrong signature; "
-                              "expected signature '{}' but found '{}'",
-                              FunctionType::ConsumerI32x2().toString(),
-                              sigsetjmp_epilogue.func_type.toString());
+                         "expected signature '{}' but found '{}'",
+                         FunctionType::ConsumerI32x2().toString(),
+                         sigsetjmp_epilogue.func_type.toString());
         }
     }
 
     return {};
 }
 
-}
+} // namespace runtime

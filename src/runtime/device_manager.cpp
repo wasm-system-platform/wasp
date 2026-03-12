@@ -1,6 +1,5 @@
-#include "runtime/interrupts.hpp"
 #include "runtime/device_manager.hpp"
-
+#include "runtime/interrupts.hpp"
 
 namespace runtime {
 
@@ -10,13 +9,12 @@ DeviceManager& DeviceManager::instance() {
 }
 
 DeviceManager::DeviceManager() {
-    worker = std::thread([this]{
+    worker = std::thread([this] {
         size_t counter = 0;
         while (running.load()) {
             tick(counter++);
             std::this_thread::sleep_for(std::chrono::microseconds(1));
         }
-
     });
 };
 
@@ -26,7 +24,8 @@ DeviceManager::~DeviceManager() {
         worker.join();
 }
 
-Errno DeviceManager::io(uint32_t port, int32_t cmd, std::span<uint8_t>& buffer) {
+Errno DeviceManager::io(uint32_t port, int32_t cmd,
+                        std::span<uint8_t>& buffer) {
     const std::lock_guard<std::mutex> guard(guard_);
 
     auto it = devices_.find(port);
@@ -42,11 +41,12 @@ void DeviceManager::tick(size_t counter) {
     if (controllers_.empty())
         return;
 
-    InterruptController& controller = *controllers_[counter % controllers_.size()];
+    InterruptController& controller =
+        *controllers_[counter % controllers_.size()];
     for (const auto& [port, device] : devices_) {
         if (device->tick())
             controller.interrupt(port);
     }
 }
 
-}
+} // namespace runtime

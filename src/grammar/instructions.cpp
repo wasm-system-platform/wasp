@@ -1141,7 +1141,8 @@ Expected<MemoryGrow> MemoryGrow::parse(std::istream& in, size_t addr) {
 
 std::string MemoryGrow::toString() const { return "memory.grow 0"; }
 
-Expected<Instruction> MemoryIntstructionBase::parse(std::istream& in, size_t addr) {
+Expected<Instruction> MemoryIntstructionBase::parse(std::istream& in,
+                                                    size_t addr) {
     Expected<Byte> mem_opcode_exp = Byte::parse(in);
     if (!mem_opcode_exp)
         return Unexpected(PROPAGATE(mem_opcode_exp));

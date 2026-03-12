@@ -33,8 +33,8 @@ int main(int argc, char** argv) {
         exit(1);
     }
 
-    auto kernel_exp = runtime::Kernel::create(
-        args["kernel"].as<std::string>(), args["rootfs"].as<std::string>());
+    auto kernel_exp = runtime::Kernel::create(args["kernel"].as<std::string>(),
+                                              args["rootfs"].as<std::string>());
     if (!kernel_exp) {
         std::cout << kernel_exp.error().toString() << std::endl;
         return -1;

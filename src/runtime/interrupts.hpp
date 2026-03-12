@@ -1,4 +1,4 @@
-#pragma  once
+#pragma once
 
 #include <atomic>
 #include <thread>
@@ -7,14 +7,15 @@
 #include "runtime/handler.hpp"
 #include "runtime/operations.hpp"
 
-
 namespace runtime {
 
 constexpr uint32_t INVALID_PORT = -1;
 
 class InterruptController {
 public:
-    InterruptController(uint32_t interrupt_handler_idx) : interrupt_handler_(std::make_shared<Interrupt>(*this, interrupt_handler_idx)) {}
+    InterruptController(uint32_t interrupt_handler_idx)
+        : interrupt_handler_(
+              std::make_shared<Interrupt>(*this, interrupt_handler_idx)) {}
 
     bool getInterruptsEnabled() { return interrupts_enabled_; }
     bool enableInterrupts() {
@@ -37,13 +38,9 @@ public:
         return interrupt_handler_.get();
     }
 
-    void idle() {
-        interrupts_->wait();
-    }
+    void idle() { interrupts_->wait(); }
 
-    void interrupt(uint32_t port) {
-        interrupts_->push(port);
-    }
+    void interrupt(uint32_t port) { interrupts_->push(port); }
 
 private:
     class Buffer {
@@ -55,7 +52,7 @@ private:
             while (next == tail_.load()) {
                 tail_.wait(next);
             }
-            
+
             data_[head] = port;
             head_.store(next);
             head_.notify_all();
@@ -93,4 +90,4 @@ private:
     Operation interrupt_handler_;
 };
 
-}
+} // namespace runtime
