@@ -7,6 +7,7 @@
 #include "runtime/vm.hpp"
 #include "runtime/kernel.hpp"
 #include "runtime/optimization.hpp"
+#include "runtime/operations_impl.hpp"
 
 namespace runtime {
 
@@ -910,14 +911,8 @@ LocalGet::LocalGet(const grammar::LocalGet& local_get)
       local_idx_(local_get.getLocalIdx()) {}
 
 Continuation LocalGet::action(Instance& instance) {
-    Context& context = instance.getActiveContext();
-
-    Value i = context.getLocal(local_idx_);
-    context.push(i);
-    TRACE_VERBOSE(
-        "{}: local.get {}: () -> ({})",
-        instance.getGlobalState().getDebugInfo().getFormattedLocation(addr_),
-        local_idx_, i.i64);
+    Value local = impl(*this, instance);
+    instance.getActiveContext().getStack().push(local);
     return next_.get();
 }
 
@@ -926,14 +921,8 @@ LocalSet::LocalSet(const grammar::LocalSet& local_set)
       local_idx_(local_set.getLocalIdx()) {}
 
 Continuation LocalSet::action(Instance& instance) {
-    Context& context = instance.getActiveContext();
-
-    Value i = context.pop();
-    context.setLocal(local_idx_, i);
-    TRACE_VERBOSE(
-        "{}: local.set {}: ({}) -> ()",
-        instance.getGlobalState().getDebugInfo().getFormattedLocation(addr_),
-        local_idx_, i.i64);
+    Value local = instance.getActiveContext().getStack().pop();
+    impl(*this, instance, local);
     return next_.get();
 }
 
@@ -982,12 +971,8 @@ I32Const::I32Const(const grammar::I32Const& i32_const)
     : TaggedOperation<I32Const>(i32_const.getAddress()), i_(i32_const.getVal()) {}
 
 Continuation I32Const::action(Instance& instance) {
-    instance.getActiveContext().pushI32(i_);
-
-    TRACE_VERBOSE(
-        "{}: i32.const {}: () -> ({})",
-        instance.getGlobalState().getDebugInfo().getFormattedLocation(addr_),
-        i_, i_);
+    Value i = impl(*this, instance);
+    instance.getActiveContext().push(i);
     return next_.get();
 }
 
@@ -995,8 +980,6 @@ Expected<Continuation> I32Const::eval(Context& context) const {
     context.pushI32(i_);
     return next_.get();
 }
-
-Value I32Const::produce(Instance& instance) { return i_; }
 
 I64Const::I64Const(const grammar::I64Const& i64_const)
     : i_(i64_const.getVal()) {}

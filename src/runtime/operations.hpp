@@ -324,6 +324,16 @@ public:
 
 private:
     uint32_t local_idx_;
+
+    static Value impl(LocalGet& local_get, Instance& instance);
+
+    template<size_t>
+    friend class GenericProducer_LocalGet;
+
+    friend class LocalGet_LocalGet;
+    friend class LocalSet_LocalGet;
+    friend class LocalSet_LocalGet_LocalGet;
+    friend class I32Const_LocalSet_LocalGet;
 };
 
 class LocalSet : public TaggedOperation<LocalSet> {
@@ -334,6 +344,11 @@ public:
 
 private:
     uint32_t local_idx_;
+
+    static void impl(LocalSet& local_set, Instance& instance, Value value);
+
+    friend class LocalSet_LocalGet;
+    friend class I32Const_LocalSet;
 };
 
 class LocalTee : public TaggedOperation<LocalTee> {
@@ -376,12 +391,15 @@ public:
 
     Continuation action(Instance& instance) override;
     Expected<Continuation> eval(Context& context) const override;
-    Value produce(Instance& instance) override;
 
     bool isProducer() const override { return true; }
 
 private:
     int32_t i_;
+
+    static Value impl(I32Const& i32_const, Instance& instance);
+
+    friend class I32Const_LocalSet;
 };
 
 class I64Const : public OperationBase {

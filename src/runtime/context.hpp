@@ -16,8 +16,23 @@ public:
     size_t size() const { return top; }
 
     Value& peek() { return data_[top - 1]; }
+    
     inline Value pop() { return data_[--top]; }
+    
+    template<size_t num_values>
+    inline void pop(std::array<Value, num_values>& out) {
+        top -= num_values;
+        std::memcpy(out.data(), &data_[top], sizeof(Value) * num_values);
+    }
+
     inline void push(Value value) { data_[top++] = value; }
+
+    template<size_t num_values>
+    inline void push(const std::array<Value, num_values>& in) {
+        std::memcpy(&data_[top], in.data(), sizeof(Value) * num_values);
+        top += num_values;
+    }
+
     inline void resize(size_t new_size) { top = new_size; }
     const Value* data() { return data_.data(); }
 
