@@ -11,6 +11,20 @@ namespace runtime {
 /* Generic Operations */
 /**********************/
 
+template <size_t num_in>
+class GenericConsumer : public TaggedOperation<GenericConsumer<num_in>> {
+public:
+    Continuation action(Instance& instance) override {
+        std::array<Value, num_in> in;
+        instance.getActiveContext().getStack().pop(in);
+        do_impl(instance, in);
+        return OperationBase::next_.get();
+    }
+
+private:
+    virtual void do_impl(Instance& instance, const std::array<Value, num_in>& in) = 0;
+};
+
 template <size_t num_out>
 class GenericProducer : public TaggedOperation<GenericProducer<num_out>> {
 public:
@@ -49,24 +63,18 @@ private:
 template <size_t num_out>
 class GenericProducer_LocalGet : public GenericProducer<num_out + 1> {
 public:
-    GenericProducer_LocalGet(GenericProducer<num_out>& producer,
-                             LocalGet& local_get)
-        : producer_(producer.shared_from_this()), local_get_(local_get) {}
+    GenericProducer_LocalGet(Operation&& producer, Operation&& local_get)
+        : producer_(std::move(producer)), local_get_(std::move(local_get)) {}
 
-    static Operation create(const Operation& first, const Operation& second) {
+    static Operation create(Operation&& first, Operation&& second) {
         assert(first->is<GenericProducer<num_out>>());
         assert(second->is<LocalGet>());
-
-        GenericProducer<num_out>& producer =
-            first->as<GenericProducer<num_out>>();
-        LocalGet& local_get = second->as<LocalGet>();
-
-        return std::make_shared<GenericProducer_LocalGet>(producer, local_get);
+        return std::make_shared<GenericProducer_LocalGet>(std::move(first), std::move(second));
     }
 
 private:
     Operation producer_;
-    LocalGet local_get_;
+    Operation local_get_;
 
     std::array<Value, num_out + 1> do_impl(Instance& instance) override {
         std::array<Value, num_out + 1> out;
@@ -75,7 +83,7 @@ private:
             producer_->as<GenericProducer<num_out>>().do_impl(instance);
         std::copy(produced.begin(), produced.end(), out.begin());
 
-        out[num_out] = LocalGet::impl(local_get_, instance);
+        out[num_out] = LocalGet::impl(local_get_->as<LocalGet>(), instance);
 
         return out;
     }
@@ -87,17 +95,13 @@ private:
 
 class LocalGet_LocalGet : public TaggedOperation<LocalGet_LocalGet> {
 public:
-    LocalGet_LocalGet(LocalGet& local_get1, LocalGet& local_get2)
-        : local_get1_(local_get1), local_get2_(local_get2) {}
+    LocalGet_LocalGet(Operation&& local_get1, Operation&& local_get2)
+        : local_get1_(std::move(local_get1)), local_get2_(std::move(local_get2)) {}
 
-    static Operation create(const Operation& first, const Operation& second) {
+    static Operation create(Operation&& first, Operation&& second) {
         assert(first->is<LocalGet>());
         assert(second->is<LocalGet>());
-
-        LocalGet& local_get1 = first->as<LocalGet>();
-        LocalGet& local_get2 = second->as<LocalGet>();
-
-        return std::make_shared<LocalGet_LocalGet>(local_get1, local_get2);
+        return std::make_shared<LocalGet_LocalGet>(std::move(first), std::move(second));
     }
 
     Continuation action(Instance& instance) override {
@@ -109,47 +113,43 @@ public:
     }
 
 private:
-    LocalGet local_get1_;
-    LocalGet local_get2_;
+    Operation local_get1_;
+    Operation local_get2_;
 
     inline static std::array<Value, 2>
     impl(LocalGet_LocalGet& local_get_local_get_, Instance& instance) {
-        return {LocalGet::impl(local_get_local_get_.local_get1_, instance),
-                LocalGet::impl(local_get_local_get_.local_get2_, instance)};
+        return {LocalGet::impl(local_get_local_get_.local_get1_->as<LocalGet>(), instance),
+                LocalGet::impl(local_get_local_get_.local_get2_->as<LocalGet>(), instance)};
     }
 };
 
 class LocalSet_LocalGet : public TaggedOperation<LocalSet_LocalGet> {
 public:
-    LocalSet_LocalGet(LocalSet& local_set, LocalGet& local_get)
-        : local_set_(local_set), local_get_(local_get) {}
+    LocalSet_LocalGet(Operation&& local_set, Operation&& local_get)
+        : local_set_(std::move(local_set)), local_get_(std::move(local_get)) {}
 
-    static Operation create(const Operation& first, const Operation& second) {
+    static Operation create(Operation&& first, Operation&& second) {
         assert(first->is<LocalSet>());
         assert(second->is<LocalGet>());
-
-        LocalSet& local_set = first->as<LocalSet>();
-        LocalGet& local_get = second->as<LocalGet>();
-
-        return std::make_shared<LocalSet_LocalGet>(local_set, local_get);
+        return std::make_shared<LocalSet_LocalGet>(std::move(first), std::move(second));
     }
 
     Continuation action(Instance& instance) override {
         Stack& stack = instance.getActiveContext().getStack();
-        Value local_in = stack.pop();
-        Value local_out = impl(*this, instance, local_in);
-        stack.push(local_out);
+        Value in = stack.pop();
+        Value out = impl(*this, instance, in);
+        stack.push(out);
         return next_.get();
     }
 
 private:
-    LocalSet local_set_;
-    LocalGet local_get_;
+    Operation local_set_;
+    Operation local_get_;
 
     inline static Value impl(LocalSet_LocalGet& local_get_local_get_,
-                             Instance& instance, Value local_in) {
-        LocalSet::impl(local_get_local_get_.local_set_, instance, local_in);
-        return LocalGet::impl(local_get_local_get_.local_get_, instance);
+                             Instance& instance, Value in) {
+        LocalSet::impl(local_get_local_get_.local_set_->as<LocalSet>(), instance, in);
+        return LocalGet::impl(local_get_local_get_.local_get_->as<LocalGet>(), instance);
     }
 
     friend class LocalSet_LocalGet_LocalGet;
@@ -157,29 +157,76 @@ private:
 
 class LocalSet_LocalGet_LocalGet : public GenericPipe<1, 2> {
 public:
-    LocalSet_LocalGet_LocalGet(LocalSet_LocalGet& local_set_local_get,
-                               LocalGet& local_get)
-        : local_set_local_get_(local_set_local_get), local_get_(local_get) {}
+    LocalSet_LocalGet_LocalGet(Operation&& local_set_local_get,
+                               Operation&& local_get)
+        : local_set_local_get_(std::move(local_set_local_get)), local_get_(std::move(local_get)) {}
 
-    static Operation create(const Operation& first, const Operation& second) {
+    static Operation create(Operation&& first, Operation&& second) {
         assert(first->is<LocalSet_LocalGet>());
         assert(second->is<LocalGet>());
-
-        LocalSet_LocalGet& local_set_local_get = first->as<LocalSet_LocalGet>();
-        LocalGet& local_get = second->as<LocalGet>();
-
-        return std::make_shared<LocalSet_LocalGet_LocalGet>(local_set_local_get,
-                                                            local_get);
+        return std::make_shared<LocalSet_LocalGet_LocalGet>(std::move(first),
+                                                            std::move(second));
     }
 
 private:
-    LocalSet_LocalGet local_set_local_get_;
-    LocalGet local_get_;
+    Operation local_set_local_get_;
+    Operation local_get_;
 
     std::array<Value, 2> do_impl(Instance& instance,
                                  const std::array<Value, 1>& in) override {
-        return {LocalSet_LocalGet::impl(local_set_local_get_, instance, in[0]),
-                LocalGet::impl(local_get_, instance)};
+        return {LocalSet_LocalGet::impl(local_set_local_get_->as<LocalSet_LocalGet>(), instance, in[0]),
+                LocalGet::impl(local_get_->as<LocalGet>(), instance)};
+    }
+};
+
+class LocalSet_I32Const : public TaggedOperation<LocalSet_I32Const> {
+public:
+    LocalSet_I32Const(Operation&& local_set, Operation&& i32_const)
+        : local_set_(std::move(local_set)), i32_const_(std::move(i32_const)) {}
+
+    static Operation create(Operation&& first, Operation&& second) {
+        assert(first->is<LocalSet>());
+        assert(second->is<I32Const>());
+        return std::make_shared<LocalSet_I32Const>(std::move(first), std::move(second));
+    }
+
+    Continuation action(Instance& instance) override {
+        Stack& stack = instance.getActiveContext().getStack();
+        Value in = stack.pop();
+        Value out = impl(*this, instance, in);
+        stack.push(out);
+        return next_.get();
+    }
+
+private:
+    Operation local_set_;
+    Operation i32_const_;
+
+    inline static Value impl(LocalSet_I32Const& local_set_i32_const, Instance& instance, Value in) {
+        LocalSet::impl(local_set_i32_const.local_set_->as<LocalSet>(), instance, in);
+        return I32Const::impl(local_set_i32_const.i32_const_->as<I32Const>(), instance);
+    }
+
+    friend class LocalSet_I32Const_LocalSet;
+};
+
+class LocalSet_I32Const_LocalSet : public GenericConsumer<1> {
+public:
+    LocalSet_I32Const_LocalSet(Operation&& local_set_i32_const, Operation&& local_set)
+        : local_set_i32_const_(std::move(local_set_i32_const)), local_set_(std::move(local_set)) {}
+
+    static Operation create(Operation&& first, Operation&& second) {
+        assert(first->is<LocalSet_I32Const>());
+        assert(second->is<LocalSet>());
+        return std::make_shared<LocalSet_I32Const_LocalSet>(std::move(first), std::move(second));
+    }
+
+private:
+    Operation local_set_i32_const_;
+    Operation local_set_;
+
+    void do_impl(Instance& instance, const std::array<Value, 1>& in) override {
+        LocalSet::impl(local_set_->as<LocalSet>(), instance, LocalSet_I32Const::impl(local_set_i32_const_->as<LocalSet_I32Const>(), instance, in[0]));
     }
 };
 
@@ -189,17 +236,13 @@ private:
 
 class I32Const_LocalSet : public TaggedOperation<I32Const_LocalSet> {
 public:
-    I32Const_LocalSet(I32Const& i32_const, LocalSet& local_set)
-        : i32_const_(i32_const), local_set_(local_set) {}
+    I32Const_LocalSet(Operation&& i32_const, Operation&& local_set)
+        : i32_const_(std::move(i32_const)), local_set_(std::move(local_set)) {}
 
-    static Operation create(const Operation& first, const Operation& second) {
+    static Operation create(Operation&& first, Operation&& second) {
         assert(first->is<I32Const>());
         assert(second->is<LocalSet>());
-
-        I32Const& i32_const = first->as<I32Const>();
-        LocalSet& local_set = second->as<LocalSet>();
-
-        return std::make_shared<I32Const_LocalSet>(i32_const, local_set);
+        return std::make_shared<I32Const_LocalSet>(std::move(first), std::move(second));
     }
 
     Continuation action(Instance& instance) override {
@@ -208,14 +251,14 @@ public:
     }
 
 private:
-    I32Const i32_const_;
-    LocalSet local_set_;
+    Operation i32_const_;
+    Operation local_set_;
 
     inline static void impl(I32Const_LocalSet& i32_const_local_set,
                             Instance& instance) {
         return LocalSet::impl(
-            i32_const_local_set.local_set_, instance,
-            I32Const::impl(i32_const_local_set.i32_const_, instance));
+            i32_const_local_set.local_set_->as<LocalSet>(), instance,
+            I32Const::impl(i32_const_local_set.i32_const_->as<I32Const>(), instance));
     }
 
     friend class I32Const_LocalSet_LocalGet;
@@ -223,28 +266,24 @@ private:
 
 class I32Const_LocalSet_LocalGet : public GenericProducer<1> {
 public:
-    I32Const_LocalSet_LocalGet(I32Const_LocalSet& i32_const_local_set,
-                               LocalGet& local_get)
-        : i32_const_local_set_(i32_const_local_set), local_get_(local_get) {}
+    I32Const_LocalSet_LocalGet(Operation&& i32_const_local_set,
+                               Operation&& local_get)
+        : i32_const_local_set_(std::move(i32_const_local_set)), local_get_(std::move(local_get)) {}
 
-    static Operation create(const Operation& first, const Operation& second) {
+    static Operation create(Operation&& first, Operation&& second) {
         assert(first->is<I32Const_LocalSet>());
         assert(second->is<LocalGet>());
-
-        I32Const_LocalSet& i32_const_local_set = first->as<I32Const_LocalSet>();
-        LocalGet& local_get = second->as<LocalGet>();
-
-        return std::make_shared<I32Const_LocalSet_LocalGet>(i32_const_local_set,
-                                                            local_get);
+        return std::make_shared<I32Const_LocalSet_LocalGet>(std::move(first),
+                                                            std::move(second));
     }
 
 private:
-    I32Const_LocalSet i32_const_local_set_;
-    LocalGet local_get_;
+    Operation i32_const_local_set_;
+    Operation local_get_;
 
     std::array<Value, 1> do_impl(Instance& instance) override {
-        I32Const_LocalSet::impl(i32_const_local_set_, instance);
-        return {LocalGet::impl(local_get_, instance)};
+        I32Const_LocalSet::impl(i32_const_local_set_->as<I32Const_LocalSet>(), instance);
+        return {LocalGet::impl(local_get_->as<LocalGet>(), instance)};
     }
 
     friend class LocalSet_LocalGet_LocalGet;
@@ -258,8 +297,7 @@ static size_t combineId(OperationBase::TypeId first,
     return seed;
 }
 
-static const std::unordered_map<size_t, Operation (*)(const Operation&,
-                                                      const Operation&)>
+static const std::unordered_map<size_t, Operation (*)(Operation&&, Operation&&)>
     recipes = {
         // generic
         {combineId(GenericProducer<1>::static_type(), LocalGet::static_type()),
@@ -271,6 +309,10 @@ static const std::unordered_map<size_t, Operation (*)(const Operation&,
          LocalSet_LocalGet::create},
         {combineId(LocalSet_LocalGet::static_type(), LocalGet::static_type()),
          LocalSet_LocalGet_LocalGet::create},
+         {combineId(LocalSet::static_type(), I32Const::static_type()),
+         LocalSet_I32Const::create},
+         {combineId(LocalSet_I32Const::static_type(), LocalSet::static_type()),
+         LocalSet_I32Const_LocalSet::create},
         {combineId(I32Const::static_type(), LocalSet::static_type()),
          I32Const_LocalSet::create},
         {combineId(I32Const_LocalSet::static_type(), LocalGet::static_type()),
@@ -288,7 +330,7 @@ bool canMerge(const Operation& first, const Operation& second) {
     if (first->is<Nop>())
         return true;
 
-    if (second->is<Label>())
+    if (first->isBranching() || second->is<Label>())
         return false;
 
     size_t combinedId = combineId(first->type(), second->type());
@@ -308,7 +350,7 @@ bool canMerge(const Operation& first, const Operation& second) {
     return true;
 }
 
-Operation merge(const Operation& first, const Operation& second) {
+Operation merge(Operation&& first, Operation&& second) {
     mergesPerformed++;
 
     if (first->is<Nop>())
@@ -321,7 +363,7 @@ Operation merge(const Operation& first, const Operation& second) {
         std::exit(-1);
     }
 
-    return it->second(first, second);
+    return it->second(std::move(first), std::move(second));
 }
 
 void printStats() {

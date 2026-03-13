@@ -1,3 +1,4 @@
+#include <list>
 #include <fmt/base.h>
 
 #include "hw/mem/mmu.hpp"
@@ -561,7 +562,7 @@ Operation OperationBase::addNext(Operation op) {
         next_ = next_->addNext(op);
     } else {
         if (canMerge(shared_from_this(), op)) {
-            return merge(shared_from_this(), op);
+            return merge(shared_from_this(), std::move(op));
         }
 
         next_ = op;
@@ -637,7 +638,7 @@ Loop::Loop(const grammar::Loop& loop,
 
     body_ = body_->addNext(
         OperationBase::create(instructions, func_types, targets));
-    body_ = body_->addNext(next_);
+    body_->addNext(next_);
 
     targets.erase(targets.begin());
 }
@@ -656,7 +657,7 @@ IfThen::IfThen(const grammar::IfElse& if_else,
 
     then_ = OperationBase::create(if_else.getThenExpr().getInstructions(),
                                   func_types, branch_targets);
-    then_ = then_->addNext(next_);
+    then_->addNext(next_);
 
     branch_targets.erase(branch_targets.begin());
 }
@@ -686,11 +687,11 @@ IfElse::IfElse(const grammar::IfElse& if_else,
 
     then_ = OperationBase::create(if_else.getThenExpr().getInstructions(),
                                   func_types, branch_targets);
-    then_ = then_->addNext(next_);
+    then_->addNext(next_);
 
     else_ = OperationBase::create(if_else.getElseExpr().getInstructions(),
                                   func_types, branch_targets);
-    else_ = else_->addNext(next_);
+    else_->addNext(next_);
 
     branch_targets.erase(branch_targets.begin());
 }

@@ -5,6 +5,7 @@
 #include "runtime/kernel.hpp"
 
 int main(int argc, char** argv) {
+
     cxxopts::Options options("wasm-sp");
 
     options.add_options()("k,kernel", "Path to kernel WASM file",

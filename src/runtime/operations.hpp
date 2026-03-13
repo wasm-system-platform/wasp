@@ -53,6 +53,8 @@ public:
         return Unexpected(ERROR("evaluate called on non constant expression"));
     }
 
+    virtual bool isBranching() const { return false; }
+
     template <class Derived> const Derived& as() const {
         return reinterpret_cast<const Derived&>(*this);
     }
@@ -335,6 +337,8 @@ private:
     static void impl(LocalSet& local_set, Instance& instance, Value value);
 
     friend class LocalSet_LocalGet;
+    friend class LocalSet_I32Const;
+    friend class LocalSet_I32Const_LocalSet;
     friend class I32Const_LocalSet;
 };
 
@@ -384,6 +388,7 @@ private:
 
     static Value impl(I32Const& i32_const, Instance& instance);
 
+    friend class LocalSet_I32Const;
     friend class I32Const_LocalSet;
 };
 
@@ -874,6 +879,8 @@ public:
     I32Load(const grammar::I32Load& i32_load);
 
     Continuation action(Instance& instance) override;
+
+    bool isBranching() const override { return true; }
 
 private:
     uint32_t offset_;
