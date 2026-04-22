@@ -18,7 +18,7 @@ Operation
 OperationBase::create(const std::vector<grammar::Instruction>& instructions,
                       const std::vector<FunctionType>& func_types,
                       std::vector<Operation>& targets) {
-    Operation op;
+    Builder builder;
 
     for (size_t i = 0; i < instructions.size(); ++i) {
         Operation next;
@@ -546,29 +546,10 @@ OperationBase::create(const std::vector<grammar::Instruction>& instructions,
             exit(1);
         }
 
-        if (op)
-            op = op->addNext(next);
-        else
-            op = next;
+        builder.addNext(next);
     }
 
-    return op;
-}
-
-Operation OperationBase::addNext(Operation op) {
-    assert(!next_ || (next_.get() != op.get()));
-
-    if (next_) {
-        next_ = next_->addNext(op);
-    } else {
-        if (canMerge(shared_from_this(), op)) {
-            return merge(shared_from_this(), std::move(op));
-        }
-
-        next_ = op;
-    }
-
-    return shared_from_this();
+    return builder.build();
 }
 
 Continuation OperationBase::trap(Instance& instance, std::string msg,
@@ -593,6 +574,35 @@ std::string OperationBase::getFormattedAddress(Instance& instance) const {
     return instance.getGlobalState().getDebugInfo().getFormattedLocation(addr_);
 }
 
+void OperationBase::Builder::addNext(Operation next) {
+    for (auto it = next; it; it = it->next_) {
+        operations_.push_back(it);
+    }
+
+    while (operations_.size() >= 2) {
+        auto& second = operations_.back();
+        auto& first  = operations_[operations_.size() - 2];
+
+        if (!canMerge(first, second))
+            break;
+
+        Operation merged = merge(std::move(first), std::move(second));
+
+        operations_.pop_back();
+        operations_.back() = merged;
+    }
+}
+
+Operation OperationBase::Builder::build() {
+    for (size_t i = 0; i + 1 < operations_.size(); ++i) {
+        operations_[i]->next_ = operations_[i + 1];
+    }
+
+    Operation start = operations_.empty() ? nullptr : operations_[0];
+    operations_.clear();
+    return start;
+}
+
 /**********************/
 /* Control Operations */
 /**********************/
@@ -614,8 +624,11 @@ Block::Block(const grammar::Block& block,
 
     const std::vector<grammar::Instruction>& instructions =
         block.getInstruction();
-    body_ = OperationBase::create(instructions, func_types, targets);
-    body_->addNext(next_);
+
+    Builder builder;
+    builder.addNext(OperationBase::create(instructions, func_types, targets));
+    builder.addNext(next_);
+    body_ = builder.build();
 
     targets.erase(targets.begin());
 }
@@ -626,21 +639,23 @@ Continuation Block::action(Instance& instance) {
 
 Loop::Loop(const grammar::Loop& loop,
            const std::vector<FunctionType>& func_types,
-           std::vector<Operation>& targets)
+           std::vector<Operation>& labels)
     : TaggedOperation<Loop>(loop.getAddress()) {
-    body_ = std::make_shared<Label>(addr_);
     next_ = std::make_shared<Label>(addr_);
 
-    targets.insert(targets.begin(), body_);
+    Operation start = std::make_shared<Label>(addr_);
+    labels.insert(labels.begin(), start);
 
     const std::vector<grammar::Instruction>& instructions =
         loop.getInstruction();
 
-    body_ = body_->addNext(
-        OperationBase::create(instructions, func_types, targets));
-    body_->addNext(next_);
+    Builder builder;
+    builder.addNext(start);
+    builder.addNext(OperationBase::create(instructions, func_types, labels));
+    builder.addNext(next_);
+    body_ = builder.build();
 
-    targets.erase(targets.begin());
+    labels.erase(labels.begin());
 }
 
 Continuation Loop::action(Instance& instance) {
@@ -649,17 +664,19 @@ Continuation Loop::action(Instance& instance) {
 
 IfThen::IfThen(const grammar::IfElse& if_else,
                const std::vector<FunctionType>& func_types,
-               std::vector<Operation>& branch_targets)
+               std::vector<Operation>& labels)
     : TaggedOperation<IfThen>(if_else.getAddress()) {
     next_ = std::make_shared<Label>(addr_);
 
-    branch_targets.insert(branch_targets.begin(), next_);
+    labels.insert(labels.begin(), next_);
 
-    then_ = OperationBase::create(if_else.getThenExpr().getInstructions(),
-                                  func_types, branch_targets);
-    then_->addNext(next_);
+    Builder builder;
+    builder.addNext(OperationBase::create(if_else.getThenExpr().getInstructions(),
+                                  func_types, labels));
+    builder.addNext(next_);
+    then_ = builder.build();
 
-    branch_targets.erase(branch_targets.begin());
+    labels.erase(labels.begin());
 }
 
 Continuation IfThen::action(Instance& instance) {
@@ -679,21 +696,25 @@ Continuation IfThen::action(Instance& instance) {
 
 IfElse::IfElse(const grammar::IfElse& if_else,
                const std::vector<FunctionType>& func_types,
-               std::vector<Operation>& branch_targets)
+               std::vector<Operation>& labels)
     : TaggedOperation<IfElse>(if_else.getAddress()) {
     next_ = std::make_shared<Label>(addr_);
 
-    branch_targets.insert(branch_targets.begin(), next_);
+    labels.insert(labels.begin(), next_);
 
-    then_ = OperationBase::create(if_else.getThenExpr().getInstructions(),
-                                  func_types, branch_targets);
-    then_->addNext(next_);
+    Builder builder;
+    builder.addNext(OperationBase::create(if_else.getThenExpr().getInstructions(),
+                                  func_types, labels));
+    builder.addNext(next_);
+    then_ = builder.build();
 
-    else_ = OperationBase::create(if_else.getElseExpr().getInstructions(),
-                                  func_types, branch_targets);
-    else_->addNext(next_);
 
-    branch_targets.erase(branch_targets.begin());
+    builder.addNext(OperationBase::create(if_else.getElseExpr().getInstructions(),
+                                  func_types, labels));
+    builder.addNext(next_);
+    else_ = builder.build();
+
+    labels.erase(labels.begin());
 }
 
 Continuation IfElse::action(Instance& instance) {
@@ -702,7 +723,7 @@ Continuation IfElse::action(Instance& instance) {
 
     TRACE_VERBOSE(
         "{}: if else --> cond={}",
-        instance.getGlobalState().getDebugInfo().getFormattedLocation(addr_));
+        instance.getGlobalState().getDebugInfo().getFormattedLocation(addr_), cond);
 
     if (cond)
         return then_->action(instance);
@@ -759,13 +780,14 @@ Continuation BranchTable::action(Instance& instance) {
 Call::Call(const grammar::Call& call)
     : Call(call.getFuncIdx(), call.getAddress()) {}
 Call::Call(uint32_t func_idx, size_t addr)
-    : TaggedOperation<Call>(addr), func_idx_(func_idx),
-      epilogue_(std::make_shared<Epilogue>(func_idx, addr)) {}
+    : TaggedOperation<Call>(addr), func_idx_(func_idx) {
+    next_ = std::make_shared<Epilogue>(func_idx, addr);
+}
 
 Continuation Call::action(Instance& instance) {
     Function& func = instance.getGlobalState().getFunction(func_idx_);
 
-    instance.getActiveContext().getEpilogues().push(epilogue_);
+    instance.getActiveContext().getEpilogues().push(next_);
 
     if (instance.is<Process>()) {
         TRACE("{:{}}{}: call {} is_kernel={}", "",
@@ -774,6 +796,7 @@ Continuation Call::action(Instance& instance) {
                   addr_),
               func_idx_, instance.as<Process>().getKernel().is<Kernel>());
     }
+
     return func.enterFrame(instance.getActiveContext());
 }
 
@@ -2112,7 +2135,7 @@ Continuation I32Load::action(Instance& instance) {
 
     context.pushI32(value);
 
-    TRACE_VERBOSE("i32.load {} {}: ({}) -> ({})", align_, offset_, base, val);
+    TRACE_VERBOSE("i32.load {} {}: ({}) -> ({})", align_, offset_, base, value);
     return next_.get();
 }
 
@@ -2149,7 +2172,7 @@ Continuation I64Load::action(Instance& instance) {
 
     context.pushI64(value);
 
-    TRACE_VERBOSE("i64.load {} {}: ({}) -> ({})", align_, offset_, base, val);
+    TRACE_VERBOSE("i64.load {} {}: ({}) -> ({})", align_, offset_, base, value);
     return next_.get();
 }
 
@@ -2171,7 +2194,7 @@ Continuation F32Load::action(Instance& instance) {
 
     context.push(value);
 
-    TRACE_VERBOSE("f32.load {} {}: ({}) -> ({})", align_, offset_, base, val);
+    TRACE_VERBOSE("f32.load {} {}: ({}) -> ({})", align_, offset_, base, value);
     return next_.get();
 }
 
@@ -2226,7 +2249,7 @@ Continuation I32Load8Signed::action(Instance& instance) {
 
     context.pushI32(value);
     TRACE_VERBOSE("i32.load8_s {} {}: ({}) -> ({})", align_, offset_, base,
-                  val);
+                  value);
     return next_.get();
 }
 
@@ -2258,7 +2281,7 @@ Continuation I32Load8Unsigned::action(Instance& instance) {
 
     context.pushI32(value);
     TRACE_VERBOSE("i32.load8_u {} {}: ({}) -> ({})", align_, offset_, base,
-                  val);
+                  value);
     return next_.get();
 }
 
@@ -2282,7 +2305,7 @@ Continuation I32Load16Signed::action(Instance& instance) {
     context.pushI32(value);
 
     TRACE_VERBOSE("i32.load16_s align={} offset={}: (base={}) -> (val={})",
-                  align_, offset_, base, val);
+                  align_, offset_, base, value);
     return next_.get();
 }
 
@@ -2322,7 +2345,7 @@ Continuation I32Load16Unsigned::action(Instance& instance) {
     context.pushI32(value);
 
     TRACE_VERBOSE("i32.load16_u align={} offset={}: (base={}) -> (val={})",
-                  align_, offset_, base, val);
+                  align_, offset_, base, value);
     return next_.get();
 }
 
@@ -2345,7 +2368,7 @@ Continuation I64Load8Signed::action(Instance& instance) {
     context.pushI64(value);
 
     TRACE_VERBOSE("i64.load8_s align={} offset={}: (base={}) -> (val={})",
-                  align_, offset_, base, val);
+                  align_, offset_, base, value);
     return next_.get();
 }
 
@@ -2368,7 +2391,7 @@ Continuation I64Load8Unsigned::action(Instance& instance) {
     context.pushI64(value);
 
     TRACE_VERBOSE("i64.load8_u align={} offset={}: (base={}) -> (val={})",
-                  align_, offset_, base, val);
+                  align_, offset_, base, value);
     return next_.get();
 }
 
@@ -2391,7 +2414,7 @@ Continuation I64Load16Signed::action(Instance& instance) {
     context.pushI64(value);
 
     TRACE_VERBOSE("i64.load16_s align={} offset={}: (base={}) -> (val={})",
-                  align_, offset_, base, val);
+                  align_, offset_, base, value);
     return next_.get();
 }
 
@@ -2415,7 +2438,7 @@ Continuation I64Load16Unsigned::action(Instance& instance) {
     context.pushI64(value);
 
     TRACE_VERBOSE("i64.load16_u align={} offset={}: (base={}) -> (val={})",
-                  align_, offset_, base, val);
+                  align_, offset_, base, value);
     return next_.get();
 }
 
@@ -2438,7 +2461,7 @@ Continuation I64Load32Signed::action(Instance& instance) {
     context.pushI64(value);
 
     TRACE_VERBOSE("i64.load32_s align={} offset={}: (base={}) -> (val={})",
-                  align_, offset_, base, val);
+                  align_, offset_, base, value);
     return next_.get();
 }
 
@@ -2462,7 +2485,7 @@ Continuation I64Load32Unsigned::action(Instance& instance) {
     context.pushI64(value);
 
     TRACE_VERBOSE("i64.load32_u align={} offset={}: (base={}) -> (val={})",
-                  align_, offset_, base, val);
+                  align_, offset_, base, value);
     return next_.get();
 }
 
@@ -2504,7 +2527,7 @@ Continuation I32Store::action(Instance& instance) {
     }
 
     TRACE_VERBOSE("i32.store {} {}: ({}, {}) -> ()", align_, offset_, base,
-                  val);
+                  value);
     return next_.get();
 }
 
@@ -2542,7 +2565,7 @@ Continuation I64Store::action(Instance& instance) {
     }
 
     TRACE_VERBOSE("i64.store {} {}: ({}, {}) -> ()", align_, offset_, base,
-                  val);
+                  value);
     return next_.get();
 }
 
@@ -2562,7 +2585,7 @@ Continuation F32Store::action(Instance& instance) {
         return trap(instance, "f32.store out of bounds memory address", offset);
 
     TRACE_VERBOSE("f32.store {} {}: ({}, {}) -> ()", align_, offset_, base,
-                  val);
+                  value);
     return next_.get();
 }
 
@@ -2582,7 +2605,7 @@ Continuation F64Store::action(Instance& instance) {
         return trap(instance, "f64.store out of bounds memory address", offset);
 
     TRACE_VERBOSE("f64.store {} {}: ({}, {}) -> ()", align_, offset_, base,
-                  val);
+                  value);
     return next_.get();
 }
 
@@ -2620,7 +2643,7 @@ Continuation I32Store8::action(Instance& instance) {
     }
 
     TRACE_VERBOSE("i32.store8 {} {}: ({}, {}) -> ()", align_, offset_, base,
-                  val);
+                  value);
     return next_.get();
 }
 
@@ -2658,7 +2681,7 @@ Continuation I32Store16::action(Instance& instance) {
     }
 
     TRACE_VERBOSE("i32.store16 align={} offset={}: (base={}, val={}) -> ()",
-                  align_, offset_, base, val & 0xFFFF);
+                  align_, offset_, base, value & 0xFFFF);
     return next_.get();
 }
 
@@ -2702,7 +2725,7 @@ Continuation I64Store16::action(Instance& instance) {
                     offset);
 
     TRACE_VERBOSE("i64.store16 align={} offset={}: (base={}, val={}) -> ()",
-                  align_, offset_, base, val & 0xFFFF);
+                  align_, offset_, base, value & 0xFFFF);
     return next_.get();
 }
 
@@ -2724,7 +2747,7 @@ Continuation I64Store32::action(Instance& instance) {
                     offset);
 
     TRACE_VERBOSE("i64.store32 align={} offset={}: (base={}, val={}) -> ()",
-                  align_, offset_, base, val & 0xFFFFFFFF);
+                  align_, offset_, base, value & 0xFFFFFFFF);
     return next_.get();
 }
 
@@ -2825,7 +2848,7 @@ Continuation MemoryCopy::action(Instance& instance) {
         }
     }
 
-    TRACE_VERBOSE("memory.copy: (dst={}, src={}, count={})", dst, src, count);
+    TRACE_VERBOSE("memory.copy: (dst={}, src={}, count={})", dst_offset, src_offset, count);
     return next_.get();
 }
 
@@ -2964,7 +2987,9 @@ Continuation AtomicWait32::action(Instance& instance) {
         context.setTimeout(offset, timeout);
         context.setRunState(Context::RunState::waiting);
 
-        idle_->addNext(shared_from_this());
+        // TODO: figure out what i wanted to do here?
+        //idle_->addNext(shared_from_this());
+        __builtin_trap();
         return idle_.get();
     }
 }
@@ -2995,7 +3020,7 @@ Continuation AtomicLoad::action(Instance& instance) {
     context.pushI32(value);
 
     TRACE_VERBOSE("memory.atomic.load {} {}: ({}) -> ({})", align_, offset_,
-                  base, val);
+                  base, value);
     return next_.get();
 }
 
@@ -3026,7 +3051,7 @@ Continuation AtomicLoad8Unsigned::action(Instance& instance) {
     context.pushI32(value);
 
     TRACE_VERBOSE("memory.atomic.load8_u {} {}: ({}) -> ({})", align_, offset_,
-                  base, val);
+                  base, value);
     return next_.get();
 }
 
@@ -3055,7 +3080,7 @@ Continuation AtomicStore::action(Instance& instance) {
     __atomic_store_n(value_ptr, value, __ATOMIC_SEQ_CST);
 
     TRACE_VERBOSE("memory.atomic.store {} {}: ({}, {}) -> ()", align_, offset_,
-                  val, base);
+                  value, base);
     return next_.get();
 }
 
@@ -3084,7 +3109,7 @@ Continuation AtomicStore8::action(Instance& instance) {
     __atomic_store_n(value_ptr, value, __ATOMIC_SEQ_CST);
 
     TRACE_VERBOSE("memory.atomic.store8 {} {}: ({}, {}) -> ()", align_, offset_,
-                  val, base);
+                  value, base);
     return next_.get();
 }
 
@@ -3116,7 +3141,7 @@ Continuation AtomicAdd::action(Instance& instance) {
     context.pushI32(static_cast<int32_t>(old));
 
     TRACE_VERBOSE("i32.atomic.rmw.add {} {}: ({}, {}) -> ()", align_, offset_,
-                  base, val, old);
+                  base, value, old);
     return next_.get();
 }
 
@@ -3148,7 +3173,7 @@ Continuation AtomicExchange8Unsigned::action(Instance& instance) {
     context.pushI32(old);
 
     TRACE_VERBOSE("i32.atomic.rmw8.xchg_u {} {}: ({}, {}) -> ({})", align_,
-                  offset_, val, base, old);
+                  offset_, value, base, old);
     return next_.get();
 }
 

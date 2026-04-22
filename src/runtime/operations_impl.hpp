@@ -23,7 +23,7 @@ inline void LocalSet::impl(LocalSet& local_set, Instance& instance,
                   instance.getActiveContext().getEpilogues().size(),
                   instance.getGlobalState().getDebugInfo().getFormattedLocation(
                       local_set.addr_),
-                  local_set.local_idx_, value.i32, value.i64);
+                  local_set.local_idx_, local.i32, local.i64);
 };
 
 // inline Value LocalTee::impl(LocalTee& local_tee, Instance& instance, Value

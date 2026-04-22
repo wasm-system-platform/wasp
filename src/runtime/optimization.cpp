@@ -325,13 +325,16 @@ static size_t mergesPerformed = 0;
 static size_t mergeAttempts = 0;
 
 bool canMerge(const Operation& first, const Operation& second) {
+    if (first->is<Label>() && second->is<Nop>())
+        return false;
+
+    if (first->isBranching() || second->is<Label>())
+        return false;
+
     mergeAttempts++;
 
     if (first->is<Nop>())
         return true;
-
-    if (first->isBranching() || second->is<Label>())
-        return false;
 
     size_t combinedId = combineId(first->type(), second->type());
     if (!recipes.contains(combinedId)) {
@@ -380,15 +383,16 @@ void printStats() {
     std::sort(stats.begin(), stats.end(),
               [](const auto& a, const auto& b) { return a.second > b.second; });
 
-    fmt::print("=== Optimization Stats ===\n");
-    fmt::print("merge success rate: {}%\n\n",
+    fmt::println("=== Optimization Stats ===");
+    fmt::println("merge attempts: {}", mergeAttempts);
+    fmt::println("merge success rate: {}%\n",
                (mergesPerformed * 100.0f) / mergeAttempts);
 
-    fmt::print("=== Top 10 Optimization Misses ===\n");
+    fmt::println("=== Top 10 Optimization Misses ===");
 
     size_t limit = std::min<size_t>(10, stats.size());
     for (size_t i = 0; i < limit; i++) {
-        fmt::print("{:>8} : {}\n", stats[i].second, stats[i].first);
+        fmt::println("{:>2.4f}% : {}", (100.0f * stats[i].second) / mergeAttempts, stats[i].first);
     }
 }
 

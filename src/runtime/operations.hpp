@@ -45,9 +45,6 @@ public:
            const std::vector<FunctionType>& func_types,
            std::vector<Operation>& targets);
 
-    virtual Operation addNext(Operation op);
-    void clearNext() { next_.reset(); }
-
     virtual Continuation action(Instance& instance) { return next_.get(); }
     virtual Expected<Continuation> eval(Context& context) const {
         return Unexpected(ERROR("evaluate called on non constant expression"));
@@ -73,6 +70,16 @@ public:
     std::string getFormattedAddress(Instance& instance) const;
 
 protected:
+    class Builder {
+    public:
+        Operation build();
+
+        void addNext(Operation next);
+
+    private:
+        Operations operations_;
+    };
+
     Operation next_;
     size_t addr_ = UINT32_MAX;
 
@@ -190,8 +197,6 @@ class Branch : public TaggedOperation<Branch> {
 public:
     Branch(const grammar::Branch& branch, std::vector<Operation>& targets);
 
-    Operation addNext(Operation) override { return shared_from_this(); }
-
     Continuation action(Instance& instance) override;
 
 private:
@@ -213,8 +218,6 @@ public:
     BranchTable(const grammar::BranchTable& br_table,
                 std::vector<Operation>& targets);
 
-    Operation addNext(Operation) override { return shared_from_this(); }
-
     Continuation action(Instance& instance) override;
 
 private:
@@ -226,11 +229,6 @@ class Call : public TaggedOperation<Call> {
 public:
     Call(const grammar::Call& call);
     Call(uint32_t func_idx, size_t addr);
-
-    Operation addNext(Operation next) override {
-        epilogue_->addNext(next);
-        return shared_from_this();
-    }
 
     Continuation action(Instance& instance) override;
 
@@ -246,7 +244,6 @@ private:
     };
 
     uint32_t func_idx_;
-    Operation epilogue_ = nullptr;
 };
 
 class CallIndirect : public TaggedOperation<CallIndirect> {
@@ -281,8 +278,6 @@ private:
 
 class Return : public TaggedOperation<Return> {
 public:
-    Operation addNext(Operation next) override { return shared_from_this(); }
-
     Continuation action(Instance& instance) override;
 };
 
