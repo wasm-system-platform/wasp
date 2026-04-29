@@ -315,6 +315,7 @@ private:
     template <size_t> friend class GenericProducer_LocalGet;
 
     friend class LocalGet_LocalGet;
+    friend class LocalGet_I32Const;
     friend class LocalSet_LocalGet;
     friend class LocalSet_LocalGet_LocalGet;
     friend class I32Const_LocalSet_LocalGet;
@@ -383,6 +384,7 @@ private:
 
     static Value impl(I32Const& i32_const, Instance& instance);
 
+    friend class LocalGet_I32Const;
     friend class LocalSet_I32Const;
     friend class I32Const_LocalSet;
 };

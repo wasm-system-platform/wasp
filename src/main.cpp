@@ -11,7 +11,8 @@ int main(int argc, char** argv) {
     options.add_options()("k,kernel", "Path to kernel WASM file",
                           cxxopts::value<std::string>())(
         "r,rootfs", "Path to rootfs image",
-        cxxopts::value<std::string>())("h,help", "Show help");
+        cxxopts::value<std::string>())("h,help", "Show help")
+        ("m,memory", "Kernel memory size in pages", cxxopts::value<int16_t>());
 
     auto args = options.parse(argc, argv);
 
@@ -42,6 +43,10 @@ int main(int argc, char** argv) {
     }
 
     runtime::Instance& kernel = **kernel_exp;
+
+    if (args.count("memory") != 0) {
+        kernel.getGlobalState().getMemory().updateLimit(args["memory"].as<int16_t>());
+    }
 
     Expected<void> result_exp = kernel.call("kernel_start", 0);
     if (!result_exp) {

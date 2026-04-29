@@ -123,6 +123,36 @@ private:
     }
 };
 
+class LocalGet_I32Const : public TaggedOperation<LocalGet_I32Const> {
+public:
+    LocalGet_I32Const(Operation&& local_get, Operation&& i32_const)
+        : local_get_(std::move(local_get)), i32_const_(std::move(i32_const)) {}
+
+    static Operation create(Operation&& first, Operation&& second) {
+        assert(first->is<LocalGet>());
+        assert(second->is<I32Const>());
+        return std::make_shared<LocalGet_I32Const>(std::move(first), std::move(second));
+    }
+
+    Continuation action(Instance& instance) override {
+        auto [out1, out2] = impl(*this, instance);
+        Context& context = instance.getActiveContext();
+        context.push(out1);
+        context.push(out2);
+        return next_.get();
+    }
+
+private:
+    Operation local_get_;
+    Operation i32_const_;
+
+    inline static std::array<Value, 2>
+    impl(LocalGet_I32Const& local_get_i32_const_, Instance& instance) {
+        return {LocalGet::impl(local_get_i32_const_.local_get_->as<LocalGet>(), instance),
+                I32Const::impl(local_get_i32_const_.i32_const_->as<I32Const>(), instance)};
+    }
+};
+
 class LocalSet_LocalGet : public TaggedOperation<LocalSet_LocalGet> {
 public:
     LocalSet_LocalGet(Operation&& local_set, Operation&& local_get)
@@ -305,6 +335,8 @@ static const std::unordered_map<size_t, Operation (*)(Operation&&, Operation&&)>
         // non generic
         {combineId(LocalGet::static_type(), LocalGet::static_type()),
          LocalGet_LocalGet::create},
+         {combineId(LocalGet::static_type(), I32Const::static_type()),
+         LocalGet_I32Const::create},
         {combineId(LocalSet::static_type(), LocalGet::static_type()),
          LocalSet_LocalGet::create},
         {combineId(LocalSet_LocalGet::static_type(), LocalGet::static_type()),
