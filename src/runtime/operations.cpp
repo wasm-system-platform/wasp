@@ -263,6 +263,12 @@ OperationBase::create(const std::vector<grammar::Instruction>& instructions,
         case grammar::I32ShiftRightUnsigned::OPCODE:
             next = std::make_shared<I32ShiftRightUnsigned>();
             break;
+        case grammar::I32RotateLeft::OPCODE:
+            next = std::make_shared<I32RotateLeft>();
+            break;
+        case grammar::I32RotateRight::OPCODE:
+            next = std::make_shared<I32RotateRight>();
+            break;
         case grammar::I64CountLeadingZeros::OPCODE:
             next = std::make_shared<I64CountLeadingZeros>();
             break;
@@ -1657,6 +1663,32 @@ Continuation I32ShiftRightUnsigned::action(Instance& instance) {
     context.pushI32(result);
 
     TRACE_VERBOSE("i32.shr_u: ({}, {}) -> ({})", left, right, result);
+    return next_.get();
+}
+
+Continuation I32RotateLeft::action(Instance& instance) {
+    Context& context = instance.getActiveContext();
+
+    uint32_t shift = context.pop().i32 & 31;
+    uint32_t value = static_cast<uint32_t>(context.pop().i32);
+    uint32_t result = std::rotl(value, static_cast<int>(shift));
+    context.pushI32(static_cast<int32_t>(result));
+
+    TRACE_VERBOSE("i32.rotl: ({}, {}) -> ({})", value, shift, result);
+
+    return next_.get();
+}
+
+Continuation I32RotateRight::action(Instance& instance) {
+    Context& context = instance.getActiveContext();
+
+    uint32_t shift = context.pop().i32 & 31;
+    uint32_t value = static_cast<uint32_t>(context.pop().i32);
+    uint32_t result = std::rotr(value, static_cast<int>(shift));
+    context.pushI32(static_cast<int32_t>(result));
+
+    TRACE_VERBOSE("i32.rotl: ({}, {}) -> ({})", value, shift, result);
+
     return next_.get();
 }
 

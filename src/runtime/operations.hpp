@@ -675,6 +675,16 @@ public:
     Continuation action(Instance& instance) override;
 };
 
+class I32RotateLeft : public TaggedOperation<I32RotateLeft> {
+public:
+    Continuation action(Instance& instance) override;
+};
+
+class I32RotateRight : public TaggedOperation<I32RotateRight> {
+public:
+    Continuation action(Instance& instance) override;
+};
+
 class I64CountLeadingZeros : public TaggedOperation<I64CountLeadingZeros> {
 public:
     Continuation action(Instance& instance) override;

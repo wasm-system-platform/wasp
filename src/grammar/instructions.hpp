@@ -913,6 +913,24 @@ public:
     std::string toString() const override { return "i32.shr_u"; }
 };
 
+class I32RotateLeft : public InstructionBase {
+public:
+    static constexpr uint8_t OPCODE = 0x77;
+
+    I32RotateLeft() : InstructionBase(OPCODE) {}
+
+    std::string toString() const override { return "i32.rotl"; }
+};
+
+class I32RotateRight : public InstructionBase {
+public:
+    static constexpr uint8_t OPCODE = 0x78;
+
+    I32RotateRight() : InstructionBase(OPCODE) {}
+
+    std::string toString() const override { return "i32.rotr"; }
+};
+
 class I64CountLeadingZeros : public InstructionBase {
 public:
     static constexpr uint8_t OPCODE = 0x79;

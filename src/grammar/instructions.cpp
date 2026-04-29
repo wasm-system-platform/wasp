@@ -278,6 +278,10 @@ Expected<Instruction> InstructionBase::parse(std::istream& in,
         return std::make_shared<I32ShiftRightSigned>();
     case I32ShiftRightUnsigned::OPCODE:
         return std::make_shared<I32ShiftRightUnsigned>();
+    case I32RotateLeft::OPCODE:
+        return std::make_shared<I32RotateLeft>();
+    case I32RotateRight::OPCODE:
+        return std::make_shared<I32RotateRight>();
     case I64CountLeadingZeros::OPCODE:
         return std::make_shared<I64CountLeadingZeros>();
     case I64CountTrailingZeros::OPCODE:
