@@ -50,4 +50,14 @@ inline Value I32Const::impl(I32Const& i32_const, Instance& instance) {
     return Value(i32_const.i_);
 }
 
+inline Value I32Add::impl(I32Add& i32_add, Instance& instance, const std::array<Value, 2>& in) {
+    int32_t out = in[0].i32 + in[1].i32;
+    TRACE_VERBOSE("[{:3}] {}: i32.add {}: ({}, {}) -> ({})",
+                  instance.getActiveContext().getEpilogues().size(),
+                  instance.getGlobalState().getDebugInfo().getFormattedLocation(
+                      i32_add.addr_),
+                  in[0].i32, in[1].i32, out);
+    return Value(out);
+}
+
 } // namespace runtime

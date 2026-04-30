@@ -1486,17 +1486,13 @@ Continuation I32PopCount::action(Instance& instance) {
 }
 
 Continuation I32Add::action(Instance& instance) {
-    Context& context = instance.getActiveContext();
+    Stack& stack = instance.getActiveContext().getStack();
 
-    int32_t right = context.pop().i32;
-    int32_t left = context.pop().i32;
-    int32_t result = left + right;
-    context.pushI32(result);
+    std::array<Value, 2> in;
+    stack.pop(in);
+    Value out = impl(*this, instance, in);
+    stack.push(out);
 
-    TRACE_VERBOSE(
-        "{}: i32.add: ({}, {}) -> ({})",
-        instance.getGlobalState().getDebugInfo().getFormattedLocation(addr_),
-        left, right, result);
     return next_.get();
 }
 

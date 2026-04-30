@@ -50,8 +50,6 @@ public:
         return Unexpected(ERROR("evaluate called on non constant expression"));
     }
 
-    virtual bool isBranching() const { return false; }
-
     template <class Derived> const Derived& as() const {
         return reinterpret_cast<const Derived&>(*this);
     }
@@ -95,7 +93,7 @@ public:
 
     static TypeId static_type() {
         static int id;
-        return &id;
+        return static_cast<const void *>(&id);
     }
 
     TypeId type() const override { return static_type(); }
@@ -387,6 +385,8 @@ private:
     friend class LocalGet_I32Const;
     friend class LocalSet_I32Const;
     friend class I32Const_LocalSet;
+    friend class I32Const_I32Const;
+    friend class I32Const_I32Const_I32Const;
 };
 
 class I64Const : public OperationBase {
@@ -612,6 +612,9 @@ public:
         : TaggedOperation<I32Add>(i32_add.getAddress()) {}
 
     Continuation action(Instance& instance) override;
+
+private:
+    static Value impl(I32Add& i32_add, Instance& instance, const std::array<Value, 2>& in);
 };
 
 class I32Sub : public TaggedOperation<I32Sub> {
@@ -886,8 +889,6 @@ public:
     I32Load(const grammar::I32Load& i32_load);
 
     Continuation action(Instance& instance) override;
-
-    bool isBranching() const override { return true; }
 
 private:
     uint32_t offset_;

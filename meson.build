@@ -62,4 +62,4 @@ sp = executable(
     ]
 )
 
-#subdir('test')
+subdir('test')

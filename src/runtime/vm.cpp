@@ -249,7 +249,7 @@ Expected<Memory> GlobalState::createMemory(const grammar::Module& module) {
         import_section.getMemoryImports();
 
     if (mem_imports.empty())
-        return Unexpected(ERROR("atleast one memory declaration is required"));
+        return Memory(0, 0);
 
     if (mem_imports.size() > 1)
         return Unexpected(ERROR("multi memory is currently not supported"));

@@ -135,10 +135,8 @@ public:
     }
 
     Continuation action(Instance& instance) override {
-        auto [out1, out2] = impl(*this, instance);
-        Context& context = instance.getActiveContext();
-        context.push(out1);
-        context.push(out2);
+        auto out = impl(*this, instance);
+        instance.getActiveContext().getStack().push(out);
         return next_.get();
     }
 
@@ -147,11 +145,36 @@ private:
     Operation i32_const_;
 
     inline static std::array<Value, 2>
-    impl(LocalGet_I32Const& local_get_i32_const_, Instance& instance) {
-        return {LocalGet::impl(local_get_i32_const_.local_get_->as<LocalGet>(), instance),
-                I32Const::impl(local_get_i32_const_.i32_const_->as<I32Const>(), instance)};
+    impl(LocalGet_I32Const& local_get_i32_const, Instance& instance) {
+        return {LocalGet::impl(local_get_i32_const.local_get_->as<LocalGet>(), instance),
+                I32Const::impl(local_get_i32_const.i32_const_->as<I32Const>(), instance)};
+    }
+
+    friend class LocalGet_I32Const_I32Add;
+};
+
+/*
+class LocalGet_I32Const_I32Add : public GenericProducer<1> {
+public:
+    LocalGet_I32Const_I32Add(Operation&& local_get_i32_const, Operation&& i32_add)
+        : local_get_i32_const_(std::move(local_get_i32_const)), i32_add_(std::move(i32_add)) {}
+
+    static Operation create(Operation&& first, Operation&& second) {
+        assert(first->is<LocalGet_I32Const>());
+        assert(second->is<I32Add>());
+        return std::make_shared<LocalGet_I32Const_I32Add>(std::move(first), std::move(second));
+    }
+
+private:
+    Operation local_get_i32_const_;
+    Operation i32_add_;
+
+    std::array<Value, 1> do_impl(Instance& instance) override {
+        //I32Add::impl();
+        LocalGet_I32Const::impl(local_get_i32_const_->as<LocalGet_I32Const>(), instance);
     }
 };
+*/
 
 class LocalSet_LocalGet : public TaggedOperation<LocalSet_LocalGet> {
 public:
@@ -319,6 +342,59 @@ private:
     friend class LocalSet_LocalGet_LocalGet;
 };
 
+class I32Const_I32Const : public TaggedOperation<I32Const_I32Const> {
+public:
+    I32Const_I32Const(Operation&& i32_const1, Operation&& i32_const2)
+        : i32_const1_(std::move(i32_const1)), i32_const2_(std::move(i32_const2)) {}
+
+    static Operation create(Operation&& first, Operation&& second) {
+        assert(first->is<I32Const>());
+        assert(second->is<I32Const>());
+        return std::make_shared<I32Const_I32Const>(std::move(first), std::move(second));
+    }
+
+    Continuation action(Instance& instance) override {
+        auto out = impl(*this, instance);
+        instance.getActiveContext().getStack().push(out);
+        return next_.get();
+    }
+
+private:
+    Operation i32_const1_;
+    Operation i32_const2_;
+
+    inline static std::array<Value, 2>
+    impl(I32Const_I32Const& i32_const_i32_const_, Instance& instance) {
+        return {I32Const::impl(i32_const_i32_const_.i32_const1_->as<I32Const>(), instance),
+                I32Const::impl(i32_const_i32_const_.i32_const2_->as<I32Const>(), instance)};
+    }
+
+    friend class I32Const_I32Const_I32Const;
+};
+
+class I32Const_I32Const_I32Const : public GenericProducer<3> {
+public:
+    I32Const_I32Const_I32Const(Operation&& i32_const_i32_const, Operation&& i32_const)
+        : i32_const_i32_const_(std::move(i32_const_i32_const)), i32_const_(std::move(i32_const)) {}
+
+    static Operation create(Operation&& first, Operation&& second) {
+        assert(first->is<I32Const_I32Const>());
+        assert(second->is<I32Const>());
+        return std::make_shared<I32Const_I32Const_I32Const>(std::move(first), std::move(second));
+    }
+
+private:
+    Operation i32_const_i32_const_;
+    Operation i32_const_;
+
+    std::array<Value, 3> do_impl(Instance& instance) override {
+        auto first = I32Const_I32Const::impl(i32_const_i32_const_->as<I32Const_I32Const>(), instance);
+        auto second = I32Const::impl(i32_const_->as<I32Const>(), instance);
+
+        return { first[0], first[1], second };
+    }
+};
+
 static size_t combineId(OperationBase::TypeId first,
                         OperationBase::TypeId second) {
     size_t seed = 0;
@@ -349,6 +425,10 @@ static const std::unordered_map<size_t, Operation (*)(Operation&&, Operation&&)>
          I32Const_LocalSet::create},
         {combineId(I32Const_LocalSet::static_type(), LocalGet::static_type()),
          I32Const_LocalSet_LocalGet::create},
+        {combineId(I32Const::static_type(), I32Const::static_type()),
+         I32Const_I32Const::create},
+        {combineId(I32Const_I32Const::static_type(), I32Const::static_type()),
+         I32Const_I32Const_I32Const::create},
 };
 
 static std::unordered_map<size_t, std::string> names;
@@ -357,13 +437,19 @@ static size_t mergesPerformed = 0;
 static size_t mergeAttempts = 0;
 
 bool canMerge(const Operation& first, const Operation& second) {
-    if (first->is<Label>() && second->is<Nop>())
-        return false;
-
-    if (first->isBranching() || second->is<Label>())
+    if (first->is<Label>() || second->is<Label>())
         return false;
 
     mergeAttempts++;
+
+    static const std::unordered_set<OperationBase::TypeId> BRANCHING_OPERATIONS = {
+        BranchIf::static_type(),
+        Call::static_type(),
+        I32Store::static_type(),
+    };
+
+    if (BRANCHING_OPERATIONS.contains(first->type()))
+        return false;
 
     if (first->is<Nop>())
         return true;
@@ -420,9 +506,8 @@ void printStats() {
     fmt::println("merge success rate: {}%\n",
                (mergesPerformed * 100.0f) / mergeAttempts);
 
-    fmt::println("=== Top 10 Optimization Misses ===");
-
     size_t limit = std::min<size_t>(10, stats.size());
+    fmt::println("=== Top {} Optimization Misses ===", limit);
     for (size_t i = 0; i < limit; i++) {
         fmt::println("{:>2.4f}% : {}", (100.0f * stats[i].second) / mergeAttempts, stats[i].first);
     }

@@ -56,6 +56,9 @@ Expected<void> Instance::call(const std::string& name, int32_t a, int32_t b) {
 
 Expected<int32_t> Instance::callRet(const std::string& name, int32_t a,
                                     int32_t b) {
+    ContextManager& ctxt_manager = ContextManager::instance();
+    Context& ctxt = ctxt_manager.createEmpty();
+    active_context_ = &ctxt;
     active_context_->pushI32(a);
     active_context_->pushI32(b);
 
