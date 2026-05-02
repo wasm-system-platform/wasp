@@ -73,7 +73,8 @@ public:
 
         uint32_t num_pages = num_curr_pages_ + delta;
 
-        if ((num_pages > num_max_pages_) || (num_pages > 1 << (UINT16_WIDTH - 1)))
+        if ((num_pages > num_max_pages_) ||
+            (num_pages > 1 << (UINT16_WIDTH - 1)))
             return UINT32_MAX;
 
         uint32_t num_old_pages = num_curr_pages_;
@@ -83,9 +84,7 @@ public:
         return num_old_pages;
     }
 
-    void updateLimit(uint16_t limit) {
-        num_max_pages_ = limit;
-    }
+    void updateLimit(uint16_t limit) { num_max_pages_ = limit; }
 
 private:
     uint16_t num_max_pages_;

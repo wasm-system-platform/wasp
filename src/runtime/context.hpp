@@ -2,6 +2,7 @@
 
 #include <cassert>
 #include <cstdint>
+#include <span>
 #include <stack>
 #include <variant>
 
@@ -19,18 +20,24 @@ public:
 
     inline Value pop() { return data_[--top]; }
 
-    template <size_t num_values>
-    inline void pop(std::array<Value, num_values>& out) {
-        top -= num_values;
-        std::memcpy(out.data(), &data_[top], sizeof(Value) * num_values);
+    template <typename Tuple> inline Tuple pop() {
+        top -= std::tuple_size_v<Tuple>;
+
+        return [&]<size_t... Is>(std::index_sequence<Is...>) {
+            return Tuple{static_cast<std::tuple_element_t<Is, Tuple>>(
+                data_[top + Is])...};
+        }(std::make_index_sequence<std::tuple_size_v<Tuple>>{});
     }
 
     inline void push(Value value) { data_[top++] = value; }
 
-    template <size_t num_values>
-    inline void push(const std::array<Value, num_values>& in) {
-        std::memcpy(&data_[top], in.data(), sizeof(Value) * num_values);
-        top += num_values;
+    template <typename... Values>
+    inline void push(const std::tuple<Values...>& in) {
+        std::apply(
+            [this](const Values&... values) {
+                ((data_[top++] = static_cast<Value>(values)), ...);
+            },
+            in);
     }
 
     inline void resize(size_t new_size) { top = new_size; }

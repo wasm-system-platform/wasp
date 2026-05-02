@@ -1,5 +1,5 @@
-#include <list>
 #include <fmt/base.h>
+#include <list>
 
 #include "hw/mem/mmu.hpp"
 #include "runtime/context.hpp"
@@ -583,19 +583,19 @@ std::string OperationBase::getFormattedAddress(Instance& instance) const {
 void OperationBase::Builder::addNext(Operation next) {
     for (auto it = next; it; it = it->next_) {
         operations_.push_back(it);
-    }
 
-    while (operations_.size() >= 2) {
-        auto& second = operations_.back();
-        auto& first  = operations_[operations_.size() - 2];
+        while (operations_.size() >= 2) {
+            auto& first = operations_[operations_.size() - 2];
+            auto& second = operations_[operations_.size() - 1];
 
-        if (!canMerge(first, second))
-            break;
+            if (!canMerge(first, second))
+                break;
 
-        Operation merged = merge(std::move(first), std::move(second));
+            Operation merged = merge(first, second);
 
-        operations_.pop_back();
-        operations_.back() = merged;
+            operations_.pop_back();
+            operations_.back() = merged;
+        }
     }
 }
 
@@ -677,8 +677,8 @@ IfThen::IfThen(const grammar::IfElse& if_else,
     labels.insert(labels.begin(), next_);
 
     Builder builder;
-    builder.addNext(OperationBase::create(if_else.getThenExpr().getInstructions(),
-                                  func_types, labels));
+    builder.addNext(OperationBase::create(
+        if_else.getThenExpr().getInstructions(), func_types, labels));
     builder.addNext(next_);
     then_ = builder.build();
 
@@ -709,14 +709,13 @@ IfElse::IfElse(const grammar::IfElse& if_else,
     labels.insert(labels.begin(), next_);
 
     Builder builder;
-    builder.addNext(OperationBase::create(if_else.getThenExpr().getInstructions(),
-                                  func_types, labels));
+    builder.addNext(OperationBase::create(
+        if_else.getThenExpr().getInstructions(), func_types, labels));
     builder.addNext(next_);
     then_ = builder.build();
 
-
-    builder.addNext(OperationBase::create(if_else.getElseExpr().getInstructions(),
-                                  func_types, labels));
+    builder.addNext(OperationBase::create(
+        if_else.getElseExpr().getInstructions(), func_types, labels));
     builder.addNext(next_);
     else_ = builder.build();
 
@@ -729,7 +728,8 @@ Continuation IfElse::action(Instance& instance) {
 
     TRACE_VERBOSE(
         "{}: if else --> cond={}",
-        instance.getGlobalState().getDebugInfo().getFormattedLocation(addr_), cond);
+        instance.getGlobalState().getDebugInfo().getFormattedLocation(addr_),
+        cond);
 
     if (cond)
         return then_->action(instance);
@@ -751,20 +751,8 @@ BranchIf::BranchIf(const grammar::BranchIf& br_if,
       target_(targets[br_if.getLabelIdx()]) {}
 
 Continuation BranchIf::action(Instance& instance) {
-    int32_t cond = instance.getActiveContext().pop().i32;
-    if (instance.is<Process>()) {
-        TRACE("{:{}}{}: br_if --> {}: (cond={}) -> () is_kernel={}", "",
-              instance.getActiveContext().getEpilogues().size(),
-              instance.getGlobalState().getDebugInfo().getFormattedLocation(
-                  addr_),
-              target_->getFormattedAddress(instance), cond,
-              instance.as<Process>().getKernel().is<Kernel>());
-    }
-
-    if (cond)
-        return target_.get();
-
-    return next_.get();
+    Value cond = instance.getActiveContext().pop();
+    return BranchIf::impl(*this, instance, next_.get(), cond);
 }
 
 BranchTable::BranchTable(const grammar::BranchTable& br_table,
@@ -946,43 +934,6 @@ Continuation Select::action(Instance& instance) {
 /* Variable Instructions */
 /*************************/
 
-LocalGet::LocalGet(const grammar::LocalGet& local_get)
-    : TaggedOperation<LocalGet>(local_get.getAddress()),
-      local_idx_(local_get.getLocalIdx()) {}
-
-Continuation LocalGet::action(Instance& instance) {
-    Value local = impl(*this, instance);
-    instance.getActiveContext().getStack().push(local);
-    return next_.get();
-}
-
-LocalSet::LocalSet(const grammar::LocalSet& local_set)
-    : TaggedOperation<LocalSet>(local_set.getAddress()),
-      local_idx_(local_set.getLocalIdx()) {}
-
-Continuation LocalSet::action(Instance& instance) {
-    Value local = instance.getActiveContext().getStack().pop();
-    impl(*this, instance, local);
-    return next_.get();
-}
-
-LocalTee::LocalTee(const grammar::LocalTee& local_tee)
-    : TaggedOperation<LocalTee>(local_tee.getAddress()),
-      local_idx_(local_tee.getLocalIdx()) {}
-
-Continuation LocalTee::action(Instance& instance) {
-    Context& context = instance.getActiveContext();
-
-    Value i = context.getStack().peek();
-    context.setLocal(local_idx_, i);
-
-    TRACE_VERBOSE(
-        "{}: local.tee {}: ({}) -> ({})",
-        instance.getGlobalState().getDebugInfo().getFormattedLocation(addr_),
-        local_idx_, i.i32, i.i32);
-    return next_.get();
-}
-
 GlobalGet::GlobalGet(const grammar::GlobalGet& global_get)
     : global_idx_(global_get.getGlobalIdx()) {}
 
@@ -1006,16 +957,6 @@ Continuation GlobalSet::action(Instance& instance) {
 /************************/
 /* Numeric Instructions */
 /************************/
-
-I32Const::I32Const(const grammar::I32Const& i32_const)
-    : TaggedOperation<I32Const>(i32_const.getAddress()),
-      i_(i32_const.getVal()) {}
-
-Continuation I32Const::action(Instance& instance) {
-    Value i = impl(*this, instance);
-    instance.getActiveContext().push(i);
-    return next_.get();
-}
 
 Expected<Continuation> I32Const::eval(Context& context) const {
     context.pushI32(i_);
@@ -1488,26 +1429,10 @@ Continuation I32PopCount::action(Instance& instance) {
 Continuation I32Add::action(Instance& instance) {
     Stack& stack = instance.getActiveContext().getStack();
 
-    std::array<Value, 2> in;
-    stack.pop(in);
-    Value out = impl(*this, instance, in);
-    stack.push(out);
+    auto [lhs, rhs] = stack.pop<std::tuple<Value, Value>>();
+    // Value out = impl(*this, instance, lhs, rhs);
+    stack.push(lhs.i32 + rhs.i32);
 
-    return next_.get();
-}
-
-Continuation I32Sub::action(Instance& instance) {
-    Context& context = instance.getActiveContext();
-
-    int32_t right = context.pop().i32;
-    int32_t left = context.pop().i32;
-    int32_t result = left - right;
-    context.pushI32(result);
-
-    TRACE_VERBOSE(
-        "{}: i32.sub: ({}, {}) -> ({})",
-        instance.getGlobalState().getDebugInfo().getFormattedLocation(addr_),
-        left, right, result);
     return next_.get();
 }
 
@@ -2876,7 +2801,8 @@ Continuation MemoryCopy::action(Instance& instance) {
         }
     }
 
-    TRACE_VERBOSE("memory.copy: (dst={}, src={}, count={})", dst_offset, src_offset, count);
+    TRACE_VERBOSE("memory.copy: (dst={}, src={}, count={})", dst_offset,
+                  src_offset, count);
     return next_.get();
 }
 
@@ -3016,7 +2942,7 @@ Continuation AtomicWait32::action(Instance& instance) {
         context.setRunState(Context::RunState::waiting);
 
         // TODO: figure out what i wanted to do here?
-        //idle_->addNext(shared_from_this());
+        // idle_->addNext(shared_from_this());
         __builtin_trap();
         return idle_.get();
     }

@@ -24,6 +24,26 @@ struct Value {
 };
 static_assert(std::is_trivially_copyable_v<Value>);
 
+template <std::size_t num> struct ValueTuple {
+    template <std::size_t> using AlwaysValue = Value;
+
+    template <std::size_t... I>
+    static auto
+        make(std::index_sequence<I...>) -> std::tuple<AlwaysValue<I>...>;
+
+    using type = decltype(make(std::make_index_sequence<num>{}));
+};
+
+template <> struct ValueTuple<1> {
+    using type = Value;
+};
+
+template <> struct ValueTuple<0> {
+    using type = void;
+};
+
+template <std::size_t num> using Values = typename ValueTuple<num>::type;
+
 class Instance;
 class Context;
 class GlobalState;
@@ -78,13 +98,13 @@ protected:
         Operations operations_;
     };
 
-    Operation next_;
-    size_t addr_ = UINT32_MAX;
-
     OperationBase() = default;
     OperationBase(size_t addr) : addr_(addr) {}
 
     Continuation trap(Instance& instance, std::string msg, size_t addr) const;
+
+    Operation next_;
+    size_t addr_ = UINT32_MAX;
 };
 
 template <typename Derived> class TaggedOperation : public OperationBase {
@@ -93,7 +113,7 @@ public:
 
     static TypeId static_type() {
         static int id;
-        return static_cast<const void *>(&id);
+        return &id;
     }
 
     TypeId type() const override { return static_type(); }
@@ -111,6 +131,14 @@ public:
 
         return std::string(name.substr(pos + 2));
     }
+};
+
+template <typename Derived>
+class GenericOperation : public TaggedOperation<Derived> {
+public:
+    using TaggedOperation<Derived>::TaggedOperation;
+
+    Continuation action(Instance& instance) override;
 };
 
 /**********************/
@@ -203,6 +231,9 @@ private:
 
 class BranchIf : public TaggedOperation<BranchIf> {
 public:
+    static Continuation impl(BranchIf& br_if, Instance& instance,
+                             Continuation next, Value cond);
+
     BranchIf(const grammar::BranchIf& br_if, std::vector<Operation>& targets);
 
     Continuation action(Instance& instance) override;
@@ -299,48 +330,46 @@ public:
 /* Variable Instructions */
 /*************************/
 
-class LocalGet : public TaggedOperation<LocalGet> {
+class LocalGet : public GenericOperation<LocalGet> {
 public:
-    LocalGet(const grammar::LocalGet& local_get);
+    using InType = Values<0>;
+    using OutType = Values<1>;
 
-    Continuation action(Instance& instance) override;
+    static OutType impl(LocalGet& local_get, Instance& instance);
+
+    LocalGet(const grammar::LocalGet& local_get)
+        : GenericOperation<LocalGet>(local_get.getAddress()),
+          local_idx_(local_get.getLocalIdx()) {}
 
 private:
     uint32_t local_idx_;
-
-    static Value impl(LocalGet& local_get, Instance& instance);
-
-    template <size_t> friend class GenericProducer_LocalGet;
-
-    friend class LocalGet_LocalGet;
-    friend class LocalGet_I32Const;
-    friend class LocalSet_LocalGet;
-    friend class LocalSet_LocalGet_LocalGet;
-    friend class I32Const_LocalSet_LocalGet;
 };
 
-class LocalSet : public TaggedOperation<LocalSet> {
+class LocalSet : public GenericOperation<LocalSet> {
 public:
-    LocalSet(const grammar::LocalSet& local_set);
+    using InType = Values<1>;
+    using OutType = Values<0>;
 
-    Continuation action(Instance& instance) override;
+    static OutType impl(LocalSet& local_set, Instance& instance, Value in);
+
+    LocalSet(const grammar::LocalSet& local_set)
+        : GenericOperation<LocalSet>(local_set.getAddress()),
+          local_idx_(local_set.getLocalIdx()) {}
 
 private:
     uint32_t local_idx_;
-
-    static void impl(LocalSet& local_set, Instance& instance, Value value);
-
-    friend class LocalSet_LocalGet;
-    friend class LocalSet_I32Const;
-    friend class LocalSet_I32Const_LocalSet;
-    friend class I32Const_LocalSet;
 };
 
-class LocalTee : public TaggedOperation<LocalTee> {
+class LocalTee : public GenericOperation<LocalTee> {
 public:
-    LocalTee(const grammar::LocalTee& local_tee);
+    using InType = std::tuple<Value>;
+    using OutType = Value;
 
-    Continuation action(Instance& instance) override;
+    static OutType impl(LocalTee& local_tee, Instance& instance, Value in);
+
+    LocalTee(const grammar::LocalTee& local_tee)
+        : GenericOperation<LocalTee>(local_tee.getAddress()),
+          local_idx_(local_tee.getLocalIdx()){};
 
 private:
     uint32_t local_idx_;
@@ -370,23 +399,21 @@ private:
 /* Numeric Instructions */
 /************************/
 
-class I32Const : public TaggedOperation<I32Const> {
+class I32Const : public GenericOperation<I32Const> {
 public:
-    I32Const(const grammar::I32Const& i32_const);
+    using InType = std::tuple<>;
+    using OutType = Value;
 
-    Continuation action(Instance& instance) override;
+    static OutType impl(I32Const& i32_const, Instance& instance);
+
+    I32Const(const grammar::I32Const& i32_const)
+        : GenericOperation<I32Const>(i32_const.getAddress()),
+          i_(i32_const.getVal()) {}
+
     Expected<Continuation> eval(Context& context) const override;
 
 private:
     int32_t i_;
-
-    static Value impl(I32Const& i32_const, Instance& instance);
-
-    friend class LocalGet_I32Const;
-    friend class LocalSet_I32Const;
-    friend class I32Const_LocalSet;
-    friend class I32Const_I32Const;
-    friend class I32Const_I32Const_I32Const;
 };
 
 class I64Const : public OperationBase {
@@ -614,15 +641,20 @@ public:
     Continuation action(Instance& instance) override;
 
 private:
-    static Value impl(I32Add& i32_add, Instance& instance, const std::array<Value, 2>& in);
+    static Value impl(I32Add& i32_add, Instance& instance,
+                      const std::array<Value, 2>& in);
 };
 
-class I32Sub : public TaggedOperation<I32Sub> {
+class I32Sub : public GenericOperation<I32Sub> {
 public:
-    I32Sub(const grammar::I32Sub& i32_sub)
-        : TaggedOperation<I32Sub>(i32_sub.getAddress()) {}
+    using InType = std::tuple<Value, Value>;
+    using OutType = Value;
 
-    Continuation action(Instance& instance) override;
+    static OutType impl(I32Sub& i32_sub, Instance& instance, Value lhs,
+                        Value rhs);
+
+    I32Sub(const grammar::I32Sub& i32_sub)
+        : GenericOperation<I32Sub>(i32_sub.getAddress()) {}
 };
 
 class I32Mul : public TaggedOperation<I32Mul> {

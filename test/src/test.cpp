@@ -27,16 +27,16 @@ TEST(Programs, Ackermann) {
         FAIL();
     }
 
-    auto t0_native = std::chrono::high_resolution_clock::now();
-    int32_t native = ack(3, 10);
-    auto t1_native = std::chrono::high_resolution_clock::now();
+    auto t0_native = std::chrono::steady_clock::now();
+    int32_t native = ack(3, 11);
+    auto t1_native = std::chrono::steady_clock::now();
     auto native_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
                          t1_native - t0_native)
                          .count();
 
-    auto t0_interp = std::chrono::high_resolution_clock::now();
+    auto t0_interp = std::chrono::steady_clock::now();
     auto result = (*instance)->callRet("main", 0, 0);
-    auto t1_interp = std::chrono::high_resolution_clock::now();
+    auto t1_interp = std::chrono::steady_clock::now();
     auto interp_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
                          t1_interp - t0_interp)
                          .count();
@@ -45,8 +45,8 @@ TEST(Programs, Ackermann) {
         static_cast<double>(interp_ns) / static_cast<double>(native_ns);
     double slower_pct = (factor - 1.0) * 100.0;
 
-    std::cout << "[perf] native: " << native_ns / 1'000'000
-              << " ms, interpreter: " << interp_ns / 1'000'000 << " ms";
+    std::cout << "[perf] native: " << native_ns / 1'000'000.0
+              << " ms, interpreter: " << interp_ns / 1'000'000.0 << " ms";
     std::cout << " (+" << slower_pct << "%)" << std::endl;
 
     EXPECT_EQ(native, *result);
