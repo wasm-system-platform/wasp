@@ -26,7 +26,8 @@ sp_sources = files(
     # 'src/devices/timer.cpp',
     'src/devices/keyboard.cpp',
     'src/hw/mem/mmu.cpp',
-    'src/hw/wasm_disk.cpp',
+    # 'src/hw/wasm_disk.cpp',
+    'src/devices/disk.cpp',
     'src/util/error_handling.cpp'
 )
 

@@ -2,6 +2,9 @@
 
 #include <cxxopts.hpp>
 
+#include "devices/disk.hpp"
+#include "devices/keyboard.hpp"
+#include "runtime/device_manager.hpp"
 #include "runtime/kernel.hpp"
 
 int main(int argc, char** argv) {
@@ -29,14 +32,21 @@ int main(int argc, char** argv) {
         exit(1);
     }
 
-    if (args.count("rootfs") == 0) {
-        std::cout << "Option 'rootfs' is required but not present\n"
-                  << options.help() << std::endl;
-        exit(1);
+    // plugin disk
+    if (args.count("rootfs") != 0) {
+        auto disk_exp = Disk::create(args["rootfs"].as<std::string>());
+        if (!disk_exp) {
+            std::cout << disk_exp.error().toString() << std::endl;
+            return -1;
+        }
+
+        runtime::DeviceManager::instance().plugIn(*disk_exp);
     }
 
-    auto kernel_exp = runtime::Kernel::create(args["kernel"].as<std::string>(),
-                                              args["rootfs"].as<std::string>());
+    // plugin keyboard
+    runtime::DeviceManager::instance().plugIn(std::make_shared<Keyboard>());
+
+    auto kernel_exp = runtime::Kernel::create(args["kernel"].as<std::string>());
     if (!kernel_exp) {
         std::cout << kernel_exp.error().toString() << std::endl;
         return -1;

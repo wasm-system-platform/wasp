@@ -1,7 +1,6 @@
 #pragma once
 
 #include "hw/mem/mmu.hpp"
-#include "runtime/device_manager.hpp"
 #include "runtime/instance.hpp"
 #include "runtime/process_manager.hpp"
 
@@ -12,7 +11,7 @@ using hw::mem::MemoryManagementUnit;
 class Kernel : public TaggedInstance<Kernel> {
 public:
     static Expected<std::shared_ptr<Kernel>>
-    create(const std::string& kernel_path, const std::string& rootfs_path);
+    create(const std::string& kernel_path);
 
     MemoryManagementUnit& getMMU() { return *mmu_; }
 
@@ -35,7 +34,7 @@ private:
     std::unique_ptr<MemoryManagementUnit> mmu_;
     std::unique_ptr<ProcessManager> proccess_manager_;
 
-    static Expected<Imports> createImports(const std::string& rootfs_path);
+    static Expected<Imports> createImports();
 
     Expected<void> validateExports();
 

@@ -196,6 +196,9 @@ private:
 
 class IfThen : public TaggedOperation<IfThen> {
 public:
+    static Continuation impl(IfThen& if_then, Instance& instance,
+                             Continuation next, Value cond);
+
     IfThen(const grammar::IfElse& if_else,
            const std::vector<FunctionType>& func_types,
            std::vector<Operation>& branch_targets);
@@ -208,6 +211,8 @@ protected:
 
 class IfElse : public TaggedOperation<IfElse> {
 public:
+    static Continuation impl(IfElse& if_else, Instance& instance, Value cond);
+
     IfElse(const grammar::IfElse& if_else,
            const std::vector<FunctionType>& func_types,
            std::vector<Operation>& branch_targets);
@@ -633,16 +638,16 @@ public:
     Continuation action(Instance& instance) override;
 };
 
-class I32Add : public TaggedOperation<I32Add> {
+class I32Add : public GenericOperation<I32Add> {
 public:
+    using InType = std::tuple<Value, Value>;
+    using OutType = Value;
+
+    static OutType impl(I32Add& i32_add, Instance& instance, Value lhs,
+                        Value rhs);
+
     I32Add(const grammar::I32Add& i32_add)
-        : TaggedOperation<I32Add>(i32_add.getAddress()) {}
-
-    Continuation action(Instance& instance) override;
-
-private:
-    static Value impl(I32Add& i32_add, Instance& instance,
-                      const std::array<Value, 2>& in);
+        : GenericOperation<I32Add>(i32_add.getAddress()) {}
 };
 
 class I32Sub : public GenericOperation<I32Sub> {
@@ -807,107 +812,107 @@ public:
     Continuation action(Instance& instance) override;
 };
 
-class F32Mul : public OperationBase {
+class F32Mul : public TaggedOperation<F32Mul> {
 public:
     Continuation action(Instance& instance) override;
 };
 
-class F32Div : public OperationBase {
+class F32Div : public TaggedOperation<F32Div> {
 public:
     Continuation action(Instance& instance) override;
 };
 
-class F64Mul : public OperationBase {
+class F64Mul : public TaggedOperation<F64Mul> {
 public:
     Continuation action(Instance& instance) override;
 };
 
-class F64Div : public OperationBase {
+class F64Div : public TaggedOperation<F64Div> {
 public:
     Continuation action(Instance& instance) override;
 };
 
-class F64CopySign : public OperationBase {
+class F64CopySign : public TaggedOperation<F64CopySign> {
 public:
     Continuation action(Instance& instance) override;
 };
 
-class I32WrapI64 : public OperationBase {
+class I32WrapI64 : public TaggedOperation<I32WrapI64> {
 public:
     Continuation action(Instance& instance) override;
 };
 
-class I64ExtendI32Signed : public OperationBase {
+class I64ExtendI32Signed : public TaggedOperation<I64ExtendI32Signed> {
 public:
     Continuation action(Instance& instance) override;
 };
 
-class I64ExtendI32Unsigned : public OperationBase {
+class I64ExtendI32Unsigned : public TaggedOperation<I64ExtendI32Unsigned> {
 public:
     Continuation action(Instance& instance) override;
 };
 
-class F32ConvertI32Signed : public OperationBase {
+class F32ConvertI32Signed : public TaggedOperation<F32ConvertI32Signed> {
 public:
     Continuation action(Instance& instance) override;
 };
 
-class F32DemoteF64 : public OperationBase {
+class F32DemoteF64 : public TaggedOperation<F32DemoteF64> {
 public:
     Continuation action(Instance& instance) override;
 };
 
-class F64ConvertI32Signed : public OperationBase {
+class F64ConvertI32Signed : public TaggedOperation<F64ConvertI32Signed> {
 public:
     Continuation action(Instance& instance) override;
 };
 
-class F64PromoteF32 : public OperationBase {
+class F64PromoteF32 : public TaggedOperation<F64PromoteF32> {
 public:
     Continuation action(Instance& instance) override;
 };
 
-class I32ReinterpretF32 : public OperationBase {
+class I32ReinterpretF32 : public TaggedOperation<I32ReinterpretF32> {
 public:
     Continuation action(Instance& instance) override;
 };
 
-class I64ReinterpretF64 : public OperationBase {
+class I64ReinterpretF64 : public TaggedOperation<I64ReinterpretF64> {
 public:
     Continuation action(Instance& instance) override;
 };
 
-class F32ReinterpretI32 : public OperationBase {
+class F32ReinterpretI32 : public TaggedOperation<F32ReinterpretI32> {
 public:
     Continuation action(Instance& instance) override;
 };
 
-class F64ReinterpretI64 : public OperationBase {
+class F64ReinterpretI64 : public TaggedOperation<F64ReinterpretI64> {
 public:
     Continuation action(Instance& instance) override;
 };
 
-class I32Extend8Signed : public OperationBase {
+class I32Extend8Signed : public TaggedOperation<I32Extend8Signed> {
 public:
     Continuation action(Instance& instance) override;
 };
 
-class I32Extend16Signed : public OperationBase {
+class I32Extend16Signed : public TaggedOperation<I32Extend16Signed> {
 public:
     Continuation action(Instance& instance) override;
 };
 
-class I64Extend8Signed : public OperationBase {
+class I64Extend8Signed : public TaggedOperation<I64Extend8Signed> {
 public:
     Continuation action(Instance& instance) override;
 };
 
-class I64Extend16Signed : public OperationBase {
+class I64Extend16Signed : public TaggedOperation<I64Extend16Signed> {
 public:
     Continuation action(Instance& instance) override;
 };
 
-class I64Extend32Signed : public OperationBase {
+class I64Extend32Signed : public TaggedOperation<I64Extend32Signed> {
 public:
     Continuation action(Instance& instance) override;
 };
@@ -960,7 +965,7 @@ private:
     uint32_t align_;
 };
 
-class I32Load8Signed : public OperationBase {
+class I32Load8Signed : public TaggedOperation<I32Load8Signed> {
 public:
     I32Load8Signed(const grammar::I32Load8Signed& i32_load8_s);
 
@@ -971,7 +976,7 @@ private:
     uint32_t align_;
 };
 
-class I32Load8Unsigned : public OperationBase {
+class I32Load8Unsigned : public TaggedOperation<I32Load8Unsigned> {
 public:
     I32Load8Unsigned(const grammar::I32Load8Unsigned& i32_load8_u);
 
@@ -982,7 +987,7 @@ private:
     uint32_t align_;
 };
 
-class I32Load16Signed : public OperationBase {
+class I32Load16Signed : public TaggedOperation<I32Load16Signed> {
 public:
     I32Load16Signed(const grammar::I32Load16Signed& i32_load16_s);
 
@@ -993,7 +998,7 @@ private:
     uint32_t align_;
 };
 
-class I32Load16Unsigned : public OperationBase {
+class I32Load16Unsigned : public TaggedOperation<I32Load16Unsigned> {
 public:
     I32Load16Unsigned(const grammar::I32Load16Unsigned& i32_load16_u);
 

@@ -1,7 +1,14 @@
+#include <utility>
+
 #include "runtime/device_manager.hpp"
 #include "runtime/interrupts.hpp"
 
 namespace runtime {
+
+enum class BusCommand : int32_t {
+    get_device_info = 0,
+    num_commands = 256,
+};
 
 DeviceManager& DeviceManager::instance() {
     static DeviceManager dev_mgr;
@@ -24,16 +31,31 @@ DeviceManager::~DeviceManager() {
         worker.join();
 }
 
-Errno DeviceManager::io(uint32_t port, int32_t cmd,
-                        std::span<uint8_t>& buffer) {
+BusResult DeviceManager::io(Instance& instance, uint32_t port, int32_t cmd,
+                            std::span<uint8_t> buffer) {
     const std::lock_guard<std::mutex> guard(guard_);
 
-    auto it = devices_.find(port);
-    if (it == devices_.end()) {
-        return Errno::INVALID_ARGUMENT;
+    if (port >= devices_.size() || !devices_[port]) {
+        return BusResult::no_device;
+    }
+    Device& dev = devices_[port];
+
+    switch (cmd) {
+    case std::to_underlying(BusCommand::get_device_info): {
+        if (buffer.size() < sizeof(DeviceInfo))
+            return BusResult::invalid_argument;
+
+        DeviceInfo* info = reinterpret_cast<DeviceInfo*>(buffer.data());
+        info->vendor_id = dev->vendorId();
+        info->device_id = dev->deviceId();
+        return BusResult::success;
+    }
+    default:
+        break;
     }
 
-    return it->second->io(cmd, buffer);
+    dev->io(instance, cmd, buffer);
+    return BusResult::success;
 }
 
 void DeviceManager::tick(size_t counter) {
@@ -43,9 +65,12 @@ void DeviceManager::tick(size_t counter) {
 
     InterruptController& controller =
         *controllers_[counter % controllers_.size()];
-    for (const auto& [port, device] : devices_) {
-        if (device->tick())
-            controller.interrupt(port);
+    for (size_t i = 0; i < devices_.size(); i++) {
+        if (!devices_[i])
+            continue;
+
+        if (devices_[i]->tick())
+            controller.interrupt(i);
     }
 }
 

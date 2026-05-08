@@ -1,13 +1,17 @@
 #pragma once
 
 #include <mutex>
-#include <span>
 
 #include "devices/device.hpp"
 #include "runtime/interrupts.hpp"
-#include "util/errno.hpp"
 
 namespace runtime {
+
+enum class BusResult : int32_t {
+    success = 0,
+    no_device = 1,
+    invalid_argument = 2,
+};
 
 class DeviceManager {
 public:
@@ -21,16 +25,17 @@ public:
         controllers_.emplace_back(controller);
     }
 
-    void plugIn(Device&& device, uint32_t port) {
+    void plugIn(Device device) {
         const std::lock_guard<std::mutex> guard(guard_);
-        devices_.emplace(port, std::move(device));
+        devices_.push_back(device);
     }
 
-    Errno io(uint32_t port, int32_t cmd, std::span<uint8_t>& buffer);
+    BusResult io(Instance& instance, uint32_t port, int32_t cmd,
+                 std::span<uint8_t> buffer);
 
 private:
     std::vector<std::shared_ptr<InterruptController>> controllers_;
-    std::unordered_map<uint32_t, Device> devices_;
+    std::vector<Device> devices_;
     std::mutex guard_;
 
     std::atomic<bool> running = true;

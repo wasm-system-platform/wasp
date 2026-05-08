@@ -1,13 +1,15 @@
-#include "runtime/kernel.hpp"
-#include "devices/keyboard.hpp"
-#include "hw/wasm_disk.hpp"
-#include "runtime/context_manager.hpp"
 #include <iostream>
+
+#include "devices/disk.hpp"
+#include "runtime/context_manager.hpp"
+#include "runtime/device_manager.hpp"
+#include "runtime/interrupts.hpp"
+#include "runtime/kernel.hpp"
 
 namespace runtime {
 
 Expected<std::shared_ptr<Kernel>>
-Kernel::create(const std::string& kernel_path, const std::string& rootfs_path) {
+Kernel::create(const std::string& kernel_path) {
     std::ifstream kernel_fstream;
     kernel_fstream.open("kernel.wasm", std::ios::in | std::ios::binary);
 
@@ -18,7 +20,7 @@ Kernel::create(const std::string& kernel_path, const std::string& rootfs_path) {
         return Unexpected(PROPAGATE(module_exp));
 
     // create imports to be supplied
-    Expected<Imports> imports_exp = Kernel::createImports(rootfs_path);
+    Expected<Imports> imports_exp = Kernel::createImports();
     if (!imports_exp)
         return Unexpected(PROPAGATE(imports_exp));
 
@@ -79,7 +81,7 @@ bool Kernel::functionExists(uint32_t idx, size_t signature) {
     return true;
 }
 
-Expected<Imports> Kernel::createImports(const std::string& rootfs_path) {
+Expected<Imports> Kernel::createImports() {
     // Interrupts
     std::function<int32_t(Instance & instance)> interrupts_enable_func =
         [](Instance& instance) -> int32_t {
@@ -190,96 +192,6 @@ Expected<Imports> Kernel::createImports(const std::string& rootfs_path) {
     Function context_get = Function::createExternal(context_get_func);
     Function context_create = Function::createExternal(context_create_func);
     Function context_switch = Function::createExternal(context_switch_func);
-
-    // WasmDisk
-    Expected<WasmDisk> disk_exp = WasmDisk::create(rootfs_path);
-    if (!disk_exp)
-        return Unexpected(PROPAGATE(disk_exp));
-
-    std::shared_ptr<WasmDisk> disk =
-        std::make_shared<WasmDisk>(std::move(*disk_exp));
-
-    std::function<int32_t(Instance&, int32_t, int32_t)> disk_read_func =
-        [disk](Instance& instance, uint32_t buffer_offset,
-               uint32_t count) -> int32_t {
-        Memory& memory = instance.getGlobalState().getMemory();
-        if (!memory.contains(buffer_offset, count)) {
-            return static_cast<int32_t>(Errno::BAD_ADDRESS);
-        }
-
-        uint8_t* buffer_ptr;
-        memory.ptr(buffer_offset, &buffer_ptr);
-        return disk->read(buffer_ptr, count);
-    };
-    std::function<int32_t(Instance&, int32_t)> disk_tellg_func =
-        [disk](Instance& instance, uint32_t pos_offset) -> int32_t {
-        uint32_t* pos_ptr;
-
-        Memory& memory = instance.getGlobalState().getMemory();
-        if (!memory.ptr(pos_offset, &pos_ptr)) {
-            return static_cast<int32_t>(Errno::BAD_ADDRESS);
-        }
-
-        return disk->tellg(pos_ptr);
-    };
-    std::function<int32_t(Instance&, int32_t, int32_t, int32_t)>
-        disk_seekg_func = [disk](Instance& instance, uint32_t pos,
-                                 int32_t whence,
-                                 uint32_t new_pos_offset) -> int32_t {
-        uint32_t* new_pos_ptr;
-
-        Memory& memory = instance.getGlobalState().getMemory();
-        if (!memory.ptr(new_pos_offset, &new_pos_ptr)) {
-            return static_cast<int32_t>(Errno::BAD_ADDRESS);
-        }
-
-        return disk->seekg(pos, whence, new_pos_ptr);
-    };
-
-    Function disk_read = Function::createExternal(disk_read_func);
-    Function disk_tellg = Function::createExternal(disk_tellg_func);
-    Function disk_seekg = Function::createExternal(disk_seekg_func);
-
-    std::function<int32_t(Instance&, int32_t, int32_t)> disk_write_func =
-        [disk](Instance& instance, uint32_t buffer_offset,
-               uint32_t count) -> int32_t {
-        Memory& memory = instance.getGlobalState().getMemory();
-        if (!memory.contains(buffer_offset, count)) {
-            return static_cast<int32_t>(Errno::BAD_ADDRESS);
-        }
-
-        uint8_t* buffer_ptr;
-        memory.ptr(buffer_offset, &buffer_ptr);
-        return disk->write(buffer_ptr, count);
-    };
-    std::function<int32_t(Instance&, int32_t)> disk_tellp_func =
-        [disk](Instance& instance, uint32_t pos_offset) -> int32_t {
-        uint32_t* pos_ptr;
-
-        Memory& memory = instance.getGlobalState().getMemory();
-        if (!memory.ptr(pos_offset, &pos_ptr)) {
-            return static_cast<int32_t>(Errno::BAD_ADDRESS);
-        }
-
-        return disk->tellp(pos_ptr);
-    };
-    std::function<int32_t(Instance&, int32_t, int32_t, int32_t)>
-        disk_seekp_func = [disk](Instance& instance, uint32_t pos,
-                                 int32_t whence,
-                                 uint32_t new_pos_offset) -> int32_t {
-        uint32_t* new_pos_ptr;
-
-        Memory& memory = instance.getGlobalState().getMemory();
-        if (!memory.ptr(new_pos_offset, &new_pos_ptr)) {
-            return static_cast<int32_t>(Errno::BAD_ADDRESS);
-        }
-
-        return disk->seekp(pos, whence, new_pos_ptr);
-    };
-
-    Function disk_write = Function::createExternal(disk_read_func);
-    Function disk_tellp = Function::createExternal(disk_tellg_func);
-    Function disk_seekp = Function::createExternal(disk_seekg_func);
 
     // Process
     std::function<int32_t(Instance&, int32_t, int32_t, int32_t)>
@@ -481,7 +393,7 @@ Expected<Imports> Kernel::createImports(const std::string& rootfs_path) {
 
         std::span<uint8_t> buffer = std::span<uint8_t>(buffer_ptr, buffer_size);
         return static_cast<int32_t>(
-            DeviceManager::instance().io(port, cmd, buffer));
+            DeviceManager::instance().io(instance, port, cmd, buffer));
     };
 
     Function device_io = Function::createExternal(device_io_func);
@@ -496,12 +408,6 @@ Expected<Imports> Kernel::createImports(const std::string& rootfs_path) {
         {"context.get", context_get},
         {"context.create", context_create},
         {"context.switch", context_switch},
-        {"disk.read", disk_read},
-        {"disk.tellg", disk_tellg},
-        {"disk.seekg", disk_seekg},
-        {"disk.write", disk_write},
-        {"disk.tellp", disk_tellp},
-        {"disk.seekp", disk_seekp},
         {"process.load", process_load},
         {"process.unload", process_unload},
         {"process.run", process_run},
@@ -604,7 +510,6 @@ Expected<void> Kernel::setupDeviceManager() {
     DeviceManager& dev_mgr = DeviceManager::instance();
 
     dev_mgr.registerController(controller_);
-    dev_mgr.plugIn(std::make_shared<Keyboard>(), KEYBOARD_PORT);
 
     return {};
 }

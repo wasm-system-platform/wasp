@@ -686,18 +686,8 @@ IfThen::IfThen(const grammar::IfElse& if_else,
 }
 
 Continuation IfThen::action(Instance& instance) {
-    Context& ctxt = instance.getActiveContext();
-    int32_t cond = ctxt.pop().i32;
-
-    TRACE_VERBOSE(
-        "{}: if --> cond={}",
-        instance.getGlobalState().getDebugInfo().getFormattedLocation(addr_),
-        cond);
-
-    if (cond)
-        return then_->action(instance);
-
-    return next_->action(instance);
+    int32_t cond = instance.getActiveContext().pop().i32;
+    return impl(*this, instance, next_.get(), cond);
 }
 
 IfElse::IfElse(const grammar::IfElse& if_else,
@@ -723,18 +713,8 @@ IfElse::IfElse(const grammar::IfElse& if_else,
 }
 
 Continuation IfElse::action(Instance& instance) {
-    Context& ctxt = instance.getActiveContext();
-    int32_t cond = ctxt.pop().i32;
-
-    TRACE_VERBOSE(
-        "{}: if else --> cond={}",
-        instance.getGlobalState().getDebugInfo().getFormattedLocation(addr_),
-        cond);
-
-    if (cond)
-        return then_->action(instance);
-
-    return else_->action(instance);
+    Value cond = instance.getActiveContext().getStack().pop();
+    return impl(*this, instance, cond);
 }
 
 Branch::Branch(const grammar::Branch& branch, std::vector<Operation>& targets)
@@ -828,6 +808,13 @@ Continuation CallIndirect::action(Instance& instance) {
     std::vector<Function>& functions = instance.getGlobalState().getFunctions();
     std::vector<uint32_t>& indirections =
         instance.getGlobalState().getIndirections();
+
+    if (element_idx >= indirections.size()) {
+        return trap(
+            instance,
+            fmt::format("call_indirect index '{}' out of bounds", element_idx),
+            addr_);
+    }
 
     if (functions.size() < indirections[element_idx]) {
         return trap(instance,
@@ -1423,16 +1410,6 @@ Continuation I32PopCount::action(Instance& instance) {
     context.pushI32(result);
 
     TRACE_VERBOSE("i32.popcnt: ({}) -> ({})", val, result);
-    return next_.get();
-}
-
-Continuation I32Add::action(Instance& instance) {
-    Stack& stack = instance.getActiveContext().getStack();
-
-    auto [lhs, rhs] = stack.pop<std::tuple<Value, Value>>();
-    // Value out = impl(*this, instance, lhs, rhs);
-    stack.push(lhs.i32 + rhs.i32);
-
     return next_.get();
 }
 
