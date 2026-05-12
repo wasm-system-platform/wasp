@@ -1,7 +1,6 @@
 #pragma once
 
 #include <atomic>
-#include <thread>
 
 #include "runtime/context.hpp"
 #include "runtime/handler.hpp"
@@ -79,8 +78,8 @@ private:
         }
 
     private:
-        std::atomic<uint32_t> head_;
-        std::atomic<uint32_t> tail_;
+        std::atomic<uint32_t> head_{0};
+        std::atomic<uint32_t> tail_{0};
         std::array<uint32_t, UINT8_MAX> data_;
     };
 

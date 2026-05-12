@@ -1,6 +1,7 @@
 #pragma once
 
 #include <mutex>
+#include <thread>
 
 #include "devices/device.hpp"
 #include "runtime/interrupts.hpp"

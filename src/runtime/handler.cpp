@@ -33,9 +33,9 @@ Continuation Interrupt::action(Instance& instance) {
 
         uint32_t port = instance_ctx.getStack().pop().i32;
 
-        Context& kernel_ctx = instance.getActiveContext();
+        Context& kernel_ctx = kernel.getActiveContext();
         kernel_ctx.pushI32(port);
-        instance_ctx.getEpilogues().push(epilogue);
+        kernel_ctx.getEpilogues().push(epilogue);
 
         kernel.switchBack();
 

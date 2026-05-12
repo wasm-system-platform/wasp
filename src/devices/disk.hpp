@@ -19,8 +19,8 @@ protected:
     Disk(std::fstream&& disk);
 
 private:
-    static constexpr uint32_t VENDOR_ID = 0x77617370;
-    static constexpr uint32_t DEVICE_ID = 0x6469736b;
+    static constexpr uint32_t VENDOR_ID = DeviceBase::asciiId("wasp");
+    static constexpr uint32_t DEVICE_ID = DeviceBase::asciiId("disk");
 
     enum class Command : int32_t {
         read = DEVICE_CMD_OFFSET + 0,

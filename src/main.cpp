@@ -3,7 +3,8 @@
 #include <cxxopts.hpp>
 
 #include "devices/disk.hpp"
-#include "devices/keyboard.hpp"
+#include "devices/terminal.hpp"
+#include "devices/timer.hpp"
 #include "runtime/device_manager.hpp"
 #include "runtime/kernel.hpp"
 
@@ -44,7 +45,9 @@ int main(int argc, char** argv) {
     }
 
     // plugin keyboard
-    runtime::DeviceManager::instance().plugIn(std::make_shared<Keyboard>());
+    runtime::DeviceManager::instance().plugIn(
+        std::make_shared<dev::Terminal>());
+    runtime::DeviceManager::instance().plugIn(std::make_shared<Timer>());
 
     auto kernel_exp = runtime::Kernel::create(args["kernel"].as<std::string>());
     if (!kernel_exp) {

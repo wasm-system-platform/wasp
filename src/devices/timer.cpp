@@ -1,48 +1,96 @@
+#include <utility>
+
 #include "devices/timer.hpp"
-#include "runtime/instance.hpp"
 
-Timer::Timer(uint32_t interrupt_handler_idx)
-    : DeviceBase(interrupt_handler_idx) {}
+bool Timer::tick() {
+    std::lock_guard<std::mutex> guard(guard_);
 
-runtime::Operation Timer::tick(runtime::Instance& instance, uint32_t port,
-                               runtime::Operation interrupt) {
-    if (!t_.active_ || t_.remaining_ == 0)
-        return interrupt;
+    if (!running_)
+        return false;
 
-    t_.remaining_ -= 1;
-    if (t_.remaining_ == 0) {
-        if (t_.interval_mode_)
-            t_.remaining_ = t_.interval_;
-        else
-            t_.active_ = false;
+    const auto now = std::chrono::steady_clock::now();
+    const auto elapsed_since_last_tick =
+        std::chrono::duration_cast<std::chrono::nanoseconds>(now - last_tick_);
 
-        instance.getActiveContext().pushI32(port);
-        handler_call->clearNext();
-        handler_call->addNext(interrupt);
-        return handler_call;
+    accumulated_ns_ += elapsed_since_last_tick.count();
+
+    const bool interval_elapsed = accumulated_ns_ >= interval_ns_;
+    const bool unlimited_fires = max_fires_ == UINT32_MAX;
+
+    if (interval_elapsed) {
+        accumulated_ns_ -= interval_ns_;
+
+        if (!unlimited_fires) {
+            fires_done_++;
+
+            if (fires_done_ >= max_fires_)
+                running_ = false;
+        }
     }
 
-    return interrupt;
+    last_tick_ = now;
+    return interval_elapsed;
 }
 
-void Timer::setTimout(uint32_t timeout) {
-    t_.remaining_ = timeout;
-    t_.active_ = true;
-    t_.interval_mode_ = false;
+void Timer::io(Instance& instance, int32_t cmd, std::span<uint8_t> buffer) {
+    switch (cmd) {
+    case std::to_underlying(Command::start):
+        start(buffer);
+        break;
+    case std::to_underlying(Command::stop):
+        stop(buffer);
+        break;
+    case std::to_underlying(Command::set):
+        set(buffer);
+        break;
+    default:
+        fmt::println("unknown cmd: {}", cmd);
+        Result* result = reinterpret_cast<Result*>(buffer.data());
+        *result = Result::invalid_arguments;
+    }
 }
 
-void Timer::setInterval(uint32_t timeout) {
-    t_.remaining_ = timeout;
-    t_.interval_ = timeout;
-    t_.active_ = true;
-    t_.interval_mode_ = true;
+void Timer::start(std::span<uint8_t> buffer) {
+    Result* result = reinterpret_cast<Result*>(buffer.data());
+
+    std::lock_guard<std::mutex> guard(guard_);
+
+    running_ = true;
+    last_tick_ = std::chrono::steady_clock::now();
+
+    *result = Result::success;
 }
 
-void Timer::clear() { t_ = {}; }
+void Timer::stop(std::span<uint8_t> buffer) {
+    Result* result = reinterpret_cast<Result*>(buffer.data());
 
-uint64_t Timer::getTime() {
-    auto now = std::chrono::steady_clock::now();
-    return std::chrono::duration_cast<std::chrono::nanoseconds>(now -
-                                                                boot_time_)
-        .count();
+    std::lock_guard<std::mutex> guard(guard_);
+
+    running_ = false;
+
+    *result = Result::success;
+}
+
+void Timer::set(std::span<uint8_t> buffer) {
+    struct SetCommand {
+        Result result;
+        uint64_t timeout_ns;
+        uint32_t repeat_count;
+    } __attribute__((packed));
+
+    if (buffer.size() < sizeof(SetCommand)) {
+        Result* result = reinterpret_cast<Result*>(buffer.data());
+        *result = Result::invalid_arguments;
+        return;
+    }
+
+    SetCommand* cmd = reinterpret_cast<SetCommand*>(buffer.data());
+
+    std::lock_guard<std::mutex> guard(guard_);
+
+    accumulated_ns_ = 0;
+    interval_ns_ = cmd->timeout_ns & ~(1ULL << 63);
+    max_fires_ = cmd->repeat_count;
+
+    cmd->result = Result::success;
 }

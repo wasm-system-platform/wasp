@@ -23,10 +23,9 @@ sp_sources = files(
     'src/runtime/kernel.cpp',
     'src/runtime/process.cpp',
     'src/runtime/optimization.cpp',
-    # 'src/devices/timer.cpp',
-    'src/devices/keyboard.cpp',
+    'src/devices/timer.cpp',
+    'src/devices/terminal.cpp',
     'src/hw/mem/mmu.cpp',
-    # 'src/hw/wasm_disk.cpp',
     'src/devices/disk.cpp',
     'src/util/error_handling.cpp'
 )

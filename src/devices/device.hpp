@@ -25,6 +25,15 @@ using Device = std::shared_ptr<DeviceBase>;
 
 class DeviceBase {
 public:
+    template <std::size_t N>
+    static consteval std::uint32_t asciiId(const char (&s)[N]) {
+        static_assert(N == 5);
+        return (std::uint32_t(std::uint8_t(s[0])) << 24) |
+               (std::uint32_t(std::uint8_t(s[1])) << 16) |
+               (std::uint32_t(std::uint8_t(s[2])) << 8) |
+               (std::uint32_t(std::uint8_t(s[3])));
+    }
+
     virtual ~DeviceBase() = default;
 
     uint32_t vendorId() const { return vendor_id_; }
