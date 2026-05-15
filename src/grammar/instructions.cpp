@@ -320,6 +320,12 @@ Expected<Instruction> InstructionBase::parse(std::istream& in,
         return std::make_shared<F32Mul>();
     case F32Div::OPCODE:
         return std::make_shared<F32Div>();
+    case F64Neg::OPCODE:
+        return std::make_shared<F64Neg>();
+    case F64Add::OPCODE:
+        return std::make_shared<F64Add>();
+    case F64Sub::OPCODE:
+        return std::make_shared<F64Sub>();
     case F64Mul::OPCODE:
         return std::make_shared<F64Mul>();
     case F64Div::OPCODE:
@@ -334,10 +340,18 @@ Expected<Instruction> InstructionBase::parse(std::istream& in,
         return std::make_shared<I64ExtendI32Unsigned>();
     case F32ConvertI32Signed::OPCODE:
         return std::make_shared<F32ConvertI32Signed>();
+    case F32ConvertI32Unsigned::OPCODE:
+        return std::make_shared<F32ConvertI32Unsigned>();
     case F32DemoteF64::OPCODE:
         return std::make_shared<F32DemoteF64>();
     case F64ConvertI32Signed::OPCODE:
         return std::make_shared<F64ConvertI32Signed>();
+    case F64ConvertI32Unsigned::OPCODE:
+        return std::make_shared<F64ConvertI32Unsigned>();
+    case F64ConvertI64Signed::OPCODE:
+        return std::make_shared<F64ConvertI64Signed>();
+    case F64ConvertI64Unsigned::OPCODE:
+        return std::make_shared<F64ConvertI64Unsigned>();
     case F64PromoteF32::OPCODE:
         return std::make_shared<F64PromoteF32>();
     case I32ReinterpretF32::OPCODE:
@@ -507,12 +521,57 @@ Expected<Instruction> InstructionBase::parse(std::istream& in,
             return Unexpected(PROPAGATE(memory_grow_exp));
         return std::make_shared<MemoryGrow>(*memory_grow_exp);
     }
-    case MemoryIntstructionBase::OPCODE:
-        return MemoryIntstructionBase::parse(in, addr);
+    case ExtendedIntstructionBase::OPCODE:
+        return ExtendedIntstructionBase::parse(in, addr);
     case AtomicIntstructionBase::OPCODE:
         return AtomicIntstructionBase::parse(in);
     default:
         return Unexpected(ERROR(fmt::format("unknown opcode: {:02X}", opcode)));
+    }
+}
+
+Expected<Instruction> ExtendedIntstructionBase::parse(std::istream& in,
+                                                      size_t addr) {
+    Expected<Byte> ext_opcode_exp = Byte::parse(in);
+    if (!ext_opcode_exp)
+        return Unexpected(PROPAGATE(ext_opcode_exp));
+    uint8_t ext_opcode = *ext_opcode_exp;
+
+    switch (ext_opcode) {
+    case I32TruncateSaturateF64Signed::EXT_OPCODE:
+        return std::make_shared<I32TruncateSaturateF64Signed>(addr);
+    case I32TruncateSaturateF64Unsigned::EXT_OPCODE:
+        return std::make_shared<I32TruncateSaturateF64Unsigned>(addr);
+    case I64TruncateSaturateF64Signed::EXT_OPCODE:
+        return std::make_shared<I64TruncateSaturateF64Signed>(addr);
+    case MemoryInit::EXT_OPCODE: {
+        Expected<MemoryInit> mem_init_exp = MemoryInit::parse(in);
+        if (!mem_init_exp)
+            return Unexpected(PROPAGATE(mem_init_exp));
+        return std::make_shared<MemoryInit>(*mem_init_exp);
+    }
+    case DataDrop::EXT_OPCODE: {
+        Expected<DataDrop> data_drop_exp = DataDrop::parse(in);
+        if (!data_drop_exp)
+            return Unexpected(PROPAGATE(data_drop_exp));
+        return std::make_shared<DataDrop>(*data_drop_exp);
+    }
+    case MemoryCopy::EXT_OPCODE: {
+        Expected<MemoryCopy> mem_copy_exp = MemoryCopy::parse(in);
+        if (!mem_copy_exp)
+            return Unexpected(PROPAGATE(mem_copy_exp));
+        return std::make_shared<MemoryCopy>(*mem_copy_exp);
+    }
+    case MemoryFill::EXT_OPCODE: {
+        Expected<MemoryFill> mem_fill_exp = MemoryFill::parse(in, addr);
+        if (!mem_fill_exp)
+            return Unexpected(PROPAGATE(mem_fill_exp));
+        return std::make_shared<MemoryFill>(*mem_fill_exp);
+    }
+    default:
+        return Unexpected(ERROR(
+            fmt::format("unknown extended instruction opcode: {:02X} {:02X}",
+                        ExtendedIntstructionBase::OPCODE, ext_opcode)));
     }
 }
 
@@ -1144,45 +1203,6 @@ Expected<MemoryGrow> MemoryGrow::parse(std::istream& in, size_t addr) {
 }
 
 std::string MemoryGrow::toString() const { return "memory.grow 0"; }
-
-Expected<Instruction> MemoryIntstructionBase::parse(std::istream& in,
-                                                    size_t addr) {
-    Expected<Byte> mem_opcode_exp = Byte::parse(in);
-    if (!mem_opcode_exp)
-        return Unexpected(PROPAGATE(mem_opcode_exp));
-    uint8_t mem_opcode = *mem_opcode_exp;
-
-    switch (mem_opcode) {
-    case MemoryInit::MEM_OPCODE: {
-        Expected<MemoryInit> mem_init_exp = MemoryInit::parse(in);
-        if (!mem_init_exp)
-            return Unexpected(PROPAGATE(mem_init_exp));
-        return std::make_shared<MemoryInit>(*mem_init_exp);
-    }
-    case DataDrop::MEM_OPCODE: {
-        Expected<DataDrop> data_drop_exp = DataDrop::parse(in);
-        if (!data_drop_exp)
-            return Unexpected(PROPAGATE(data_drop_exp));
-        return std::make_shared<DataDrop>(*data_drop_exp);
-    }
-    case MemoryCopy::MEM_OPCODE: {
-        Expected<MemoryCopy> mem_copy_exp = MemoryCopy::parse(in);
-        if (!mem_copy_exp)
-            return Unexpected(PROPAGATE(mem_copy_exp));
-        return std::make_shared<MemoryCopy>(*mem_copy_exp);
-    }
-    case MemoryFill::MEM_OPCODE: {
-        Expected<MemoryFill> mem_fill_exp = MemoryFill::parse(in, addr);
-        if (!mem_fill_exp)
-            return Unexpected(PROPAGATE(mem_fill_exp));
-        return std::make_shared<MemoryFill>(*mem_fill_exp);
-    }
-    default:
-        return Unexpected(ERROR(
-            fmt::format("unknown memory instruction opcode: {:02X} {:02X}",
-                        MemoryIntstructionBase::OPCODE, mem_opcode)));
-    }
-}
 
 Expected<MemoryInit> MemoryInit::parse(std::istream& in) {
     Expected<U32> segment_idx_res = U32::parse(in);

@@ -1,5 +1,3 @@
-#pragma once
-
 #include <mutex>
 
 #include "runtime/waiting_room.hpp"

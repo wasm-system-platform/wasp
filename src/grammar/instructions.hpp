@@ -71,6 +71,30 @@ private:
     size_t addr_;
 };
 
+class ExtendedIntstructionBase : public InstructionBase {
+public:
+    static constexpr uint8_t OPCODE = 0xFC;
+
+    static Expected<Instruction> parse(std::istream& in, size_t addr);
+
+    uint32_t getExtendedOpcode() const { return ext_opcode_; }
+
+    template <class Derived> bool is() const {
+        return ext_opcode_ == Derived::EXT_OPCODE;
+    }
+
+    template <class Derived> const Derived& as() const {
+        return reinterpret_cast<const Derived&>(*this);
+    }
+
+protected:
+    ExtendedIntstructionBase(uint32_t mem_id, size_t addr = 0)
+        : InstructionBase(OPCODE, addr), ext_opcode_(mem_id) {}
+
+private:
+    uint32_t ext_opcode_;
+};
+
 /************************/
 /* Control Instructions */
 /************************/
@@ -1102,6 +1126,33 @@ public:
     std::string toString() const override { return "f32.div"; }
 };
 
+class F64Neg : public InstructionBase {
+public:
+    static constexpr uint8_t OPCODE = 0x9A;
+
+    F64Neg() : InstructionBase(OPCODE) {}
+
+    std::string toString() const override { return "f64.neg"; }
+};
+
+class F64Add : public InstructionBase {
+public:
+    static constexpr uint8_t OPCODE = 0xA0;
+
+    F64Add() : InstructionBase(OPCODE) {}
+
+    std::string toString() const override { return "f64.add"; }
+};
+
+class F64Sub : public InstructionBase {
+public:
+    static constexpr uint8_t OPCODE = 0xA1;
+
+    F64Sub() : InstructionBase(OPCODE) {}
+
+    std::string toString() const override { return "f64.sub"; }
+};
+
 class F64Mul : public InstructionBase {
 public:
     static constexpr uint8_t OPCODE = 0xA2;
@@ -1165,6 +1216,15 @@ public:
     std::string toString() const override { return "f32.convert_i32_s"; }
 };
 
+class F32ConvertI32Unsigned : public InstructionBase {
+public:
+    static constexpr uint8_t OPCODE = 0xB3;
+
+    F32ConvertI32Unsigned() : InstructionBase(OPCODE) {}
+
+    std::string toString() const override { return "f32.convert_i32_u"; }
+};
+
 class F32DemoteF64 : public InstructionBase {
 public:
     static constexpr uint8_t OPCODE = 0xB6;
@@ -1181,6 +1241,33 @@ public:
     F64ConvertI32Signed() : InstructionBase(OPCODE) {}
 
     std::string toString() const override { return "f64.convert_i32_s"; }
+};
+
+class F64ConvertI32Unsigned : public InstructionBase {
+public:
+    static constexpr uint8_t OPCODE = 0xB8;
+
+    F64ConvertI32Unsigned() : InstructionBase(OPCODE) {}
+
+    std::string toString() const override { return "f64.convert_i32_u"; }
+};
+
+class F64ConvertI64Signed : public InstructionBase {
+public:
+    static constexpr uint8_t OPCODE = 0xB9;
+
+    F64ConvertI64Signed() : InstructionBase(OPCODE) {}
+
+    std::string toString() const override { return "f64.convert_i64_s"; }
+};
+
+class F64ConvertI64Unsigned : public InstructionBase {
+public:
+    static constexpr uint8_t OPCODE = 0xBA;
+
+    F64ConvertI64Unsigned() : InstructionBase(OPCODE) {}
+
+    std::string toString() const override { return "f64.convert_i64_u"; }
 };
 
 class F64PromoteF32 : public InstructionBase {
@@ -1271,6 +1358,36 @@ public:
     I64Extend32Signed() : InstructionBase(OPCODE) {}
 
     std::string toString() const override { return "i64.extend32_s"; }
+};
+
+class I32TruncateSaturateF64Signed : public ExtendedIntstructionBase {
+public:
+    static constexpr uint32_t EXT_OPCODE = 0x02;
+
+    I32TruncateSaturateF64Signed(size_t addr)
+        : ExtendedIntstructionBase(EXT_OPCODE, addr) {}
+
+    std::string toString() const override { return "i32.trunc_sat_f64_s"; }
+};
+
+class I32TruncateSaturateF64Unsigned : public ExtendedIntstructionBase {
+public:
+    static constexpr uint32_t EXT_OPCODE = 0x03;
+
+    I32TruncateSaturateF64Unsigned(size_t addr)
+        : ExtendedIntstructionBase(EXT_OPCODE, addr) {}
+
+    std::string toString() const override { return "i32.trunc_sat_f64_u"; }
+};
+
+class I64TruncateSaturateF64Signed : public ExtendedIntstructionBase {
+public:
+    static constexpr uint32_t EXT_OPCODE = 0x06;
+
+    I64TruncateSaturateF64Signed(size_t addr)
+        : ExtendedIntstructionBase(EXT_OPCODE, addr) {}
+
+    std::string toString() const override { return "i64.trunc_sat_f64_s"; }
 };
 
 /***********************/
@@ -1665,33 +1782,9 @@ private:
     MemoryGrow(size_t addr) : InstructionBase(OPCODE, addr) {}
 };
 
-class MemoryIntstructionBase : public InstructionBase {
+class MemoryInit : public ExtendedIntstructionBase {
 public:
-    static constexpr uint8_t OPCODE = 0xFC;
-
-    static Expected<Instruction> parse(std::istream& in, size_t addr);
-
-    uint32_t getMemoryOpcode() const { return mem_opcode_; }
-
-    template <class Derived> bool is() const {
-        return mem_opcode_ == Derived::MEM_OPCODE;
-    }
-
-    template <class Derived> const Derived& as() const {
-        return reinterpret_cast<const Derived&>(*this);
-    }
-
-protected:
-    MemoryIntstructionBase(uint32_t mem_id, size_t addr = 0)
-        : InstructionBase(OPCODE, addr), mem_opcode_(mem_id) {}
-
-private:
-    uint32_t mem_opcode_;
-};
-
-class MemoryInit : public MemoryIntstructionBase {
-public:
-    static constexpr uint32_t MEM_OPCODE = 0x08;
+    static constexpr uint32_t EXT_OPCODE = 0x08;
 
     static Expected<MemoryInit> parse(std::istream& in);
 
@@ -1703,12 +1796,12 @@ private:
     uint32_t segment_idx_;
 
     MemoryInit(uint32_t segment_idx)
-        : MemoryIntstructionBase(MEM_OPCODE), segment_idx_(segment_idx) {}
+        : ExtendedIntstructionBase(EXT_OPCODE), segment_idx_(segment_idx) {}
 };
 
-class DataDrop : public MemoryIntstructionBase {
+class DataDrop : public ExtendedIntstructionBase {
 public:
-    static constexpr uint32_t MEM_OPCODE = 0x09;
+    static constexpr uint32_t EXT_OPCODE = 0x09;
 
     static Expected<DataDrop> parse(std::istream& in);
 
@@ -1720,31 +1813,31 @@ private:
     uint32_t segment_idx_;
 
     DataDrop(uint32_t segment_idx)
-        : MemoryIntstructionBase(MEM_OPCODE), segment_idx_(segment_idx) {}
+        : ExtendedIntstructionBase(EXT_OPCODE), segment_idx_(segment_idx) {}
 };
 
-class MemoryCopy : public MemoryIntstructionBase {
+class MemoryCopy : public ExtendedIntstructionBase {
 public:
-    static constexpr uint32_t MEM_OPCODE = 0x0A;
+    static constexpr uint32_t EXT_OPCODE = 0x0A;
 
     static Expected<MemoryCopy> parse(std::istream& in);
 
     std::string toString() const override { return "memory.copy 0 0"; }
 
 private:
-    MemoryCopy() : MemoryIntstructionBase(MEM_OPCODE) {}
+    MemoryCopy() : ExtendedIntstructionBase(EXT_OPCODE) {}
 };
 
-class MemoryFill : public MemoryIntstructionBase {
+class MemoryFill : public ExtendedIntstructionBase {
 public:
-    static constexpr uint32_t MEM_OPCODE = 0x0B;
+    static constexpr uint32_t EXT_OPCODE = 0x0B;
 
     static Expected<MemoryFill> parse(std::istream& in, size_t addr);
 
     std::string toString() const override { return "memory.fill"; }
 
 private:
-    MemoryFill(size_t addr) : MemoryIntstructionBase(MEM_OPCODE, addr) {}
+    MemoryFill(size_t addr) : ExtendedIntstructionBase(EXT_OPCODE, addr) {}
 };
 
 /******************************/

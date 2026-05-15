@@ -822,6 +822,41 @@ public:
     Continuation action(Instance& instance) override;
 };
 
+class F64Neg : public GenericOperation<F64Neg> {
+public:
+    using InType = Values<1>;
+    using OutType = Values<1>;
+
+    static OutType impl(F64Neg& f64_neg, Instance& instance, Value in);
+
+    F64Neg(const grammar::F64Neg& f64_neg)
+        : GenericOperation<F64Neg>(f64_neg.getAddress()) {}
+};
+
+class F64Add : public GenericOperation<F64Add> {
+public:
+    using InType = Values<2>;
+    using OutType = Values<1>;
+
+    static OutType impl(F64Add& f64_add, Instance& instance, Value lhs,
+                        Value rhs);
+
+    F64Add(const grammar::F64Add& f64_add)
+        : GenericOperation<F64Add>(f64_add.getAddress()) {}
+};
+
+class F64Sub : public GenericOperation<F64Sub> {
+public:
+    using InType = Values<2>;
+    using OutType = Values<1>;
+
+    static OutType impl(F64Sub& f64_sub, Instance& instance, Value lhs,
+                        Value rhs);
+
+    F64Sub(const grammar::F64Sub& f64_sub)
+        : GenericOperation<F64Sub>(f64_sub.getAddress()) {}
+};
+
 class F64Mul : public TaggedOperation<F64Mul> {
 public:
     Continuation action(Instance& instance) override;
@@ -857,6 +892,15 @@ public:
     Continuation action(Instance& instance) override;
 };
 
+class F32ConvertI32Unsigned : public GenericOperation<F32ConvertI32Unsigned> {
+public:
+    using InType = Values<1>;
+    using OutType = Values<1>;
+
+    static OutType impl(F32ConvertI32Unsigned& f32_convert_i32_u,
+                        Instance& instance, Value in);
+};
+
 class F32DemoteF64 : public TaggedOperation<F32DemoteF64> {
 public:
     Continuation action(Instance& instance) override;
@@ -865,6 +909,33 @@ public:
 class F64ConvertI32Signed : public TaggedOperation<F64ConvertI32Signed> {
 public:
     Continuation action(Instance& instance) override;
+};
+
+class F64ConvertI32Unsigned : public GenericOperation<F64ConvertI32Unsigned> {
+public:
+    using InType = Values<1>;
+    using OutType = Values<1>;
+
+    static OutType impl(F64ConvertI32Unsigned& f64_convert_i32_u,
+                        Instance& instance, Value in);
+};
+
+class F64ConvertI64Signed : public GenericOperation<F64ConvertI64Signed> {
+public:
+    using InType = Values<1>;
+    using OutType = Values<1>;
+
+    static OutType impl(F64ConvertI64Signed& f64_convert_i64_s,
+                        Instance& instance, Value in);
+};
+
+class F64ConvertI64Unsigned : public GenericOperation<F64ConvertI64Unsigned> {
+public:
+    using InType = Values<1>;
+    using OutType = Values<1>;
+
+    static OutType impl(F64ConvertI64Unsigned& f64_convert_i64_u,
+                        Instance& instance, Value in);
 };
 
 class F64PromoteF32 : public TaggedOperation<F64PromoteF32> {
@@ -915,6 +986,51 @@ public:
 class I64Extend32Signed : public TaggedOperation<I64Extend32Signed> {
 public:
     Continuation action(Instance& instance) override;
+};
+
+class I32TruncateSaturateF64Signed
+    : public GenericOperation<I32TruncateSaturateF64Signed> {
+public:
+    using InType = Values<1>;
+    using OutType = Values<1>;
+
+    static OutType impl(I32TruncateSaturateF64Signed& i32_trunc_sat_f64_s,
+                        Instance& instance, Value in);
+
+    I32TruncateSaturateF64Signed(
+        const grammar::I32TruncateSaturateF64Signed& i32_trunc_sat_f64_s)
+        : GenericOperation<I32TruncateSaturateF64Signed>(
+              i32_trunc_sat_f64_s.getAddress()) {}
+};
+
+class I32TruncateSaturateF64Unsigned
+    : public GenericOperation<I32TruncateSaturateF64Unsigned> {
+public:
+    using InType = Values<1>;
+    using OutType = Values<1>;
+
+    static OutType impl(I32TruncateSaturateF64Unsigned& i32_trunc_sat_f64_u,
+                        Instance& instance, Value in);
+
+    I32TruncateSaturateF64Unsigned(
+        const grammar::I32TruncateSaturateF64Unsigned& i32_trunc_sat_f64_u)
+        : GenericOperation<I32TruncateSaturateF64Unsigned>(
+              i32_trunc_sat_f64_u.getAddress()) {}
+};
+
+class I64TruncateSaturateF64Signed
+    : public GenericOperation<I64TruncateSaturateF64Signed> {
+public:
+    using InType = Values<1>;
+    using OutType = Values<1>;
+
+    static OutType impl(I64TruncateSaturateF64Signed& i64_trunc_sat_f64_s,
+                        Instance& instance, Value in);
+
+    I64TruncateSaturateF64Signed(
+        const grammar::I64TruncateSaturateF64Signed& i64_trunc_sat_f64_s)
+        : GenericOperation<I64TruncateSaturateF64Signed>(
+              i64_trunc_sat_f64_s.getAddress()) {}
 };
 
 /***********************/

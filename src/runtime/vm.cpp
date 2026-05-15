@@ -211,7 +211,7 @@ Expected<std::vector<Function>> GlobalState::createFunctions(
         funcs.push_back(Function::create(*type_exp, func_types, functions[i]));
     }
 
-    printStats();
+    // printStats();
     return funcs;
 }
 

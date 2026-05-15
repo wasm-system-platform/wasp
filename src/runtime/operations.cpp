@@ -326,6 +326,15 @@ OperationBase::create(const std::vector<grammar::Instruction>& instructions,
         case grammar::F32Div::OPCODE:
             next = std::make_shared<F32Div>();
             break;
+        case grammar::F64Neg::OPCODE:
+            next = std::make_shared<F64Neg>(inst->as<grammar::F64Neg>());
+            break;
+        case grammar::F64Add::OPCODE:
+            next = std::make_shared<F64Add>(inst->as<grammar::F64Add>());
+            break;
+        case grammar::F64Sub::OPCODE:
+            next = std::make_shared<F64Sub>(inst->as<grammar::F64Sub>());
+            break;
         case grammar::F64Mul::OPCODE:
             next = std::make_shared<F64Mul>();
             break;
@@ -347,11 +356,23 @@ OperationBase::create(const std::vector<grammar::Instruction>& instructions,
         case grammar::F32ConvertI32Signed::OPCODE:
             next = std::make_shared<F32ConvertI32Signed>();
             break;
+        case grammar::F32ConvertI32Unsigned::OPCODE:
+            next = std::make_shared<F32ConvertI32Unsigned>();
+            break;
         case grammar::F32DemoteF64::OPCODE:
             next = std::make_shared<F32DemoteF64>();
             break;
         case grammar::F64ConvertI32Signed::OPCODE:
             next = std::make_shared<F64ConvertI32Signed>();
+            break;
+        case grammar::F64ConvertI32Unsigned::OPCODE:
+            next = std::make_shared<F64ConvertI32Unsigned>();
+            break;
+        case grammar::F64ConvertI64Signed::OPCODE:
+            next = std::make_shared<F64ConvertI64Signed>();
+            break;
+        case grammar::F64ConvertI64Unsigned::OPCODE:
+            next = std::make_shared<F64ConvertI64Unsigned>();
             break;
         case grammar::F64PromoteF32::OPCODE:
             next = std::make_shared<F64PromoteF32>();
@@ -470,29 +491,42 @@ OperationBase::create(const std::vector<grammar::Instruction>& instructions,
             next =
                 std::make_shared<MemoryGrow>(inst->as<grammar::MemoryGrow>());
             break;
-        case grammar::MemoryIntstructionBase::OPCODE: {
-            const grammar::MemoryIntstructionBase& mem_inst =
-                inst->as<grammar::MemoryIntstructionBase>();
-            uint32_t mem_opcode = mem_inst.getMemoryOpcode();
+        case grammar::ExtendedIntstructionBase::OPCODE: {
+            const grammar::ExtendedIntstructionBase& ext_inst =
+                inst->as<grammar::ExtendedIntstructionBase>();
+            uint32_t ext_opcode = ext_inst.getExtendedOpcode();
 
-            switch (mem_opcode) {
-            case grammar::MemoryInit::MEM_OPCODE:
+            switch (ext_opcode) {
+            case grammar::I32TruncateSaturateF64Signed::EXT_OPCODE:
+                next = std::make_shared<I32TruncateSaturateF64Signed>(
+                    inst->as<grammar::I32TruncateSaturateF64Signed>());
+                break;
+            case grammar::I32TruncateSaturateF64Unsigned::EXT_OPCODE:
+                next = std::make_shared<I32TruncateSaturateF64Unsigned>(
+                    inst->as<grammar::I32TruncateSaturateF64Unsigned>());
+                break;
+            case grammar::I64TruncateSaturateF64Signed::EXT_OPCODE:
+                next = std::make_shared<I64TruncateSaturateF64Signed>(
+                    inst->as<grammar::I64TruncateSaturateF64Signed>());
+                break;
+            case grammar::MemoryInit::EXT_OPCODE:
                 next = std::make_shared<MemoryInit>(
                     inst->as<grammar::MemoryInit>());
                 break;
-            case grammar::DataDrop::MEM_OPCODE:
+            case grammar::DataDrop::EXT_OPCODE:
                 next =
                     std::make_shared<DataDrop>(inst->as<grammar::DataDrop>());
                 break;
-            case grammar::MemoryCopy::MEM_OPCODE:
+            case grammar::MemoryCopy::EXT_OPCODE:
                 next = std::make_shared<MemoryCopy>();
                 break;
-            case grammar::MemoryFill::MEM_OPCODE:
+            case grammar::MemoryFill::EXT_OPCODE:
                 next = std::make_shared<MemoryFill>(
                     inst->as<grammar::MemoryFill>());
                 break;
             default:
-                fmt::println("unknown memory opcode 0xFC 0x{:02X}", mem_opcode);
+                fmt::println("unknown extended opcode 0xFC 0x{:02X}",
+                             ext_opcode);
                 exit(1);
             }
             break;
