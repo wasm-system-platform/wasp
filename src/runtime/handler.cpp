@@ -1,3 +1,5 @@
+#include <utility>
+
 #include "runtime/handler.hpp"
 #include "runtime/instance.hpp"
 #include "runtime/interrupts.hpp"
@@ -188,6 +190,63 @@ Continuation PageFault::Epilogue::action(Instance& instance) {
         kernel.switchToInstance(suspended_instance_);
     }
 
+    return nullptr;
+}
+
+/******************/
+/* Signal Handler */
+/******************/
+
+Continuation Signal::action(Instance& instance) {
+    Kernel& kernel = instance.as<Kernel>();
+    Context& kernel_ctxt = kernel.getActiveContext();
+
+    uint32_t pid = kernel_ctxt.getLocal(0).i32;
+    uint32_t handler_idx = kernel_ctxt.getLocal(1).i32;
+    int32_t signal = kernel_ctxt.getLocal(2).i32;
+
+    ProcessManager& proc_mgr = kernel.getProcessManager();
+    std::shared_ptr<Process> proc;
+
+    Errno result = proc_mgr.getProcess(pid, proc);
+    if (result != Errno::success) {
+        kernel_ctxt.pushI32(std::to_underlying(result));
+        return nullptr;
+    }
+
+    /* Find process handler function. */
+    std::vector<Function>& functions = proc->getGlobalState().getFunctions();
+    std::vector<uint32_t>& indirections = proc->getGlobalState().getIndirections();
+
+    if (handler_idx >= indirections.size() || indirections[handler_idx] >= functions.size()) {
+        kernel_ctxt.pushI32(std::to_underlying(Errno::invalid));
+        return nullptr;
+    }   
+
+    /* Handler must be of type (i32) -> (). */
+    Function& func = functions[indirections[handler_idx]];
+    if (func.getSignature() != FunctionType::ConsumerI32().getSignature()) {
+        kernel_ctxt.pushI32(std::to_underlying(Errno::invalid));
+        return nullptr;
+    }
+
+    /* Allocate epilogue. */
+    auto epilogue = std::make_shared<Epilogue>(instance, *this);
+
+    /* Prepare process state. */
+    Context& proc_ctxt = proc->getActiveContext();
+    proc_ctxt.getStack().push(signal);
+    proc_ctxt.getEpilogues().push(epilogue);
+
+    /* Switch to process and call the handler function. */
+    kernel.switchToInstance(*proc);
+    return func.enterFrame(proc_ctxt);
+}
+
+Continuation Signal::Epilogue::action(Instance& instance) {
+    Kernel& kernel = suspended_instance_.as<Kernel>();
+    kernel.getActiveContext().getStack().push(std::to_underlying(Errno::success));
+    kernel.switchBack();
     return nullptr;
 }
 

@@ -69,10 +69,10 @@ inline Continuation IfElse::impl(IfElse& if_else, Instance& instance,
 
 inline Continuation BranchIf::impl(BranchIf& br_if, Instance& instance,
                                    Continuation next, Value cond) {
-    TRACE("[{:3}]: br_if --> {}: (cond={}) -> ()",
+    TRACE_VERBOSE("[{:3}] {}: br_if --> {}: (cond={}) -> ()",
           instance.getActiveContext().getEpilogues().size(),
-          instance.getGlobalState().getDebugInfo().getFormattedLocation(addr_),
-          target_->getFormattedAddress(instance), cond);
+          instance.getGlobalState().getDebugInfo().getFormattedLocation(br_if.addr_),
+          br_if.target_->getFormattedAddress(instance), cond.i32);
 
     if (cond.i32)
         return br_if.target_.get();

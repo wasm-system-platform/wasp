@@ -18,7 +18,7 @@ sp_sources = files(
     'src/runtime/function.cpp',
     'src/runtime/vm.cpp',
     'src/runtime/handler.cpp',
-    'src/runtime/setjmp.cpp',
+    'src/runtime/checkpoint.cpp',
     'src/runtime/device_manager.cpp',
     'src/runtime/kernel.cpp',
     'src/runtime/process.cpp',
@@ -42,7 +42,10 @@ endif
 sp_lib = static_library(
     'wasm-sp-lib',
     sources: sp_sources,
-    dependencies: fmt_dep,
+    dependencies: [
+        fmt_dep,
+        dependency('libcrypto')
+    ],
     include_directories: include_directories('src/')
 )
 

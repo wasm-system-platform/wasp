@@ -1,9 +1,9 @@
 #include <spanstream>
 
+#include "runtime/checkpoint.hpp"
 #include "runtime/context_manager.hpp"
 #include "runtime/kernel.hpp"
 #include "runtime/process.hpp"
-#include "runtime/setjmp.hpp"
 
 namespace runtime {
 
@@ -57,7 +57,7 @@ Errno Process::clone(uint32_t new_id, std::shared_ptr<Process>& proc_out) {
 
     uint32_t clone_cid;
     Errno result = ctx_mgr.cloneContext(getActiveContext().getId(), clone_cid);
-    if (result != Errno::SUCCESS)
+    if (result != Errno::success)
         return result;
 
     class Builder : public Process {
@@ -67,7 +67,7 @@ Errno Process::clone(uint32_t new_id, std::shared_ptr<Process>& proc_out) {
 
     proc_out = std::make_shared<Builder>(*this, new_id);
     proc_out->setActiveContext(ctx_mgr.getContext(clone_cid));
-    return Errno::SUCCESS;
+    return Errno::success;
 }
 
 Expected<Imports>
@@ -95,20 +95,42 @@ Process::createImports(Instance& instance,
 
     Function sys_execve_stack = Function::createExternal(sys_execve_stack_func);
 
-    // setjmp/longjmp
-    sigsetjmp_out = std::make_shared<Sigsetjmp>();
-    Function env_sigsetjmp(sigsetjmp_out, 2, {int32_t(0), int32_t(0)},
-                           FunctionType::ProducerI32x2().getSignature());
+    // save/restore
+    std::function<int32_t(Instance & instance, int32_t, int32_t)>
+        env_save_func = [](Instance& instance, uint32_t checkpoint_offset,
+                           uint checkpoint_len) -> int32_t {
+        Memory& memory = instance.getGlobalState().getMemory();
+        if (!memory.contains(checkpoint_offset, checkpoint_len))
+            return static_cast<int32_t>(Errno::invalid);
 
-    std::shared_ptr<Longjmp> env_longjmp_op = std::make_shared<Longjmp>();
-    Function env_longjmp(env_longjmp_op, 2, {int32_t(0), int32_t(0)},
-                         FunctionType::ConsumerI32x2().getSignature());
+        uint8_t* checkpoint_ptr;
+        memory.ptr(checkpoint_offset, &checkpoint_ptr);
+        std::span<uint8_t> checkpoint(checkpoint_ptr, checkpoint_len);
+
+        return static_cast<int32_t>(checkpoint::create(instance, checkpoint));
+    };
+    std::function<int32_t(Instance & instance, int32_t, int32_t)>
+        env_restore_func = [](Instance& instance, uint32_t checkpoint_offset,
+                              uint checkpoint_len) -> int32_t {
+        Memory& memory = instance.getGlobalState().getMemory();
+        if (!memory.contains(checkpoint_offset, checkpoint_len))
+            return static_cast<int32_t>(Errno::invalid);
+
+        const uint8_t* checkpoint_ptr;
+        memory.ptr(checkpoint_offset, &checkpoint_ptr);
+        std::span<const uint8_t> checkpoint(checkpoint_ptr, checkpoint_len);
+
+        return static_cast<int32_t>(checkpoint::restore(instance, checkpoint));
+    };
+
+    Function env_save = Function::createExternal(env_save_func);
+    Function env_restore = Function::createExternal(env_restore_func);
 
     return Imports{
         {"sys.call", sys_call},
         {"sys.execve_stack", sys_execve_stack},
-        {"env.sigsetjmp", env_sigsetjmp},
-        {"env.longjmp", env_longjmp},
+        {"env.save", env_save},
+        {"env.restore", env_restore},
     };
 }
 
@@ -127,38 +149,6 @@ Expected<void> Process::validateExports(std::shared_ptr<Sigsetjmp>& sigsetjmp) {
                                   FunctionType::ConsumerI32x2().toString(),
                                   start.func_type.toString())
                           .c_str()));
-        }
-    }
-
-    it = exports_->find("sigsetjmp_prologue");
-    if (it != exports_->end()) {
-        Export& sigsetjmp_prologue = it->second;
-        size_t sigsetjmp_prologue_sig =
-            FunctionType::ConsumerI32x2().getSignature();
-
-        if (sigsetjmp_prologue_sig == sigsetjmp_prologue.signature) {
-            sigsetjmp->setPrologueFuncIdx(sigsetjmp_prologue.func_idx);
-        } else {
-            fmt::println("warning: sigsetjmp prologue has a wrong signature; "
-                         "expected signature '{}' but found '{}'",
-                         FunctionType::ConsumerI32x2().toString(),
-                         sigsetjmp_prologue.func_type.toString());
-        }
-    }
-
-    it = exports_->find("sigsetjmp_epilogue");
-    if (it != exports_->end()) {
-        Export& sigsetjmp_epilogue = it->second;
-        size_t sigsetjmp_epilogue_sig =
-            FunctionType::ConsumerI32x2().getSignature();
-
-        if (sigsetjmp_epilogue_sig == sigsetjmp_epilogue.signature) {
-            sigsetjmp->setEpilogueFuncIdx(sigsetjmp_epilogue.func_idx);
-        } else {
-            fmt::println("warning: sigsetjmp epilogue has a wrong signature; "
-                         "expected signature '{}' but found '{}'",
-                         FunctionType::ConsumerI32x2().toString(),
-                         sigsetjmp_epilogue.func_type.toString());
         }
     }
 

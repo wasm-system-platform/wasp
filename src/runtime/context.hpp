@@ -43,6 +43,8 @@ public:
     inline void resize(size_t new_size) { top = new_size; }
     const Value* data() { return data_.data(); }
 
+    void clear() { top = 0; }
+
 private:
     size_t top = 0;
     std::array<Value, UINT16_MAX> data_;
@@ -53,51 +55,66 @@ public:
     void pushLocals(const std::vector<Value>& locals) {
         size_t frame_size = locals.size();
 
-        if (stack_pointer_ + frame_size > stack_.size()) {
-            stack_.resize(stack_pointer_ + frame_size);
+        if (stack_pointer_ + frame_size > values_.size()) {
+            values_.resize(stack_pointer_ + frame_size);
         }
 
-        std::memcpy(stack_.data() + stack_pointer_, locals.data(),
+        std::memcpy(values_.data() + stack_pointer_, locals.data(),
                     frame_size * sizeof(Value));
 
-        frame_pointers_.push_back(frame_pointer_);
+        frames_.push_back(frame_pointer_);
         frame_pointer_ = stack_pointer_;
         stack_pointer_ += frame_size;
     }
 
     void popLocals() {
         stack_pointer_ = frame_pointer_;
-        frame_pointer_ = frame_pointers_.back();
-        frame_pointers_.pop_back();
+        frame_pointer_ = frames_.back();
+        frames_.pop_back();
     }
 
-    Value getLocal(uint32_t idx) const { return stack_[frame_pointer_ + idx]; }
+    Value getLocal(uint32_t idx) const { return values_[frame_pointer_ + idx]; }
 
     void setLocal(uint32_t idx, Value value) {
-        stack_[frame_pointer_ + idx] = value;
+        values_[frame_pointer_ + idx] = value;
     }
 
-    size_t getFramePointersSize() const { return frame_pointers_.size(); }
+    size_t getStackPointer() const { return stack_pointer_; }
+    size_t getFramePointer() const { return frame_pointer_; }
+    const std::vector<Value>& getValues() const { return values_; }
+    const std::vector<size_t>& getFrames() const { return frames_; }
+
+    void setFramePointer(size_t frame_pointer) {
+        frame_pointer_ = frame_pointer;
+    }
+    void setStackPointer(size_t stack_pointer) {
+        stack_pointer_ = stack_pointer;
+    }
+    void setValues(std::vector<Value>&& values) { values_ = std::move(values); }
+    void setFrames(std::vector<size_t>&& frames) {
+        frames_ = std::move(frames);
+    }
 
 private:
     size_t stack_pointer_ = 0;
     size_t frame_pointer_ = 0;
-    std::vector<size_t> frame_pointers_;
-    std::vector<Value> stack_;
+    std::vector<Value> values_;
+    std::vector<size_t> frames_;
 };
 
 class Epilogues {
 public:
-    void push(const Operation& epilogue) { data_[top++] = epilogue; }
-    const Operation& pop() { return data_[--top]; }
-    const Operation& peek() { return data_[top - 1]; }
-    void swap(const Operation& epilogue) { data_[top - 1] = epilogue; }
-    void shrink(size_t new_size) { top = new_size; }
-    size_t size() { return top; }
-    const Operation* data() { return data_.data(); }
+    void push(const Operation& epilogue) { data_[top_++] = epilogue; }
+    const Operation& pop() { return data_[--top_]; }
+    const Operation& peek() { return data_[top_ - 1]; }
+    void swap(const Operation& epilogue) { data_[top_ - 1] = epilogue; }
+    void shrink(size_t new_size) { top_ = new_size; }
+    size_t size() { return top_; }
+    const Operation* data() const { return data_.data(); }
+    void clear() { top_ = 0; }
 
 private:
-    size_t top = 0;
+    size_t top_ = 0;
     std::array<Operation, UINT16_MAX> data_;
 };
 

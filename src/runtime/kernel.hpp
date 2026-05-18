@@ -14,6 +14,7 @@ public:
     create(const std::string& kernel_path);
 
     MemoryManagementUnit& getMMU() { return *mmu_; }
+    ProcessManager& getProcessManager() { return *proccess_manager_; }
 
     void switchToInstance(Instance& instance) { active_instance_ = &instance; }
     void switchBack() { active_instance_ = this; }

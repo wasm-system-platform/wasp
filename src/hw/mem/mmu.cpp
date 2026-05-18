@@ -12,32 +12,32 @@ Errno MemoryManagementUnit::createTable(uint32_t& ptable_idx_out) {
         free_list_.pop();
     }
 
-    return Errno::SUCCESS;
+    return Errno::success;
 }
 
 Errno MemoryManagementUnit::destroyTable(uint32_t ptable_idx) {
     if (ptable_idx >= tables_.size()) {
-        return Errno::INVALID_ARGUMENT;
+        return Errno::invalid;
     }
 
     tables_[ptable_idx].clear();
     free_list_.push(ptable_idx);
-    return Errno::SUCCESS;
+    return Errno::success;
 }
 
 Errno MemoryManagementUnit::loadTable(uint32_t ptable_idx) {
     if (ptable_idx >= tables_.size())
-        return Errno::INVALID_ARGUMENT;
+        return Errno::invalid;
 
     active_idx_ = ptable_idx;
-    return Errno::SUCCESS;
+    return Errno::success;
 }
 
 Errno MemoryManagementUnit::mapPage(uint32_t ptable_idx, uint32_t virt_addr,
                                     uint32_t offset, int32_t prot) {
     if (ptable_idx >= tables_.size() || (virt_addr & WPAGE_MASK) ||
         (offset & WPAGE_MASK))
-        return Errno::INVALID_ARGUMENT;
+        return Errno::invalid;
 
     if (!memory_.contains(offset, WPAGE_SIZE))
         return Errno::BAD_ADDRESS;
@@ -48,7 +48,7 @@ Errno MemoryManagementUnit::mapPage(uint32_t ptable_idx, uint32_t virt_addr,
 Errno MemoryManagementUnit::unmapPage(uint32_t ptable_idx, uint32_t virt_addr,
                                       uint32_t* offset_out, int32_t* prot_out) {
     if (ptable_idx >= tables_.size())
-        return Errno::INVALID_ARGUMENT;
+        return Errno::invalid;
 
     return tables_[ptable_idx].unmapPage(virt_addr, offset_out, prot_out);
 }
@@ -56,7 +56,7 @@ Errno MemoryManagementUnit::unmapPage(uint32_t ptable_idx, uint32_t virt_addr,
 Errno MemoryManagementUnit::getPage(uint32_t ptable_idx, uint32_t virt_addr,
                                     uint32_t* offset_out, int32_t* prot_out) {
     if (ptable_idx >= tables_.size())
-        return Errno::INVALID_ARGUMENT;
+        return Errno::invalid;
 
     return tables_[ptable_idx].getPage(virt_addr, offset_out, prot_out);
 }
@@ -71,7 +71,7 @@ Errno MemoryManagementUnit::checkAccess(uint32_t va, AccessType access_type) {
 Errno PageTable::mapPage(uint32_t virt_addr, uint32_t offset, int32_t prot) {
     uint16_t page_num = virt_addr >> 16;
     mapping_[page_num] = Mapping{offset, prot};
-    return Errno::SUCCESS;
+    return Errno::success;
 }
 
 Errno PageTable::unmapPage(uint32_t virt_addr, uint32_t* offset,
@@ -90,7 +90,7 @@ Errno PageTable::unmapPage(uint32_t virt_addr, uint32_t* offset,
         *prot = mapping.prot;
 
     mapping_.erase(it);
-    return Errno::SUCCESS;
+    return Errno::success;
 }
 
 Errno PageTable::getPage(uint32_t virt_addr, uint32_t* offset, int32_t* prot) {
@@ -108,7 +108,7 @@ Errno PageTable::getPage(uint32_t virt_addr, uint32_t* offset, int32_t* prot) {
     if (prot)
         *prot = mapping.prot;
 
-    return Errno::SUCCESS;
+    return Errno::success;
 }
 
 bool PageTable::translate(uint32_t virt_addr, uint32_t& offset,

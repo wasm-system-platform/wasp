@@ -1,4 +1,5 @@
 #include <iostream>
+#include <utility>
 
 #include "devices/disk.hpp"
 #include "runtime/context_manager.hpp"
@@ -137,7 +138,7 @@ Expected<Imports> Kernel::createImports() {
 
         std::string_view msg(reinterpret_cast<char*>(buffer.data()), len);
         std::cout << msg << std::flush;
-        return static_cast<int32_t>(Errno::SUCCESS);
+        return static_cast<int32_t>(Errno::success);
     };
 
     Function console_out = Function::createExternal(console_out_func);
@@ -177,11 +178,11 @@ Expected<Imports> Kernel::createImports() {
         auto result = mgr.createTrampoline(instance.as<Kernel>(),
                                            entry_func_idx, param1, cid);
 
-        if (result != Errno::SUCCESS)
+        if (result != Errno::success)
             return static_cast<int32_t>(result);
 
         memory.store(cid_out_offset, cid);
-        return static_cast<int32_t>(Errno::SUCCESS);
+        return static_cast<int32_t>(Errno::success);
     };
     std::function<int32_t(Instance&, int32_t)> context_switch_func =
         [](Instance& instance, uint32_t next_id) -> int32_t {
@@ -224,11 +225,17 @@ Expected<Imports> Kernel::createImports() {
         return static_cast<int32_t>(
             proc_mgr.runProcess(pid, instance, execve_stack));
     };
-    std::function<void(Instance&, int32_t)> process_terminate_func =
-        [](Instance& instance, uint32_t pid) -> void {
+    std::function<int32_t(Instance&, int32_t)> process_terminate_func =
+        [](Instance& instance, uint32_t pid) -> int32_t {
         ProcessManager& proc_mgr = *instance.as<Kernel>().proccess_manager_;
-        Instance& proc = proc_mgr.getProcess(pid);
-        proc.getActiveContext().setRunState(Context::RunState::rdy);
+        std::shared_ptr<Process> proc;
+        
+        Errno result = proc_mgr.getProcess(pid, proc);
+        if (result != Errno::success)
+            return std::to_underlying(result);
+
+        proc->getActiveContext().setRunState(Context::RunState::rdy);
+        return std::to_underlying(Errno::success);
     };
     std::function<int32_t(Instance&, int32_t, int32_t)> process_clone_func =
         [](Instance& instance, uint32_t pid,
@@ -288,6 +295,9 @@ Expected<Imports> Kernel::createImports() {
         Function::createExternal(process_read_memory_cstring_func);
     Function process_write_memory =
         Function::createExternal(process_write_memory_func);
+    Function process_signal(std::make_shared<Signal>(), 3,
+                      {int32_t(0), int32_t(0), int32_t(0)},
+                      FunctionType::I32Producer_I32_I32_I32().getSignature());
 
     // Devices
     std::function<int64_t(Instance&)> timer_get_time_func =
@@ -417,6 +427,7 @@ Expected<Imports> Kernel::createImports() {
         {"process.read_memory", process_read_memory},
         {"process.read_memory_cstring", process_read_memory_cstring},
         {"process.write_memory", process_write_memory},
+        {"process.signal", process_signal},
         {"timer.get_time", timer_get_time},
         {"timer.set_interval", timer_set_interval},
         {"mmu.active_table", mmu_active_table},

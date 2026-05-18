@@ -27,7 +27,7 @@ Errno ContextManager::createTrampoline(Kernel& kernel, uint32_t entry_func_idx,
 
     if (!kernel.functionExists(entry_func_idx, entry_signature)) {
         fmt::println("oof");
-        return Errno::INVALID_ARGUMENT;
+        return Errno::invalid;
     }
 
     Context& ctxt = createEmpty();
@@ -40,35 +40,35 @@ Errno ContextManager::createTrampoline(Kernel& kernel, uint32_t entry_func_idx,
     ctxt.getEpilogues().push(entry);
     ctxt.setRunState(Context::RunState::suspended);
 
-    return Errno::SUCCESS;
+    return Errno::success;
 };
 
 Errno ContextManager::destroyContext(uint32_t id) {
     if (id >= contexts_.size() || !contexts_[id])
-        return Errno::INVALID_ARGUMENT;
+        return Errno::invalid;
 
     freeContextId(id);
-    return Errno::SUCCESS;
+    return Errno::success;
 }
 
 Errno ContextManager::cloneContext(uint32_t id, uint32_t& clone_id_out) {
     if (id >= contexts_.size() || !contexts_[id])
-        return Errno::INVALID_ARGUMENT;
+        return Errno::invalid;
 
     Context& ctx = *contexts_[id];
 
     clone_id_out = allocateContextId();
     contexts_[clone_id_out] = std::make_shared<Context>(ctx, id);
 
-    return Errno::SUCCESS;
+    return Errno::success;
 }
 
 Errno ContextManager::switchContext(Instance& instance, uint32_t next_id) {
     if (next_id >= contexts_.size() || !contexts_[next_id])
-        return Errno::INVALID_ARGUMENT;
+        return Errno::invalid;
 
     instance.setActiveContext(*contexts_[next_id]);
-    return Errno::SUCCESS;
+    return Errno::success;
 }
 
 uint32_t ContextManager::allocateContextId() {

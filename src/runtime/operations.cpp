@@ -794,15 +794,14 @@ Call::Call(uint32_t func_idx, size_t addr)
 
 Continuation Call::action(Instance& instance) {
     Function& func = instance.getGlobalState().getFunction(func_idx_);
-
     instance.getActiveContext().getEpilogues().push(next_);
 
     if (instance.is<Process>()) {
-        TRACE("{:{}}{}: call {} is_kernel={}", "",
+        TRACE("[{:3}] {}: call {} ({} sp=0x{:x})",
               instance.getActiveContext().getEpilogues().size(),
               instance.getGlobalState().getDebugInfo().getFormattedLocation(
                   addr_),
-              func_idx_, instance.as<Process>().getKernel().is<Kernel>());
+              func_idx_, locals.getValues().size(), (uint32_t)instance.getGlobalState().getGlobal(0).i32);
     }
 
     return func.enterFrame(instance.getActiveContext());
@@ -813,11 +812,11 @@ Call::Epilogue::Epilogue(uint32_t func_idx, size_t addr)
 
 Continuation Call::Epilogue::action(Instance& instance) {
     if (instance.is<Process>()) {
-        TRACE("{:{}}{}: ret {} is_kernel={}", "",
+        TRACE("[{:3}] {}: ret {}",
               instance.getActiveContext().getEpilogues().size(),
               instance.getGlobalState().getDebugInfo().getFormattedLocation(
                   addr_),
-              func_idx_, instance.as<Process>().getKernel().is<Kernel>());
+              func_idx_);
     }
 
     Function& func = instance.getGlobalState().getFunction(func_idx_);
@@ -871,7 +870,7 @@ Continuation CallIndirect::action(Instance& instance) {
     instance.getActiveContext().getEpilogues().push(epilogue);
 
     if (instance.is<Process>()) {
-        TRACE("{:{}}{}: call_indirect: (element_idx={}) -> ()", "",
+        TRACE("[{:3}] {}: call_indirect: (element_idx={}) -> ()",
               instance.getActiveContext().getEpilogues().size(),
               instance.getGlobalState().getDebugInfo().getFormattedLocation(
                   addr_),
@@ -907,11 +906,10 @@ CallIndirect::Epilogue::Epilogue(size_t idx, Function& func,
 
 Continuation CallIndirect::Epilogue::action(Instance& instance) {
     if (instance.is<Process>()) {
-        TRACE("{:{}}{}: ret is_kernel={}", "",
+        TRACE("[{:3}] {}: ret",
               instance.getActiveContext().getEpilogues().size(),
               instance.getGlobalState().getDebugInfo().getFormattedLocation(
-                  addr_),
-              instance.as<Process>().getKernel().is<Kernel>());
+                  addr_));
     }
 
     func_.leaveFrame(instance.getActiveContext());
@@ -2482,9 +2480,6 @@ Continuation I32Store::action(Instance& instance) {
             context.pushI32(value);
             context.getEpilogues().push(shared_from_this());
 
-            if (instance.is<Kernel>()) {
-                fmt::println("i32.store: {}", getFormattedAddress(instance));
-            }
             // trigger page fault handling
             return mmu.fault(instance, offset, true);
         }

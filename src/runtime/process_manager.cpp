@@ -17,22 +17,22 @@ Errno ProcessManager::createProcess(Instance& instance,
     if (!process_exp) {
         fmt::println("error: {}", process_exp.error().toString());
         freeProcessId(pid);
-        return Errno::INVALID_ARGUMENT;
+        return Errno::invalid;
     }
 
     processes_[pid] = std::move(*process_exp);
 
-    return Errno::SUCCESS;
+    return Errno::success;
 }
 
 Errno ProcessManager::runProcess(uint32_t pid, Instance& instance,
                                  uint32_t execve_stack) {
     if (pid >= processes_.size())
-        return Errno::INVALID_ARGUMENT;
+        return Errno::invalid;
 
     std::shared_ptr<Process>& proc = processes_[pid];
     if (!proc)
-        return Errno::INVALID_ARGUMENT;
+        return Errno::invalid;
 
     ContextManager& ctxt_manager = ContextManager::instance();
     Context& ctxt = ctxt_manager.createEmpty();
@@ -44,28 +44,28 @@ Errno ProcessManager::runProcess(uint32_t pid, Instance& instance,
     proc->setExecveStack(execve_stack);
     proc->setActiveContext(ctxt);
     instance.as<Kernel>().switchToInstance(*proc);
-    return Errno::SUCCESS;
+    return Errno::success;
 }
 
 Errno ProcessManager::cloneProcess(uint32_t pid, uint32_t& clone_pid) {
     // Invalid pid
     if (pid >= processes_.size())
-        return Errno::INVALID_ARGUMENT;
+        return Errno::invalid;
 
     std::shared_ptr<Process> original = processes_[pid];
     if (!original)
-        return Errno::INVALID_ARGUMENT;
+        return Errno::invalid;
 
     Context& original_ctx = original->getActiveContext();
     if (original_ctx.getRunState() != Context::RunState::in_syscall) {
         fmt::println("{}: impl error?", __PRETTY_FUNCTION__);
         __builtin_trap();
-        return Errno::INVALID_ARGUMENT;
+        return Errno::invalid;
     }
 
     clone_pid = allocateProcessId();
     Errno result = original->clone(clone_pid, processes_[clone_pid]);
-    if (result != Errno::SUCCESS)
+    if (result != Errno::success)
         freeProcessId(clone_pid);
 
     return result;
@@ -74,27 +74,33 @@ Errno ProcessManager::cloneProcess(uint32_t pid, uint32_t& clone_pid) {
 Errno ProcessManager::resumeProcess(uint32_t pid, Kernel& kernel,
                                     int32_t retval) {
     if (pid >= processes_.size())
-        return Errno::INVALID_ARGUMENT;
+        return Errno::invalid;
 
     std::shared_ptr<Process>& proc = processes_[pid];
     if (!proc)
-        return Errno::INVALID_ARGUMENT;
+        return Errno::invalid;
 
     Context& proc_ctx = proc->getActiveContext();
     if (proc_ctx.getRunState() != Context::RunState::in_syscall) {
         fmt::println("{}: impl error?", __PRETTY_FUNCTION__);
         __builtin_trap();
-        return Errno::INVALID_ARGUMENT;
+        return Errno::invalid;
     }
 
     proc_ctx.pushI32(retval);
     proc_ctx.setRunState(Context::RunState::running);
 
     kernel.switchToInstance(*proc);
-    return Errno::SUCCESS;
+    return Errno::success;
 }
 
-Instance& ProcessManager::getProcess(uint32_t pid) { return *processes_[pid]; }
+Errno ProcessManager::getProcess(uint32_t pid, std::shared_ptr<Process>& proc_out) {
+    if (pid <= processes_.size() || !processes_[pid])
+        return Errno::invalid;
+    
+    proc_out = processes_[pid];
+    return Errno::success;
+}
 
 Errno ProcessManager::readMemory(uint32_t pid, uint32_t kbuffer_offset,
                                  uint32_t pbuffer_offset, uint32_t count) {
@@ -102,7 +108,7 @@ Errno ProcessManager::readMemory(uint32_t pid, uint32_t kbuffer_offset,
 
     if (pid >= processes_.size()) {
         fmt::println("Invalid PID: {}", pid);
-        return Errno::INVALID_ARGUMENT;
+        return Errno::invalid;
     }
 
     std::shared_ptr<Process>& process = processes_[pid];
@@ -133,7 +139,7 @@ Errno ProcessManager::readMemory(uint32_t pid, uint32_t kbuffer_offset,
     }
 
     kernel_memory.store(kbuffer_offset, tbuffer);
-    return Errno::SUCCESS;
+    return Errno::success;
 }
 
 Errno ProcessManager::readMemoryCString(uint32_t pid, uint32_t kbuffer_offset,
@@ -142,7 +148,7 @@ Errno ProcessManager::readMemoryCString(uint32_t pid, uint32_t kbuffer_offset,
     std::shared_lock lock(mutex_);
 
     if (pid >= processes_.size())
-        return Errno::INVALID_ARGUMENT;
+        return Errno::invalid;
 
     std::shared_ptr<Process>& process = processes_[pid];
 
@@ -185,7 +191,7 @@ Errno ProcessManager::readMemoryCString(uint32_t pid, uint32_t kbuffer_offset,
             break;
     }
 
-    return Errno::SUCCESS;
+    return Errno::success;
 }
 
 Errno ProcessManager::writeMemory(uint32_t pid, uint32_t kbuffer_offset,
@@ -194,7 +200,7 @@ Errno ProcessManager::writeMemory(uint32_t pid, uint32_t kbuffer_offset,
 
     if (pid >= processes_.size()) {
         fmt::println("Invalid PID: {}", pid);
-        return Errno::INVALID_ARGUMENT;
+        return Errno::invalid;
     }
 
     std::shared_ptr<Process>& process = processes_[pid];
@@ -229,7 +235,7 @@ Errno ProcessManager::writeMemory(uint32_t pid, uint32_t kbuffer_offset,
         }
     }
 
-    return Errno::SUCCESS;
+    return Errno::success;
 }
 
 uint32_t ProcessManager::allocateProcessId() {

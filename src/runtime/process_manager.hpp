@@ -19,7 +19,7 @@ public:
     Errno runProcess(uint32_t pid, Instance& instance, uint32_t execve_stack);
     Errno cloneProcess(uint32_t pid, uint32_t& clone_pid);
     Errno resumeProcess(uint32_t pid, Kernel& kernel, int32_t retval);
-    Instance& getProcess(uint32_t pid);
+    Errno getProcess(uint32_t pid, std::shared_ptr<Process>& proc_out);
 
     Errno readMemory(uint32_t pid, uint32_t kbuf, uint32_t pbuf,
                      uint32_t count);
