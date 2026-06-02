@@ -2,9 +2,6 @@
 
 #include <cassert>
 #include <cstdint>
-#include <span>
-#include <stack>
-#include <variant>
 
 #include "runtime/operations.hpp"
 
@@ -127,36 +124,36 @@ public:
 
     Context(size_t id) : id_(id) {}
     Context(const Context& other, size_t id)
-        : id_(id), locals_(std::make_unique<Locals>(*other.locals_)),
-          stack_(std::make_unique<Stack>(*other.stack_)),
-          epilogues_(std::make_unique<Epilogues>(*other.epilogues_)),
+        : id_(id), locals_(other.locals_),
+          stack_(other.stack_),
+          epilogues_(other.epilogues_),
           run_state_(other.run_state_) {}
 
     inline size_t getId() const { return id_; }
 
-    size_t size() const { return stack_->size(); }
-    inline void push(Value value) { stack_->push(value); }
-    inline void pushI32(int32_t value) { stack_->push(value); }
-    inline void pushI64(int64_t value) { stack_->push(value); }
+    size_t size() const { return stack_.size(); }
+    inline void push(Value value) { stack_.push(value); }
+    inline void pushI32(int32_t value) { stack_.push(value); }
+    inline void pushI64(int64_t value) { stack_.push(value); }
 
-    inline Stack& getStack() { return *stack_; }
-    inline Value pop() { return stack_->pop(); }
-    inline void drop() { stack_->pop(); }
+    inline Stack& getStack() { return stack_; }
+    inline Value pop() { return stack_.pop(); }
+    inline void drop() { stack_.pop(); }
 
-    inline Locals& getLocals() { return *locals_; }
+    inline Locals& getLocals() { return locals_; }
     void pushLocals(const std::vector<Value>& locals) {
-        return locals_->pushLocals(locals);
+        return locals_.pushLocals(locals);
     }
-    inline void popLocals() { locals_->popLocals(); }
-    inline Value getLocal(uint32_t idx) { return locals_->getLocal(idx); }
+    inline void popLocals() { locals_.popLocals(); }
+    inline Value getLocal(uint32_t idx) { return locals_.getLocal(idx); }
     inline void setLocal(uint32_t idx, Value value) {
-        locals_->setLocal(idx, value);
+        locals_.setLocal(idx, value);
     }
 
     void setRunState(RunState state) { run_state_ = state; }
     RunState getRunState() const { return run_state_; }
 
-    Epilogues& getEpilogues() { return *epilogues_; }
+    Epilogues& getEpilogues() { return epilogues_; }
 
     // waiting
     inline void setTimeout(uint32_t addr, int64_t timout) {
@@ -175,9 +172,9 @@ public:
 private:
     size_t id_;
 
-    std::unique_ptr<Locals> locals_ = std::make_unique<Locals>();
-    std::unique_ptr<Stack> stack_ = std::make_unique<Stack>();
-    std::unique_ptr<Epilogues> epilogues_ = std::make_unique<Epilogues>();
+    Locals locals_;
+    Stack stack_;
+    Epilogues epilogues_;
 
     RunState run_state_;
 

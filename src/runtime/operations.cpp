@@ -1,5 +1,4 @@
 #include <fmt/base.h>
-#include <list>
 
 #include "hw/mem/mmu.hpp"
 #include "runtime/context.hpp"
@@ -797,11 +796,11 @@ Continuation Call::action(Instance& instance) {
     instance.getActiveContext().getEpilogues().push(next_);
 
     if (instance.is<Process>()) {
-        TRACE("[{:3}] {}: call {} ({} sp=0x{:x})",
+        TRACE("[{:3}] {}: call {} (sp=0x{:x})",
               instance.getActiveContext().getEpilogues().size(),
               instance.getGlobalState().getDebugInfo().getFormattedLocation(
                   addr_),
-              func_idx_, locals.getValues().size(), (uint32_t)instance.getGlobalState().getGlobal(0).i32);
+              func_idx_, (uint32_t)instance.getGlobalState().getGlobal(0).i32);
     }
 
     return func.enterFrame(instance.getActiveContext());
@@ -2840,7 +2839,8 @@ Continuation MemoryFill::action(Instance& instance) {
                              ? instance.as<Kernel>()
                              : instance.as<Process>().getKernel();
         MemoryManagementUnit& mmu = kernel.getMMU();
-        if (!mmu.fill(dst_offset, value, count)) {
+        uint32_t faulting_addr;
+        if (!mmu.fill(dst_offset, value, count, faulting_addr)) {
             // repeat the operation after handling the page fault
             context.pushI32(dst_offset);
             context.pushI32(value);
@@ -2848,7 +2848,7 @@ Continuation MemoryFill::action(Instance& instance) {
             context.getEpilogues().push(shared_from_this());
 
             // trigger page fault handling
-            return mmu.fault(instance, dst_offset, true);
+            return mmu.fault(instance, faulting_addr, true);
         }
     }
 

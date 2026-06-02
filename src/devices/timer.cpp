@@ -1,4 +1,5 @@
 #include <utility>
+#include <chrono>
 
 #include "devices/timer.hpp"
 
@@ -42,6 +43,9 @@ void Timer::io(Instance& instance, int32_t cmd, std::span<uint8_t> buffer) {
         break;
     case std::to_underlying(Command::set):
         set(buffer);
+        break;
+    case std::to_underlying(Command::get_time):
+        getTime(buffer);
         break;
     default:
         fmt::println("unknown cmd: {}", cmd);
@@ -92,5 +96,27 @@ void Timer::set(std::span<uint8_t> buffer) {
     interval_ns_ = cmd->timeout_ns & ~(1ULL << 63);
     max_fires_ = cmd->repeat_count;
 
+    cmd->result = Result::success;
+}
+
+void Timer::getTime(std::span<uint8_t> buffer) {
+    struct GetTimeCommand {
+        Result result;
+        uint64_t timestamp;
+    } __attribute__((packed));
+
+    if (buffer.size() < sizeof(GetTimeCommand)) {
+        Result* result = reinterpret_cast<Result*>(buffer.data());
+        *result = Result::invalid_arguments;
+        return;
+    }
+
+    GetTimeCommand* cmd = reinterpret_cast<GetTimeCommand*>(buffer.data());
+
+    cmd->timestamp = static_cast<uint64_t>(
+        std::chrono::duration_cast<std::chrono::nanoseconds>(
+            std::chrono::system_clock::now().time_since_epoch()
+        ).count()
+    );
     cmd->result = Result::success;
 }

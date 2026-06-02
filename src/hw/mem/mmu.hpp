@@ -203,15 +203,17 @@ public:
         return true;
     }
 
-    bool fill(uint32_t virt_addr, uint8_t value, uint32_t count) {
+    bool fill(uint32_t virt_addr, uint8_t value, uint32_t count, uint32_t& faulting_addr) {
         uint32_t remaining = count;
         uint32_t curr_addr = virt_addr;
 
         while (remaining > 0) {
             uint32_t offset;
             if (!tables_[active_idx_].translate(curr_addr, offset,
-                                                AccessType::WRITE))
+                                                AccessType::WRITE)) {
+                faulting_addr = curr_addr;
                 return false;
+            }
 
             uint32_t page_offset = curr_addr & WPAGE_MASK;
             uint32_t chunk_size = std::min(remaining, WPAGE_SIZE - page_offset);

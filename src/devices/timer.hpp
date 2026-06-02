@@ -21,6 +21,7 @@ private:
         start = DEVICE_CMD_OFFSET + 0,
         stop = DEVICE_CMD_OFFSET + 1,
         set = DEVICE_CMD_OFFSET + 2,
+        get_time = DEVICE_CMD_OFFSET + 3,
     };
 
     enum class Result : int32_t {
@@ -31,6 +32,7 @@ private:
     void start(std::span<uint8_t> buffer);
     void stop(std::span<uint8_t> buffer);
     void set(std::span<uint8_t> buffer);
+    void getTime(std::span<uint8_t> buffer);
 
     bool running_ = false;
 
