@@ -42,7 +42,7 @@ public:
     }
 
     void grow(uint32_t delta) {
-        size_t new_size = data_.size() + (delta << UINT16_WIDTH);
+        size_t new_size = data_.size() + (delta << 16);
         data_.resize(new_size);
     }
 

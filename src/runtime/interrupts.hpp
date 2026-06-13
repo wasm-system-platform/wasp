@@ -2,6 +2,7 @@
 
 #include <atomic>
 
+#include "host/arch.hpp"
 #include "runtime/context.hpp"
 #include "runtime/handler.hpp"
 #include "runtime/operations.hpp"
@@ -70,10 +71,17 @@ private:
         }
 
         void wait() {
-            size_t tail = tail_.load();
+            host::Arch& arch = host::Arch::instance();
 
-            if (tail == head_.load()) {
-                head_.wait(tail);
+            while (true) {
+                const auto head = head_.load();
+                const auto tail = tail_.load();
+
+                if (tail != head) {
+                    return;
+                }
+
+                arch.wait(head_, head);
             }
         }
 

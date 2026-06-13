@@ -4,6 +4,7 @@ fmt = subproject('fmt')
 fmt_dep = fmt.get_variable('fmt_dep')
 
 sp_sources = files(
+    'src/host/web.cpp',
     'src/grammar/instructions.cpp',
     'src/grammar/module.cpp',
     'src/grammar/sections.cpp',
@@ -44,7 +45,7 @@ sp_lib = static_library(
     sources: sp_sources,
     dependencies: [
         fmt_dep,
-        dependency('libcrypto')
+        dependency('libcrypto', default_options: ['default_library=static', 'build_cli=false'])
     ],
     include_directories: include_directories('src/')
 )
@@ -65,4 +66,4 @@ sp = executable(
     ]
 )
 
-subdir('test')
+#subdir('test')

@@ -13,9 +13,9 @@
 
 namespace hw::mem {
 
-static constexpr uint32_t WPAGE_SIZE = 1 << UINT16_WIDTH;
+static constexpr uint32_t WPAGE_SIZE = 1 << 16;
 static constexpr uint32_t WPAGE_MASK = UINT16_MAX;
-static constexpr uint32_t WPAGE_WIDTH = UINT16_WIDTH;
+static constexpr uint32_t WPAGE_WIDTH = 16;
 static constexpr uint32_t VIRT_MEMORY = 0x8000'0000;
 
 enum AccessType : uint8_t { READ = 'r', WRITE = 'w' };
@@ -203,7 +203,8 @@ public:
         return true;
     }
 
-    bool fill(uint32_t virt_addr, uint8_t value, uint32_t count, uint32_t& faulting_addr) {
+    bool fill(uint32_t virt_addr, uint8_t value, uint32_t count,
+              uint32_t& faulting_addr) {
         uint32_t remaining = count;
         uint32_t curr_addr = virt_addr;
 

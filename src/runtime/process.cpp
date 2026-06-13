@@ -1,16 +1,14 @@
-#include <spanstream>
-
 #include "runtime/checkpoint.hpp"
 #include "runtime/context_manager.hpp"
 #include "runtime/kernel.hpp"
-#include "runtime/process.hpp"
+#include "util/memory_stream.hpp"
 
 namespace runtime {
 
 Expected<std::shared_ptr<Process>>
 Process::create(std::span<const char>& program_bytes, Instance& instance,
                 uint32_t id) {
-    std::ispanstream program_stream(program_bytes);
+    MemoryIStream program_stream(program_bytes.data(), program_bytes.size());
 
     Expected<grammar::Module> module_exp =
         grammar::Module::parse(program_stream);
@@ -98,7 +96,7 @@ Process::createImports(Instance& instance,
     // save/restore
     std::function<int32_t(Instance & instance, int32_t, int32_t)>
         env_save_func = [](Instance& instance, uint32_t checkpoint_offset,
-                           uint checkpoint_len) -> int32_t {
+                           uint32_t checkpoint_len) -> int32_t {
         Memory& memory = instance.getGlobalState().getMemory();
         if (!memory.contains(checkpoint_offset, checkpoint_len))
             return static_cast<int32_t>(Errno::invalid);
@@ -111,7 +109,7 @@ Process::createImports(Instance& instance,
     };
     std::function<int32_t(Instance & instance, int32_t, int32_t)>
         env_restore_func = [](Instance& instance, uint32_t checkpoint_offset,
-                              uint checkpoint_len) -> int32_t {
+                              uint32_t checkpoint_len) -> int32_t {
         Memory& memory = instance.getGlobalState().getMemory();
         if (!memory.contains(checkpoint_offset, checkpoint_len))
             return static_cast<int32_t>(Errno::invalid);

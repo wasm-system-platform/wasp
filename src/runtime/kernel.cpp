@@ -1,7 +1,7 @@
 #include <iostream>
 #include <utility>
 
-#include "devices/disk.hpp"
+#include "host/arch.hpp"
 #include "runtime/context_manager.hpp"
 #include "runtime/device_manager.hpp"
 #include "runtime/interrupts.hpp"
@@ -229,7 +229,7 @@ Expected<Imports> Kernel::createImports() {
         [](Instance& instance, uint32_t pid) -> int32_t {
         ProcessManager& proc_mgr = *instance.as<Kernel>().proccess_manager_;
         std::shared_ptr<Process> proc;
-        
+
         Errno result = proc_mgr.getProcess(pid, proc);
         if (result != Errno::success)
             return std::to_underlying(result);
@@ -295,9 +295,9 @@ Expected<Imports> Kernel::createImports() {
         Function::createExternal(process_read_memory_cstring_func);
     Function process_write_memory =
         Function::createExternal(process_write_memory_func);
-    Function process_signal(std::make_shared<Signal>(), 3,
-                      {int32_t(0), int32_t(0), int32_t(0)},
-                      FunctionType::I32Producer_I32_I32_I32().getSignature());
+    Function process_signal(
+        std::make_shared<Signal>(), 3, {int32_t(0), int32_t(0), int32_t(0)},
+        FunctionType::I32Producer_I32_I32_I32().getSignature());
 
     // Devices
     std::function<int64_t(Instance&)> timer_get_time_func =
@@ -531,6 +531,8 @@ Expected<void> Kernel::setupProcessManager() {
 }
 
 void Kernel::run(OperationBase& entry) {
+    host::Arch& arch = host::Arch::instance();
+
     active_instance_ = this;
 
     Context::RunState state = getActiveContext().getRunState();
@@ -546,6 +548,9 @@ void Kernel::run(OperationBase& entry) {
         if (!continuation && controller_->getInterruptsEnabled())
             continuation =
                 controller_->next(active_instance_->getActiveContext());
+
+        /* Handle host events. */
+        arch.tick();
 
         // check for epilogues
         if (!continuation)

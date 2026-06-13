@@ -124,10 +124,8 @@ public:
 
     Context(size_t id) : id_(id) {}
     Context(const Context& other, size_t id)
-        : id_(id), locals_(other.locals_),
-          stack_(other.stack_),
-          epilogues_(other.epilogues_),
-          run_state_(other.run_state_) {}
+        : id_(id), locals_(other.locals_), stack_(other.stack_),
+          epilogues_(other.epilogues_), run_state_(other.run_state_) {}
 
     inline size_t getId() const { return id_; }
 

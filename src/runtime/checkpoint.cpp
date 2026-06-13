@@ -3,8 +3,8 @@
 #include <openssl/evp.h>
 
 #include "runtime/instance.hpp"
-#include "runtime/process.hpp"
 #include "runtime/kernel.hpp"
+#include "runtime/process.hpp"
 
 namespace runtime {
 
@@ -158,7 +158,7 @@ void decode(Instance& instance, const std::vector<uint8_t>& encoded) {
     epilogues.clear();
     for (size_t i = 0; i < num_epilogues; i++) {
         Continuation continuation = decoder.read<Continuation>();
-        
+
         if (continuation)
             epilogues.push(continuation->shared_from_this());
         else

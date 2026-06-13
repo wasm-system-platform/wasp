@@ -24,7 +24,9 @@ public:
     const Operation& getEntry() { return entry_; }
 
     const std::array<uint8_t, 32>& getKey() const { return key_; }
-    std::unordered_set<Operation>& getEpilogueCache() { return epilogue_cache_; }
+    std::unordered_set<Operation>& getEpilogueCache() {
+        return epilogue_cache_;
+    }
 
 protected:
     Process(GlobalState&& global_state, std::shared_ptr<Exports>& exports,

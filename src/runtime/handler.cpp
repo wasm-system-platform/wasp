@@ -216,12 +216,14 @@ Continuation Signal::action(Instance& instance) {
 
     /* Find process handler function. */
     std::vector<Function>& functions = proc->getGlobalState().getFunctions();
-    std::vector<uint32_t>& indirections = proc->getGlobalState().getIndirections();
+    std::vector<uint32_t>& indirections =
+        proc->getGlobalState().getIndirections();
 
-    if (handler_idx >= indirections.size() || indirections[handler_idx] >= functions.size()) {
+    if (handler_idx >= indirections.size() ||
+        indirections[handler_idx] >= functions.size()) {
         kernel_ctxt.pushI32(std::to_underlying(Errno::invalid));
         return nullptr;
-    }   
+    }
 
     /* Handler must be of type (i32) -> (). */
     Function& func = functions[indirections[handler_idx]];
@@ -245,7 +247,8 @@ Continuation Signal::action(Instance& instance) {
 
 Continuation Signal::Epilogue::action(Instance& instance) {
     Kernel& kernel = suspended_instance_.as<Kernel>();
-    kernel.getActiveContext().getStack().push(std::to_underlying(Errno::success));
+    kernel.getActiveContext().getStack().push(
+        std::to_underlying(Errno::success));
     kernel.switchBack();
     return nullptr;
 }

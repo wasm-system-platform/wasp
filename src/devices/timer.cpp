@@ -1,5 +1,5 @@
-#include <utility>
 #include <chrono>
+#include <utility>
 
 #include "devices/timer.hpp"
 
@@ -115,8 +115,7 @@ void Timer::getTime(std::span<uint8_t> buffer) {
 
     cmd->timestamp = static_cast<uint64_t>(
         std::chrono::duration_cast<std::chrono::nanoseconds>(
-            std::chrono::system_clock::now().time_since_epoch()
-        ).count()
-    );
+            std::chrono::system_clock::now().time_since_epoch())
+            .count());
     cmd->result = Result::success;
 }

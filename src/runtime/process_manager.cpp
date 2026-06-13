@@ -94,10 +94,11 @@ Errno ProcessManager::resumeProcess(uint32_t pid, Kernel& kernel,
     return Errno::success;
 }
 
-Errno ProcessManager::getProcess(uint32_t pid, std::shared_ptr<Process>& proc_out) {
+Errno ProcessManager::getProcess(uint32_t pid,
+                                 std::shared_ptr<Process>& proc_out) {
     if (pid <= processes_.size() || !processes_[pid])
         return Errno::invalid;
-    
+
     proc_out = processes_[pid];
     return Errno::success;
 }

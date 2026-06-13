@@ -14,7 +14,7 @@ public:
           impl(num_init_pages) {}
 
     bool contains(uint32_t offset, uint32_t len) {
-        uint32_t size = num_curr_pages_ << UINT16_WIDTH;
+        uint32_t size = num_curr_pages_ << 16;
         return offset <= size && len <= size - offset;
     }
 
@@ -73,8 +73,7 @@ public:
 
         uint32_t num_pages = num_curr_pages_ + delta;
 
-        if ((num_pages > num_max_pages_) ||
-            (num_pages > 1 << (UINT16_WIDTH - 1)))
+        if ((num_pages > num_max_pages_) || (num_pages > 1 << 15))
             return UINT32_MAX;
 
         uint32_t num_old_pages = num_curr_pages_;
