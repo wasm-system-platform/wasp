@@ -53,7 +53,7 @@ private:
     // input
     void read(Instance& instance, std::span<uint8_t> buffer);
     void tellg(uint32_t* offset);
-    void seekg(Instance& instance, std::span<uint8_t> buffer);
+    void seekg(std::span<uint8_t> buffer);
 
     // output
     void write(const void* src, uint32_t count);

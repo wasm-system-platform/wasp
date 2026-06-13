@@ -1,6 +1,7 @@
 #pragma once
 
 #include "runtime/instance.hpp"
+#include "util/errno.hpp"
 
 namespace runtime {
 
@@ -49,11 +50,10 @@ private:
     Operation entry_;
 
     static Expected<Imports>
-    createImports(Instance& instance,
-                  std::shared_ptr<Sigsetjmp>& env_sigsetjmp_op_out);
+    createImports(Instance& instance);
 
     Expected<void>
-    validateExports(std::shared_ptr<Sigsetjmp>& env_sigsetjmp_op);
+    validateExports();
 };
 
 } // namespace runtime

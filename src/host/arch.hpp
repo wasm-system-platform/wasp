@@ -25,13 +25,15 @@ private:
 };
 
 class GenericArch {
-protected:
+private:
     void tick() {}
 
     template <typename Atomic, typename T>
     void wait(Atomic& atomic, T old_value) {
         atomic.wait(old_value);
     }
+
+    friend class BasicArch<GenericArch>;
 };
 
 #if defined(__EMSCRIPTEN__)

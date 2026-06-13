@@ -58,12 +58,11 @@ private:
                                                  CompilationUnitHeader& header,
                                                  State& state,
                                                  std::vector<State>& states);
-    static Expected<void> handle_special_opcode(std::istream& in, uint8_t op,
+    static Expected<void> handle_special_opcode(uint8_t op,
                                                 CompilationUnitHeader& header,
                                                 State& state,
                                                 std::vector<State>& states);
-    static Expected<bool> handle_extended_opcode(std::istream& in, uint8_t op,
-                                                 CompilationUnitHeader& header,
+    static Expected<bool> handle_extended_opcode(std::istream& in,
                                                  State& state,
                                                  std::vector<State>& states);
 };

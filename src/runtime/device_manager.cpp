@@ -65,7 +65,7 @@ void DeviceManager::tick(size_t counter) {
 
     InterruptController& controller =
         *controllers_[counter % controllers_.size()];
-    for (size_t i = 0; i < devices_.size(); i++) {
+    for (uint32_t i = 0; i < devices_.size(); i++) {
         if (!devices_[i])
             continue;
 

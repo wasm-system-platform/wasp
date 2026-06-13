@@ -15,8 +15,8 @@ Error::Error(const Error& inner, const char* func, const char* file, int line)
 
 std::string Error::toString() const {
     std::string s = fmt::format("Error: {}\n", msg_);
-    for (int i = static_cast<int>(call_stack_.size()) - 1; i >= 0; --i) {
-        const auto& [func, file, line] = call_stack_[i];
+    for (ssize_t i = static_cast<ssize_t>(call_stack_.size()) - 1; i >= 0; --i) {
+        const auto& [func, file, line] = call_stack_[static_cast<size_t>(i)];
         s += fmt::format("  at {} ({}:{})\n", func, file, line);
     }
     return s;

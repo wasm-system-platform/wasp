@@ -33,10 +33,10 @@ Continuation Interrupt::action(Instance& instance) {
         Function interrupt_handler =
             kernel.getGlobalState().getFunction(handler_idx_);
 
-        uint32_t port = instance_ctx.getStack().pop().i32;
+        uint32_t port = static_cast<uint32_t>(instance_ctx.getStack().pop().i32);
 
         Context& kernel_ctx = kernel.getActiveContext();
-        kernel_ctx.pushI32(port);
+        kernel_ctx.pushI32(static_cast<int32_t>(port));
         kernel_ctx.getEpilogues().push(epilogue);
 
         kernel.switchBack();
@@ -79,7 +79,7 @@ Continuation SysCall::action(Instance& instance) {
     Kernel& kernel = instance.as<Process>().getKernel();
 
     Context& kernel_ctxt = kernel.getActiveContext();
-    kernel_ctxt.pushI32(instance.as<Process>().getId());
+    kernel_ctxt.pushI32(static_cast<int32_t>(instance.as<Process>().getId()));
     kernel_ctxt.pushI32(n);
     kernel_ctxt.pushI32(a1);
     kernel_ctxt.pushI32(a2);
@@ -144,7 +144,7 @@ Continuation PageFault::action(Instance& instance) {
         // push arguments on the kernel stack
         Kernel& kernel = instance.as<Process>().getKernel();
         Context& kernel_ctx = kernel.getActiveContext();
-        kernel_ctx.pushI32(instance.as<Process>().getId());
+        kernel_ctx.pushI32(static_cast<int32_t>(instance.as<Process>().getId()));
         kernel_ctx.pushI32(faulting_address);
         kernel_ctx.pushI32(access_type);
 
@@ -201,8 +201,8 @@ Continuation Signal::action(Instance& instance) {
     Kernel& kernel = instance.as<Kernel>();
     Context& kernel_ctxt = kernel.getActiveContext();
 
-    uint32_t pid = kernel_ctxt.getLocal(0).i32;
-    uint32_t handler_idx = kernel_ctxt.getLocal(1).i32;
+    uint32_t pid = static_cast<uint32_t>(kernel_ctxt.getLocal(0).i32);
+    uint32_t handler_idx = static_cast<uint32_t>(kernel_ctxt.getLocal(1).i32);
     int32_t signal = kernel_ctxt.getLocal(2).i32;
 
     ProcessManager& proc_mgr = kernel.getProcessManager();
@@ -245,7 +245,7 @@ Continuation Signal::action(Instance& instance) {
     return func.enterFrame(proc_ctxt);
 }
 
-Continuation Signal::Epilogue::action(Instance& instance) {
+Continuation Signal::Epilogue::action(Instance&) {
     Kernel& kernel = suspended_instance_.as<Kernel>();
     kernel.getActiveContext().getStack().push(
         std::to_underlying(Errno::success));

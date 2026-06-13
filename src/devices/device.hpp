@@ -4,7 +4,6 @@
 #include <span>
 
 #include "runtime/operations.hpp"
-#include "util/errno.hpp"
 
 using runtime::Instance;
 

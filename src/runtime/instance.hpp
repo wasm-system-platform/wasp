@@ -72,7 +72,7 @@ private:
 
     Expected<void> call(const std::string& name, const FunctionType& func_type);
 
-    void invoke(size_t func_idx);
+    void invoke(uint32_t func_idx);
     void invokeIndirect(uint32_t element_idx, size_t signature);
 
     virtual void run(OperationBase& entry);

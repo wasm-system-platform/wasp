@@ -16,8 +16,7 @@ Process::create(std::span<const char>& program_bytes, Instance& instance,
         return Unexpected(PROPAGATE(module_exp));
 
     // create imports to be supplied
-    std::shared_ptr<Sigsetjmp> sigsetjmp;
-    Expected<Imports> imports_exp = createImports(instance, sigsetjmp);
+    Expected<Imports> imports_exp = createImports(instance);
     if (!imports_exp)
         return Unexpected(PROPAGATE(imports_exp));
 
@@ -43,7 +42,7 @@ Process::create(std::span<const char>& program_bytes, Instance& instance,
         std::make_shared<Builder>(std::move(*global_state_exp), *exports_exp,
                                   *module_exp, instance.as<Kernel>(), id);
 
-    Expected<void> result = proc->validateExports(sigsetjmp);
+    Expected<void> result = proc->validateExports();
     if (!result)
         return Unexpected(PROPAGATE(result));
 
@@ -69,8 +68,7 @@ Errno Process::clone(uint32_t new_id, std::shared_ptr<Process>& proc_out) {
 }
 
 Expected<Imports>
-Process::createImports(Instance& instance,
-                       std::shared_ptr<Sigsetjmp>& sigsetjmp_out) {
+Process::createImports(Instance& instance) {
     auto it = instance.exports_->find("sys_call_handler");
     if (it == instance.exports_->end()) {
         return Unexpected(ERROR("kernel export 'sys_call_handler' not found"));
@@ -88,7 +86,7 @@ Process::createImports(Instance& instance,
 
     std::function<int32_t(Instance&)> sys_execve_stack_func =
         [](Instance& instance) -> int32_t {
-        return instance.as<Process>().getExecveStack();
+        return static_cast<int32_t>(instance.as<Process>().getExecveStack());
     };
 
     Function sys_execve_stack = Function::createExternal(sys_execve_stack_func);
@@ -132,7 +130,7 @@ Process::createImports(Instance& instance,
     };
 }
 
-Expected<void> Process::validateExports(std::shared_ptr<Sigsetjmp>& sigsetjmp) {
+Expected<void> Process::validateExports() {
     auto it = exports_->find("_start");
     if (it != exports_->end()) {
         Export& start = it->second;

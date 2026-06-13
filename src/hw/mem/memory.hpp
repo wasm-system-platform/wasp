@@ -14,7 +14,7 @@ public:
           impl(num_init_pages) {}
 
     bool contains(uint32_t offset, uint32_t len) {
-        uint32_t size = num_curr_pages_ << 16;
+        uint32_t size = static_cast<uint32_t>(num_curr_pages_) << 16;
         return offset <= size && len <= size - offset;
     }
 
@@ -35,7 +35,7 @@ public:
     }
 
     template <ContiguousBuffer T> bool load(uint32_t offset, T& dst_buffer) {
-        if (!contains(offset, dst_buffer.size()))
+        if (!contains(offset, static_cast<uint32_t>(dst_buffer.size())))
             return false;
 
         impl.load(offset, dst_buffer);

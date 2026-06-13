@@ -65,8 +65,8 @@ public:
            const std::vector<FunctionType>& func_types,
            std::vector<Operation>& targets);
 
-    virtual Continuation action(Instance& instance) { return next_.get(); }
-    virtual Expected<Continuation> eval(Context& context) const {
+    virtual Continuation action(Instance&) { return next_.get(); }
+    virtual Expected<Continuation> eval(Context&) const {
         return Unexpected(ERROR("evaluate called on non constant expression"));
     }
 
@@ -943,24 +943,36 @@ public:
     Continuation action(Instance& instance) override;
 };
 
-class I32ReinterpretF32 : public TaggedOperation<I32ReinterpretF32> {
+class I32ReinterpretF32 : public GenericOperation<I32ReinterpretF32> {
 public:
-    Continuation action(Instance& instance) override;
+    using InType = Values<1>;
+    using OutType = Values<1>;
+
+    static OutType impl(I32ReinterpretF32& i32_reinterpret_f32, Instance& instance, Value in);
 };
 
 class I64ReinterpretF64 : public TaggedOperation<I64ReinterpretF64> {
 public:
-    Continuation action(Instance& instance) override;
+    using InType = Values<1>;
+    using OutType = Values<1>;
+
+    static OutType impl(I64ReinterpretF64& i64_reinterpret_f64, Instance& instance, Value in);
 };
 
-class F32ReinterpretI32 : public TaggedOperation<F32ReinterpretI32> {
+class F32ReinterpretI32 : public GenericOperation<F32ReinterpretI32> {
 public:
-    Continuation action(Instance& instance) override;
+    using InType = Values<1>;
+    using OutType = Values<1>;
+
+    static OutType impl(F32ReinterpretI32& f32_reinterpret_i32, Instance& instance, Value in);
 };
 
-class F64ReinterpretI64 : public TaggedOperation<F64ReinterpretI64> {
+class F64ReinterpretI64 : public GenericOperation<F64ReinterpretI64> {
 public:
-    Continuation action(Instance& instance) override;
+    using InType = Values<1>;
+    using OutType = Values<1>;
+
+    static OutType impl(F64ReinterpretI64& f64_reinterpret_i64, Instance& instance, Value in);
 };
 
 class I32Extend8Signed : public TaggedOperation<I32Extend8Signed> {

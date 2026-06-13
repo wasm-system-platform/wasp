@@ -5,7 +5,7 @@ namespace hw::mem {
 
 Errno MemoryManagementUnit::createTable(uint32_t& ptable_idx_out) {
     if (free_list_.empty()) {
-        ptable_idx_out = tables_.size();
+        ptable_idx_out = static_cast<uint32_t>(tables_.size());
         tables_.emplace_back();
     } else {
         ptable_idx_out = free_list_.top();
@@ -135,7 +135,7 @@ runtime::Continuation MemoryManagementUnit::fault(runtime::Instance& instance,
                                                   uint32_t addr,
                                                   bool is_write) {
     runtime::Context& ctxt = instance.getActiveContext();
-    ctxt.pushI32(addr);
+    ctxt.pushI32(static_cast<int32_t>(addr));
     ctxt.pushI32(is_write);
     return page_fault_handler_.get();
 }

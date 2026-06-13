@@ -106,7 +106,7 @@ public:
 
     const ExpectedType& getParamTypes() const { return param_types_; }
     const ExpectedType& getExpectedTypes() const { return result_types_; }
-    const size_t getSignature() const;
+    size_t getSignature() const;
 
     std::string toString() const;
 

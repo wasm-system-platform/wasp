@@ -34,7 +34,7 @@ Errno ContextManager::createTrampoline(Kernel& kernel, uint32_t entry_func_idx,
     out_id = ctxt.getId();
 
     ctxt.pushI32(param1);
-    ctxt.pushI32(entry_func_idx);
+    ctxt.pushI32(static_cast<int32_t>(entry_func_idx));
 
     ctxt.getEpilogues().push(nullptr);
     ctxt.getEpilogues().push(entry);
@@ -76,7 +76,7 @@ uint32_t ContextManager::allocateContextId() {
 
     uint32_t id;
     if (free_list_.empty()) {
-        id = contexts_.size();
+        id = static_cast<uint32_t>(contexts_.size());
         contexts_.push_back({});
     } else {
         id = free_list_.top();

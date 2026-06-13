@@ -244,7 +244,7 @@ uint32_t ProcessManager::allocateProcessId() {
 
     uint32_t pid;
     if (free_list_.empty()) {
-        pid = processes_.size();
+        pid = static_cast<uint32_t>(processes_.size());
         processes_.push_back({});
     } else {
         pid = free_list_.top();

@@ -25,7 +25,7 @@ void Disk::io(Instance& instance, int32_t cmd, std::span<uint8_t> buffer) {
         read(instance, buffer);
         break;
     case std::to_underlying(Command::seekg):
-        seekg(instance, buffer);
+        seekg(buffer);
         break;
     default:
         fmt::println("unknown cmd: {}", cmd);
@@ -71,7 +71,7 @@ void Disk::read(Instance& instance, std::span<uint8_t> buffer) {
     cmd->result = Result::success;
 }
 
-void Disk::seekg(Instance& instance, std::span<uint8_t> buffer) {
+void Disk::seekg(std::span<uint8_t> buffer) {
     if (buffer.size() < sizeof(SeekCommand)) {
         Result* result = reinterpret_cast<Result*>(buffer.data());
         *result = Result::invalid_arguments;
@@ -103,7 +103,7 @@ void Disk::seekg(Instance& instance, std::span<uint8_t> buffer) {
         return;
     }
 
-    cmd->new_pos = disk_.tellp();
+    cmd->new_pos = static_cast<uint64_t>(disk_.tellp());
     cmd->result = Result::success;
     return;
 }

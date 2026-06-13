@@ -111,7 +111,7 @@ public:
 
     template <ContiguousBuffer T> bool load(uint32_t virt_addr, T& dst_buffer) {
         uint8_t* dst_ptr = dst_buffer.data();
-        uint32_t remaining = dst_buffer.size();
+        uint32_t remaining = static_cast<uint32_t>(dst_buffer.size());
         uint32_t curr_addr = virt_addr;
 
         while (remaining > 0) {
@@ -178,7 +178,7 @@ public:
     template <ContiguousBuffer T>
     bool store(uint32_t virt_addr, const T& src_buffer) {
         const uint8_t* src_ptr = src_buffer.data();
-        uint32_t remaining = src_buffer.size();
+        uint32_t remaining = static_cast<uint32_t>(src_buffer.size());
         uint32_t curr_addr = virt_addr;
 
         while (remaining > 0) {

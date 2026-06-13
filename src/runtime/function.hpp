@@ -48,8 +48,8 @@ public:
 
     inline Continuation enterFrame(Context& context) {
         TRACE_VERBOSE(" --- enter frame ---");
-        for (int i = num_params_ - 1; i >= 0; --i) {
-            locals_[i] = context.pop();
+        for (ssize_t i = static_cast<ssize_t>(num_params_) - 1; i >= 0; --i) {
+            locals_[static_cast<size_t>(i)] = context.pop();
         }
         context.pushLocals(locals_);
 

@@ -236,7 +236,7 @@ Expected<FunctionType> FunctionType::parse(std::istream& in) {
     return FunctionType(*param_types_exp, *result_types_exp);
 }
 
-const size_t FunctionType::getSignature() const {
+size_t FunctionType::getSignature() const {
     return std::hash<FunctionType>()(*this);
 }
 

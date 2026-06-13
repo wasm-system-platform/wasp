@@ -13,7 +13,7 @@ bool Timer::tick() {
     const auto elapsed_since_last_tick =
         std::chrono::duration_cast<std::chrono::nanoseconds>(now - last_tick_);
 
-    accumulated_ns_ += elapsed_since_last_tick.count();
+    accumulated_ns_ += static_cast<uint64_t>(elapsed_since_last_tick.count());
 
     const bool interval_elapsed = accumulated_ns_ >= interval_ns_;
     const bool unlimited_fires = max_fires_ == UINT32_MAX;
@@ -33,7 +33,7 @@ bool Timer::tick() {
     return interval_elapsed;
 }
 
-void Timer::io(Instance& instance, int32_t cmd, std::span<uint8_t> buffer) {
+void Timer::io(Instance&, int32_t cmd, std::span<uint8_t> buffer) {
     switch (cmd) {
     case std::to_underlying(Command::start):
         start(buffer);

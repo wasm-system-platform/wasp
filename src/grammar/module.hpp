@@ -11,10 +11,10 @@ class Module {
 public:
     static Expected<Module> parse(std::istream& in);
 
-    const bool hasFunctionSection() const { return func_section_.has_value(); }
-    const bool hasExportSection() const { return export_section_.has_value(); }
-    const bool hasCodeSection() const { return code_section_.has_value(); }
-    const bool hasStartSection() const { return start_section_.has_value(); }
+    bool hasFunctionSection() const { return func_section_.has_value(); }
+    bool hasExportSection() const { return export_section_.has_value(); }
+    bool hasCodeSection() const { return code_section_.has_value(); }
+    bool hasStartSection() const { return start_section_.has_value(); }
 
     const TypeSection& getTypeSection() const { return type_section_; }
     const ImportSection& getImportSection() const { return import_section_; }

@@ -25,7 +25,7 @@ bool Terminal::tick() {
     return false;
 }
 
-void Terminal::io(Instance& instance, int32_t cmd, std::span<uint8_t> buffer) {
+void Terminal::io(Instance&, int32_t cmd, std::span<uint8_t> buffer) {
     switch (cmd) {
     case std::to_underlying(Command::read):
         read(buffer);
@@ -45,7 +45,7 @@ void Terminal::read(std::span<uint8_t> buffer) {
         Result result;
         uint32_t bytes_read;
         uint32_t buffer_size;
-        char buffer[];
+        char *buffer;
     } __attribute__((packed));
 
     if (buffer.size() < sizeof(ReadCommand)) {
@@ -72,7 +72,7 @@ void Terminal::read(std::span<uint8_t> buffer) {
         input_.pop_front();
     }
 
-    cmd->bytes_read = i;
+    cmd->bytes_read = static_cast<uint32_t>(i);
     cmd->result = Result::success;
 }
 
@@ -81,7 +81,7 @@ void Terminal::write(std::span<uint8_t> buffer) {
         Result result;
         uint32_t bytes_written;
         uint32_t buffer_size;
-        char buffer[];
+        char *buffer;
     } __attribute__((packed));
 
     if (buffer.size() < sizeof(WriteCommand)) {

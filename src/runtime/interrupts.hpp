@@ -9,7 +9,7 @@
 
 namespace runtime {
 
-constexpr uint32_t INVALID_PORT = -1;
+constexpr uint32_t INVALID_PORT = static_cast<uint32_t>(-1);
 
 class InterruptController {
 public:
@@ -34,7 +34,7 @@ public:
         if (port == INVALID_PORT)
             return nullptr;
 
-        ctxt.pushI32(port);
+        ctxt.pushI32(static_cast<int32_t>(port));
         return interrupt_handler_.get();
     }
 
@@ -59,13 +59,14 @@ private:
         }
 
         uint32_t pop() {
-            size_t tail = tail_.load();
+            uint32_t tail = tail_.load();
 
             if (tail == head_.load())
                 return INVALID_PORT;
 
             uint32_t port = data_[tail];
-            tail_.store((tail + 1) % data_.size());
+            uint32_t next = static_cast<uint32_t>((tail + 1) % data_.size());
+            tail_.store(next);
             tail_.notify_one();
             return port;
         }

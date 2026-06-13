@@ -22,7 +22,7 @@ public:
     using OutType = Values<num_out>;
 
     static std::pair<size_t, Operation (*)(Operation&, Operation&)>
-    recipe(bool anonymize = false) {
+    recipe() {
         return {combineId(decltype(first_)::static_type(),
                           decltype(second_)::static_type()),
                 create};
@@ -57,7 +57,7 @@ public:
     using OutType = Values<num_out>;
 
     static std::pair<size_t, Operation (*)(Operation&, Operation&)>
-    recipe(bool anonymize = false) {
+    recipe() {
         return {combineId(decltype(first_)::static_type(),
                           decltype(second_)::static_type()),
                 create};
@@ -111,7 +111,7 @@ using LocalGet_IfThen = Junction<LocalGet, IfThen, 0, 0>;
 template <>
 template <typename... Args>
 Continuation LocalGet_IfThen::impl(Junction& junc, Instance& instance,
-                                   Args... in) {
+                                   Args...) {
     return IfThen::impl(junc.second_, instance, junc.next_.get(),
                         LocalGet::impl(junc.first_, instance));
 }
@@ -123,7 +123,7 @@ using LocalGet_IfElse = Junction<LocalGet, IfElse, 0, 0>;
 template <>
 template <typename... Args>
 Continuation LocalGet_IfElse::impl(Junction& junc, Instance& instance,
-                                   Args... in) {
+                                   Args...) {
     return IfElse::impl(junc.second_, instance,
                         LocalGet::impl(junc.first_, instance));
 }
@@ -135,7 +135,7 @@ using LocalGet_LocalGet = Sequence<LocalGet, LocalGet, 0, 2>;
 template <>
 template <typename... Args>
 inline LocalGet_LocalGet::OutType
-LocalGet_LocalGet::impl(Sequence& seq, Instance& instance, Args... in) {
+LocalGet_LocalGet::impl(Sequence& seq, Instance& instance, Args...) {
     return {LocalGet::impl(seq.first_, instance),
             LocalGet::impl(seq.second_, instance)};
 }
@@ -148,7 +148,7 @@ template <>
 template <typename... Args>
 inline LocalGet_LocalGet_I32Const::OutType
 LocalGet_LocalGet_I32Const::impl(Sequence& seq, Instance& instance,
-                                 Args... in) {
+                                 Args...) {
     auto [v1, v2] = LocalGet_LocalGet::impl(seq.first_, instance);
     return {v1, v2, I32Const::impl(seq.second_, instance)};
 }
@@ -162,7 +162,7 @@ template <>
 template <typename... Args>
 inline LocalGet_LocalGet_I32Const_I32Sub::OutType
 LocalGet_LocalGet_I32Const_I32Sub::impl(Sequence& seq, Instance& instance,
-                                        Args... in) {
+                                        Args...) {
     auto [v1, v2, v3] = LocalGet_LocalGet_I32Const::impl(seq.first_, instance);
     return {v1, I32Sub::impl(seq.second_, instance, v2, v3)};
 }
@@ -174,7 +174,7 @@ using LocalGet_I32Const = Sequence<LocalGet, I32Const, 0, 2>;
 template <>
 template <typename... Args>
 inline LocalGet_I32Const::OutType
-LocalGet_I32Const::impl(Sequence& seq, Instance& instance, Args... in) {
+LocalGet_I32Const::impl(Sequence& seq, Instance& instance, Args...) {
     return {LocalGet::impl(seq.first_, instance),
             I32Const::impl(seq.second_, instance)};
 }
@@ -186,7 +186,7 @@ using LocalGet_I32Const_I32Add = Sequence<LocalGet_I32Const, I32Add, 0, 1>;
 template <>
 template <typename... Args>
 inline LocalGet_I32Const_I32Add::OutType
-LocalGet_I32Const_I32Add::impl(Sequence& seq, Instance& instance, Args... in) {
+LocalGet_I32Const_I32Add::impl(Sequence& seq, Instance& instance, Args...) {
     auto [v1, v2] = LocalGet_I32Const::impl(seq.first_, instance);
     return I32Add::impl(seq.second_, instance, v1, v2);
 }
@@ -250,7 +250,7 @@ using I32Const_I32Const = Sequence<I32Const, I32Const, 0, 2>;
 template <>
 template <typename... Args>
 inline I32Const_I32Const::OutType
-I32Const_I32Const::impl(Sequence& seq, Instance& instance, Args... in) {
+I32Const_I32Const::impl(Sequence& seq, Instance& instance, Args...) {
     return {I32Const::impl(seq.first_, instance),
             I32Const::impl(seq.second_, instance)};
 }
@@ -344,14 +344,14 @@ void printStats() {
     fmt::println("=== Optimization Stats ===");
     fmt::println("merge attempts: {}", mergeAttempts);
     fmt::println("merge success rate: {}%\n",
-                 (mergesPerformed * 100.0f) / mergeAttempts);
+                 (static_cast<double>(mergesPerformed) * 100.0) / static_cast<double>(mergeAttempts));
 
     size_t limit = std::min<size_t>(10, stats.size());
     fmt::println("=== Top {} Optimization Misses ===", limit);
     for (size_t i = 0; i < limit; i++) {
         fmt::println("{:>2.4f}% : {}",
-                     (100.0f * stats[i].second) / mergeAttempts,
-                     stats[i].first);
+                 (static_cast<double>(100.0) * static_cast<double>(stats[i].second)) / static_cast<double>(mergeAttempts),
+                 stats[i].first);
     }
 }
 

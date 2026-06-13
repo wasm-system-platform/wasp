@@ -13,13 +13,13 @@ namespace grammar {
 /******************/
 
 Expected<CustomSection> CustomSection::parse(std::istream& in, uint32_t size) {
-    size_t start = in.tellg();
+    size_t start = static_cast<size_t>(in.tellg());
 
     Expected<Name> name_exp = Name::parse(in);
     if (!name_exp)
         return Unexpected(PROPAGATE(name_exp));
 
-    uint32_t offset = static_cast<size_t>(in.tellg()) - start;
+    size_t offset = static_cast<size_t>(in.tellg()) - start;
     if (offset > size)
         return Unexpected(ERROR("custom section has an invalid size"));
 
@@ -623,7 +623,7 @@ Expected<Segment> Segment::parse(std::istream& in) {
     std::vector<uint8_t> bytes;
     bytes.resize(len);
 
-    if (!in.read(reinterpret_cast<char*>(bytes.data()), bytes.size())) {
+    if (!in.read(reinterpret_cast<char*>(bytes.data()), static_cast<uint32_t>(bytes.size()))) {
         return Unexpected(ERROR("unexpected end of file"));
     }
 

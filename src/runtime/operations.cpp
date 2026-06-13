@@ -753,7 +753,7 @@ Continuation IfElse::action(Instance& instance) {
 Branch::Branch(const grammar::Branch& branch, std::vector<Operation>& targets)
     : target_(targets[branch.getLabelIdx()]) {}
 
-Continuation Branch::action(Instance& instance) {
+Continuation Branch::action(Instance&) {
     TRACE_VERBOSE("br --> {}", (void*)target_.get());
     return target_.get();
 }
@@ -773,9 +773,9 @@ BranchTable::BranchTable(const grammar::BranchTable& br_table,
     : label_indices_(br_table.getLabelIndices()), containers_(containers) {}
 
 Continuation BranchTable::action(Instance& instance) {
-    uint32_t idx = instance.getActiveContext().pop().i32;
+    uint32_t idx = static_cast<uint32_t>(instance.getActiveContext().pop().i32);
     if (idx >= label_indices_.size())
-        idx = label_indices_.size() - 1;
+        idx = static_cast<uint32_t>(label_indices_.size()) - 1;
 
     uint32_t label_idx = label_indices_[idx];
     Operation target = containers_[label_idx];
@@ -916,7 +916,7 @@ Continuation CallIndirect::Epilogue::action(Instance& instance) {
     return parent_.next_.get();
 }
 
-Continuation Return::action(Instance& instance) {
+Continuation Return::action(Instance&) {
     TRACE_VERBOSE("return");
     return nullptr;
 }
@@ -1485,7 +1485,7 @@ Continuation I32DivideUnsigned::action(Instance& instance) {
 
     uint32_t left = static_cast<uint32_t>(context.pop().i32);
     uint32_t result = left / right;
-    context.pushI32(result);
+    context.pushI32(static_cast<int32_t>(result));
 
     TRACE_VERBOSE("i32.div_u: (left={}, right={}) -> ({})", left, right,
                   result);
@@ -1516,7 +1516,7 @@ Continuation I32RemainderUnsigned::action(Instance& instance) {
 
     uint32_t left = static_cast<uint32_t>(context.pop().i32);
     uint32_t result = left % right;
-    context.pushI32(result);
+    context.pushI32(static_cast<int32_t>(result));
 
     TRACE_VERBOSE("i32.rem_u: (left={}, right={}) -> ({})", left, right,
                   result);
@@ -1588,8 +1588,8 @@ Continuation I32ShiftRightUnsigned::action(Instance& instance) {
 
     int32_t right = context.pop().i32 & 31;
     uint32_t left = static_cast<uint32_t>(context.pop().i32);
-    int32_t result = left >> right;
-    context.pushI32(result);
+    uint32_t result = left >> right;
+    context.pushI32(static_cast<int32_t>(result));
 
     TRACE_VERBOSE("i32.shr_u: ({}, {}) -> ({})", left, right, result);
     return next_.get();
@@ -1624,8 +1624,8 @@ Continuation I32RotateRight::action(Instance& instance) {
 Continuation I64CountLeadingZeros::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    uint64_t val = context.pop().i64;
-    uint64_t result;
+    uint64_t val = static_cast<uint64_t>(context.pop().i64);
+    int64_t result;
 
     if (val == 0)
         result = 64;
@@ -1641,8 +1641,8 @@ Continuation I64CountLeadingZeros::action(Instance& instance) {
 Continuation I64CountTrailingZeros::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    uint64_t val = context.pop().i64;
-    uint64_t result;
+    uint64_t val = static_cast<uint64_t>(context.pop().i64);
+    int64_t result;
 
     if (val == 0)
         result = 64;
@@ -1719,7 +1719,7 @@ Continuation I64DivideUnsigned::action(Instance& instance) {
 
     uint64_t left = static_cast<uint64_t>(context.pop().i64);
     uint64_t result = left / right;
-    context.pushI64(result);
+    context.pushI64(static_cast<int64_t>(result));
 
     TRACE_VERBOSE("i64.div_u: (left={}, right={}) -> ({})", left, right,
                   result);
@@ -1750,7 +1750,7 @@ Continuation I64RemainderUnsigned::action(Instance& instance) {
 
     uint64_t left = static_cast<uint64_t>(context.pop().i64);
     uint64_t result = left % right;
-    context.pushI64(result);
+    context.pushI64(static_cast<int64_t>(result));
 
     TRACE_VERBOSE("i64.rem_u: (left={}, right={}) -> ({})", left, right,
                   result);
@@ -1823,7 +1823,7 @@ Continuation I64ShiftRightUnsigned::action(Instance& instance) {
     int64_t right = context.pop().i64 & 63;
     uint64_t left = static_cast<uint64_t>(context.pop().i64);
     uint64_t result = left >> right;
-    context.pushI64(result);
+    context.pushI64(static_cast<int64_t>(result));
 
     TRACE_VERBOSE("i64.shr_u: ({}, {}) -> ({})", left, right, result);
     return next_.get();
@@ -1987,26 +1987,6 @@ Continuation F64PromoteF32::action(Instance& instance) {
     return next_.get();
 }
 
-Continuation I32ReinterpretF32::action(Instance& instance) {
-    TRACE_VERBOSE("i32.reinterpret_f32");
-    return next_.get();
-}
-
-Continuation I64ReinterpretF64::action(Instance& instance) {
-    TRACE_VERBOSE("i64.reinterpret_f64");
-    return next_.get();
-}
-
-Continuation F32ReinterpretI32::action(Instance& instance) {
-    TRACE_VERBOSE("f32.reinterpret_i32");
-    return next_.get();
-}
-
-Continuation F64ReinterpretI64::action(Instance& instance) {
-    TRACE_VERBOSE("f64.reinterpret_i64");
-    return next_.get();
-}
-
 Continuation I32Extend8Signed::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
@@ -2074,7 +2054,7 @@ I32Load::I32Load(const grammar::I32Load& i32_load)
 Continuation I32Load::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    int32_t base = context.pop().i32;
+    uint32_t base = static_cast<uint32_t>(context.pop().i32);
     uint32_t offset = base + offset_;
 
     int32_t value;
@@ -2107,7 +2087,7 @@ I64Load::I64Load(const grammar::I64Load& i64_load)
 Continuation I64Load::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    int32_t base = context.pop().i32;
+    uint32_t base = static_cast<uint32_t>(context.pop().i32);
     uint32_t offset = base + offset_;
 
     int64_t value;
@@ -2123,7 +2103,7 @@ Continuation I64Load::action(Instance& instance) {
         MemoryManagementUnit& mmu = kernel.getMMU();
         if (!mmu.load(offset, value)) {
             // repeat the operation after handling the page fault
-            context.push(base);
+            context.push(static_cast<int32_t>(base));
             context.getEpilogues().push(shared_from_this());
 
             // trigger page fault handling
@@ -2144,7 +2124,7 @@ F32Load::F32Load(const grammar::F32Load& f32_load)
 Continuation F32Load::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    int32_t base = context.pop().i32;
+    uint32_t base = static_cast<uint32_t>(context.pop().i32);
     uint32_t offset = base + offset_;
 
     float value;
@@ -2166,7 +2146,7 @@ F64Load::F64Load(const grammar::F64Load& f64_load)
 Continuation F64Load::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    int32_t base = context.pop().i32;
+    uint32_t base = static_cast<uint32_t>(context.pop().i32);
     uint32_t offset = base + offset_;
 
     double val;
@@ -2188,7 +2168,7 @@ I32Load8Signed::I32Load8Signed(const grammar::I32Load8Signed& i32_load8_s)
 Continuation I32Load8Signed::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    int32_t base = context.pop().i32;
+    uint32_t base = static_cast<uint32_t>(context.pop().i32);
     uint32_t offset = base + offset_;
 
     int8_t value;
@@ -2221,7 +2201,7 @@ I32Load8Unsigned::I32Load8Unsigned(const grammar::I32Load8Unsigned& i32_load8_u)
 Continuation I32Load8Unsigned::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    int32_t base = context.pop().i32;
+    uint32_t base = static_cast<uint32_t>(context.pop().i32);
     uint32_t offset = base + offset_;
 
     uint8_t value;
@@ -2253,7 +2233,7 @@ I32Load16Signed::I32Load16Signed(const grammar::I32Load16Signed& i32_load16_s)
 Continuation I32Load16Signed::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    int32_t base = context.pop().i32;
+    uint32_t base = static_cast<uint32_t>(context.pop().i32);
     uint32_t offset = base + offset_;
 
     int16_t value;
@@ -2278,7 +2258,7 @@ I32Load16Unsigned::I32Load16Unsigned(
 Continuation I32Load16Unsigned::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    int32_t base = context.pop().i32;
+    uint32_t base = static_cast<uint32_t>(context.pop().i32);
     uint32_t offset = base + offset_;
 
     uint16_t value;
@@ -2295,7 +2275,7 @@ Continuation I32Load16Unsigned::action(Instance& instance) {
         MemoryManagementUnit& mmu = kernel.getMMU();
         if (!mmu.load(offset, value)) {
             // repeat the operation after handling the page fault
-            context.push(base);
+            context.push(static_cast<int32_t>(base));
             context.getEpilogues().push(shared_from_this());
 
             // trigger a page fault
@@ -2316,7 +2296,7 @@ I64Load8Signed::I64Load8Signed(const grammar::I64Load8Signed& i64_load8_s)
 Continuation I64Load8Signed::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    int32_t base = context.pop().i32;
+    uint32_t base = static_cast<uint32_t>(context.pop().i32);
     uint32_t offset = base + offset_;
 
     int8_t value;
@@ -2339,7 +2319,7 @@ I64Load8Unsigned::I64Load8Unsigned(const grammar::I64Load8Unsigned& i64_load8_u)
 Continuation I64Load8Unsigned::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    int32_t base = context.pop().i32;
+    uint32_t base = static_cast<uint32_t>(context.pop().i32);
     uint32_t offset = base + offset_;
 
     uint8_t value;
@@ -2362,7 +2342,7 @@ I64Load16Signed::I64Load16Signed(const grammar::I64Load16Signed& i64_load16_s)
 Continuation I64Load16Signed::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    int32_t base = context.pop().i32;
+    uint32_t base = static_cast<uint32_t>(context.pop().i32);
     uint32_t offset = base + offset_;
 
     int16_t value;
@@ -2386,7 +2366,7 @@ I64Load16Unsigned::I64Load16Unsigned(
 Continuation I64Load16Unsigned::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    int32_t base = context.pop().i32;
+    uint32_t base = static_cast<uint32_t>(context.pop().i32);
     uint32_t offset = base + offset_;
 
     uint16_t value;
@@ -2409,7 +2389,7 @@ I64Load32Signed::I64Load32Signed(const grammar::I64Load32Signed& i64_load32_s)
 Continuation I64Load32Signed::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    int32_t base = context.pop().i32;
+    uint32_t base = static_cast<uint32_t>(context.pop().i32);
     uint32_t offset = base + offset_;
 
     int32_t value;
@@ -2433,7 +2413,7 @@ I64Load32Unsigned::I64Load32Unsigned(
 Continuation I64Load32Unsigned::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    int32_t base = context.pop().i32;
+    uint32_t base = static_cast<uint32_t>(context.pop().i32);
     uint32_t offset = base + offset_;
 
     uint32_t value;
@@ -2459,7 +2439,7 @@ Continuation I32Store::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
     int32_t value = context.pop().i32;
-    int32_t base = context.pop().i32;
+    uint32_t base = static_cast<uint32_t>(context.pop().i32);
 
     uint32_t offset = base + offset_;
 
@@ -2475,7 +2455,7 @@ Continuation I32Store::action(Instance& instance) {
         MemoryManagementUnit& mmu = kernel.getMMU();
         if (!mmu.store(offset, value)) {
             // repeat the operation after handling the page fault
-            context.pushI32(base);
+            context.pushI32(static_cast<int32_t>(base));
             context.pushI32(value);
             context.getEpilogues().push(shared_from_this());
 
@@ -2497,7 +2477,7 @@ Continuation I64Store::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
     int64_t value = context.pop().i64;
-    int32_t base = context.pop().i32;
+    uint32_t base = static_cast<uint32_t>(context.pop().i32);
 
     uint32_t offset = base + offset_;
 
@@ -2513,7 +2493,7 @@ Continuation I64Store::action(Instance& instance) {
         MemoryManagementUnit& mmu = kernel.getMMU();
         if (!mmu.store(offset, value)) {
             // repeat the operation after handling the page fault
-            context.pushI32(base);
+            context.pushI32(static_cast<int32_t>(base));
             context.pushI64(value);
             context.getEpilogues().push(shared_from_this());
 
@@ -2534,7 +2514,7 @@ Continuation F32Store::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
     float value = context.pop().f32;
-    int32_t base = context.pop().i32;
+    uint32_t base = static_cast<uint32_t>(context.pop().i32);
 
     uint32_t offset = base + offset_;
 
@@ -2554,7 +2534,7 @@ Continuation F64Store::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
     double value = context.pop().f64;
-    int32_t base = context.pop().i32;
+    uint32_t base = static_cast<uint32_t>(context.pop().i32);
 
     uint32_t offset = base + offset_;
 
@@ -2575,7 +2555,7 @@ Continuation I32Store8::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
     int32_t value = context.pop().i32;
-    int32_t base = context.pop().i32;
+    uint32_t base = static_cast<uint32_t>(context.pop().i32);
 
     uint32_t offset = base + offset_;
 
@@ -2591,7 +2571,7 @@ Continuation I32Store8::action(Instance& instance) {
         MemoryManagementUnit& mmu = kernel.getMMU();
         if (!mmu.store(offset, static_cast<uint8_t>(value & 0xFF))) {
             // repeat the operation after handling the page fault
-            context.pushI32(base);
+            context.pushI32(static_cast<int32_t>(base));
             context.pushI32(value);
             context.getEpilogues().push(shared_from_this());
 
@@ -2613,7 +2593,7 @@ Continuation I32Store16::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
     int32_t value = context.pop().i32;
-    int32_t base = context.pop().i32;
+    uint32_t base = static_cast<uint32_t>(context.pop().i32);
 
     uint32_t offset = base + offset_;
 
@@ -2629,7 +2609,7 @@ Continuation I32Store16::action(Instance& instance) {
         MemoryManagementUnit& mmu = kernel.getMMU();
         if (!mmu.store(offset, static_cast<int16_t>(value & 0xFFFF))) {
             // repeat the operation after handling the page fault
-            context.pushI32(base);
+            context.pushI32(static_cast<int32_t>(base));
             context.pushI32(value);
             context.getEpilogues().push(shared_from_this());
 
@@ -2651,7 +2631,7 @@ Continuation I64Store8::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
     int64_t val = context.pop().i64;
-    int32_t base = context.pop().i32;
+    uint32_t base = static_cast<uint32_t>(context.pop().i32);
 
     uint32_t offset = base + offset_;
 
@@ -2673,7 +2653,7 @@ Continuation I64Store16::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
     int64_t value = context.pop().i64;
-    int32_t base = context.pop().i32;
+    uint32_t base = static_cast<uint32_t>(context.pop().i32);
 
     uint32_t offset = base + offset_;
 
@@ -2695,7 +2675,7 @@ Continuation I64Store32::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
     int64_t value = context.pop().i64;
-    int32_t base = context.pop().i32;
+    uint32_t base = static_cast<uint32_t>(context.pop().i32);
 
     uint32_t offset = base + offset_;
 
@@ -2715,10 +2695,10 @@ MemoryGrow::MemoryGrow(const grammar::MemoryGrow& mem_grow)
 Continuation MemoryGrow::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    uint32_t delta = context.pop().i32;
+    uint32_t delta = static_cast<uint32_t>(context.pop().i32);
     Memory& memory = instance.getGlobalState().getMemory();
 
-    context.pushI32(memory.grow(delta));
+    context.pushI32(static_cast<int32_t>(memory.grow(delta)));
     return next_.get();
 }
 
@@ -2728,8 +2708,8 @@ MemoryInit::MemoryInit(const grammar::MemoryInit& mem_init)
 Continuation MemoryInit::action(Instance& instance) {
     Context& context = instance.getActiveContext();
 
-    int32_t len = context.pop().i32;
-    int32_t src_offset = context.pop().i32;
+    uint32_t len = static_cast<uint32_t>(context.pop().i32);
+    uint32_t src_offset = static_cast<uint32_t>(context.pop().i32);
     int32_t dst_offset = context.pop().i32;
 
     std::vector<uint8_t>& data_segment =
@@ -2739,7 +2719,7 @@ Continuation MemoryInit::action(Instance& instance) {
     auto src_buffer = std::span<uint8_t>(data_segment).subspan(src_offset, len);
 
     Memory& memory = instance.getGlobalState().getMemory();
-    bool result = memory.store(dst_offset, src_buffer);
+    bool result = memory.store(static_cast<uint32_t>(dst_offset), src_buffer);
     assert(result);
 
     return next_.get();
@@ -2774,9 +2754,9 @@ Continuation MemoryCopy::action(Instance& instance) {
         MemoryManagementUnit& mmu = kernel.getMMU();
         if (!mmu.load(src_offset, buffer)) {
             // repeat the operation after handling the page fault
-            context.pushI32(dst_offset);
-            context.pushI32(src_offset);
-            context.pushI32(count);
+            context.pushI32(static_cast<int32_t>(dst_offset));
+            context.pushI32(static_cast<int32_t>(src_offset));
+            context.pushI32(static_cast<int32_t>(count));
             context.getEpilogues().push(shared_from_this());
 
             // trigger page fault handling
@@ -2796,9 +2776,9 @@ Continuation MemoryCopy::action(Instance& instance) {
         MemoryManagementUnit& mmu = kernel.getMMU();
         if (!mmu.store(dst_offset, buffer)) {
             // repeat the operation after handling the page fault
-            context.pushI32(dst_offset);
-            context.pushI32(src_offset);
-            context.pushI32(count);
+            context.pushI32(static_cast<int32_t>(dst_offset));
+            context.pushI32(static_cast<int32_t>(src_offset));
+            context.pushI32(static_cast<int32_t>(count));
             context.getEpilogues().push(shared_from_this());
 
             // trigger page fault handling
@@ -2828,7 +2808,7 @@ Continuation MemoryFill::action(Instance& instance) {
 
     if (dst_offset < VIRT_MEMORY) {
         Memory& memory = instance.getGlobalState().getMemory();
-        if (!memory.fill(dst_offset, value, count))
+        if (!memory.fill(dst_offset, static_cast<uint8_t>(value), count))
             return trap(instance,
                         fmt::format("memory.fill out of bounds memory address: "
                                     "dst=0x{:x} count={}",
@@ -2840,11 +2820,11 @@ Continuation MemoryFill::action(Instance& instance) {
                              : instance.as<Process>().getKernel();
         MemoryManagementUnit& mmu = kernel.getMMU();
         uint32_t faulting_addr;
-        if (!mmu.fill(dst_offset, value, count, faulting_addr)) {
+        if (!mmu.fill(dst_offset, static_cast<uint8_t>(value), count, faulting_addr)) {
             // repeat the operation after handling the page fault
-            context.pushI32(dst_offset);
+            context.pushI32(static_cast<int32_t>(dst_offset));
             context.pushI32(value);
-            context.pushI32(count);
+            context.pushI32(static_cast<int32_t>(count));
             context.getEpilogues().push(shared_from_this());
 
             // trigger page fault handling

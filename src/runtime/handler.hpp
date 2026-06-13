@@ -102,20 +102,17 @@ private:
 
 class Signal : public Handler {
 public:
-    Signal() : Handler(-1) {}
+    Signal() : Handler(static_cast<uint32_t>(-1)) {}
 
     Continuation action(Instance& instance) override;
 
 private:
     class Epilogue : public Handler::Epilogue {
     public:
-        Epilogue(Instance& suspended_instance, Signal& parent)
-            : Handler::Epilogue(suspended_instance), parent_(parent) {}
+        Epilogue(Instance& suspended_instance, Signal&)
+            : Handler::Epilogue(suspended_instance) {}
 
         Continuation action(Instance& instance) override;
-
-    private:
-        Signal& parent_;
     };
 };
 

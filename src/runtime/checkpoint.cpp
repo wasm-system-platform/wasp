@@ -14,7 +14,7 @@ struct Checkpoint {
     std::array<uint8_t, 12> nonce;
     std::array<uint8_t, 16> tag;
     uint32_t confidential_size;
-    uint8_t confidential[];
+    uint8_t* confidential;
 };
 
 class Encoder {
@@ -306,7 +306,7 @@ Errno create(Instance& instance, std::span<uint8_t> checkpoint_out) {
     Checkpoint* state = reinterpret_cast<Checkpoint*>(checkpoint_out.data());
 
     std::vector<uint8_t> encoded_state = encode(instance);
-    state->confidential_size = encoded_state.size();
+    state->confidential_size = static_cast<uint32_t>(encoded_state.size());
 
     if (checkpoint_out.size() < (sizeof(Checkpoint) + encoded_state.size())) {
         return Errno::overflow;

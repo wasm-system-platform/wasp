@@ -12,7 +12,7 @@ namespace runtime {
 Expected<std::shared_ptr<Kernel>>
 Kernel::create(const std::string& kernel_path) {
     std::ifstream kernel_fstream;
-    kernel_fstream.open("kernel.wasm", std::ios::in | std::ios::binary);
+    kernel_fstream.open(kernel_path, std::ios::in | std::ios::binary);
 
     // parse module
     Expected<grammar::Module> module_exp =
@@ -146,7 +146,7 @@ Expected<Imports> Kernel::createImports() {
     // Debug
     std::function<void(Instance&, int32_t, int32_t, int32_t)> debug_log_func =
         [](Instance& instance, uint32_t buffer_offset, uint32_t len,
-           int32_t level) -> void {
+           int32_t) -> void {
         Memory& memory = instance.getGlobalState().getMemory();
         std::vector<uint8_t> buffer(len);
 
@@ -218,7 +218,7 @@ Expected<Imports> Kernel::createImports() {
             proc_manager.createProcess(instance, program_bytes, *pid_ptr));
     };
     std::function<void(Instance&, int32_t)> process_unload_func =
-        [](Instance& instance, uint32_t pid) -> void {};
+        [](Instance&, uint32_t) -> void {};
     std::function<int32_t(Instance&, int32_t, int32_t)> process_run_func =
         [](Instance& instance, uint32_t pid, uint32_t execve_stack) -> int32_t {
         ProcessManager& proc_mgr = *instance.as<Kernel>().proccess_manager_;
@@ -258,7 +258,7 @@ Expected<Imports> Kernel::createImports() {
             proc_mgr.resumeProcess(pid, kernel, retval));
     };
     std::function<int32_t(Instance&, int32_t, int32_t, int32_t, int32_t)>
-        process_read_memory_func = [](Instance& instance, int pid,
+        process_read_memory_func = [](Instance& instance, uint32_t pid,
                                       uint32_t kbuf, uint32_t pbuf,
                                       uint32_t count) -> int32_t {
         ProcessManager& proc_mgr = *instance.as<Kernel>().proccess_manager_;
@@ -266,7 +266,7 @@ Expected<Imports> Kernel::createImports() {
         return static_cast<int32_t>(result);
     };
     std::function<int32_t(Instance&, int32_t, int32_t, int32_t, int32_t)>
-        process_read_memory_cstring_func = [](Instance& instance, int pid,
+        process_read_memory_cstring_func = [](Instance& instance, uint32_t pid,
                                               uint32_t kbuf, uint32_t pbuf,
                                               uint32_t maxlen) -> int32_t {
         ProcessManager& proc_mgr = *instance.as<Kernel>().proccess_manager_;
@@ -274,7 +274,7 @@ Expected<Imports> Kernel::createImports() {
         return static_cast<int32_t>(result);
     };
     std::function<int32_t(Instance&, int32_t, int32_t, int32_t, int32_t)>
-        process_write_memory_func = [](Instance& instance, int pid,
+        process_write_memory_func = [](Instance& instance, uint32_t pid,
                                        uint32_t kbuf, uint32_t pbuf,
                                        uint32_t count) -> int32_t {
         ProcessManager& proc_mgr = *instance.as<Kernel>().proccess_manager_;
@@ -299,26 +299,10 @@ Expected<Imports> Kernel::createImports() {
         std::make_shared<Signal>(), 3, {int32_t(0), int32_t(0), int32_t(0)},
         FunctionType::I32Producer_I32_I32_I32().getSignature());
 
-    // Devices
-    std::function<int64_t(Instance&)> timer_get_time_func =
-        [](Instance& instance) -> int64_t {
-        // return instance.getTimer().getTime();
-        return 0;
-    };
-
-    std::function<void(Instance&, int32_t)> timer_set_interval_func =
-        [](Instance& instance, uint32_t timout) -> void {
-        // instance.getTimer().setInterval(timout);
-    };
-
-    Function timer_get_time = Function::createExternal(timer_get_time_func);
-    Function timer_set_interval =
-        Function::createExternal(timer_set_interval_func);
-
     // MMU
     std::function<int32_t(Instance&)> mmu_active_table_func =
         [](Instance& instance) -> int32_t {
-        return instance.as<Kernel>().mmu_->activeTable();
+        return static_cast<int32_t>(instance.as<Kernel>().mmu_->activeTable());
     };
     std::function<int32_t(Instance&, int32_t)> mmu_create_table_func =
         [](Instance& instance, uint32_t ptable_idx_offset) -> int32_t {
@@ -338,21 +322,21 @@ Expected<Imports> Kernel::createImports() {
             instance.as<Kernel>().mmu_->destroyTable(ptable_idx));
     };
     std::function<int32_t(Instance&, int32_t)> mmu_switch_table_func =
-        [](Instance& instance, int32_t table_idx) -> int32_t {
+        [](Instance& instance, uint32_t table_idx) -> int32_t {
         return static_cast<int32_t>(
             instance.as<Kernel>().mmu_->loadTable(table_idx));
     };
     std::function<int32_t(Instance&, int32_t, int32_t, int32_t, int32_t)>
-        mmu_map_page_func = [](Instance& instance, int32_t ptable_idx,
+        mmu_map_page_func = [](Instance& instance, uint32_t ptable_idx,
                                uint32_t virt_addr, uint32_t offset,
                                int32_t prot) -> int32_t {
         return static_cast<int32_t>(instance.as<Kernel>().mmu_->mapPage(
             ptable_idx, virt_addr, offset, prot));
     };
     std::function<int32_t(Instance&, int32_t, int32_t, int32_t, int32_t)>
-        mmu_unmap_page_func = [](Instance& instance, int32_t table_idx,
+        mmu_unmap_page_func = [](Instance& instance, uint32_t ptable_idx,
                                  uint32_t virt_addr, uint32_t offset_offset,
-                                 int32_t prot_offset) -> int32_t {
+                                 uint32_t prot_offset) -> int32_t {
         uint32_t* offset_ptr;
         int32_t* prot_ptr;
 
@@ -362,12 +346,12 @@ Expected<Imports> Kernel::createImports() {
             return static_cast<int32_t>(Errno::BAD_ADDRESS);
 
         return static_cast<int32_t>(instance.as<Kernel>().mmu_->unmapPage(
-            table_idx, virt_addr, offset_ptr, prot_ptr));
+            ptable_idx, virt_addr, offset_ptr, prot_ptr));
     };
     std::function<int32_t(Instance&, int32_t, int32_t, int32_t, int32_t)>
-        mmu_get_page_func = [](Instance& instance, int32_t table_idx,
+        mmu_get_page_func = [](Instance& instance, uint32_t ptable_idx,
                                uint32_t virt_addr, uint32_t offset_offset,
-                               int32_t prot_offset) -> int32_t {
+                               uint32_t prot_offset) -> int32_t {
         uint32_t* offset_ptr;
         int32_t* prot_ptr;
 
@@ -377,7 +361,7 @@ Expected<Imports> Kernel::createImports() {
             return static_cast<int32_t>(Errno::BAD_ADDRESS);
 
         return static_cast<int32_t>(instance.as<Kernel>().mmu_->getPage(
-            table_idx, virt_addr, offset_ptr, prot_ptr));
+            ptable_idx, virt_addr, offset_ptr, prot_ptr));
     };
 
     Function mmu_active_table = Function::createExternal(mmu_active_table_func);
@@ -428,8 +412,6 @@ Expected<Imports> Kernel::createImports() {
         {"process.read_memory_cstring", process_read_memory_cstring},
         {"process.write_memory", process_write_memory},
         {"process.signal", process_signal},
-        {"timer.get_time", timer_get_time},
-        {"timer.set_interval", timer_set_interval},
         {"mmu.active_table", mmu_active_table},
         {"mmu.create_table", mmu_create_table},
         {"mmu.destroy_table", mmu_destroy_table},

@@ -31,7 +31,7 @@ Expected<DebugLineSection> DebugLineSection::parse(std::istream& in) {
                      sizeof(CompilationUnitHeader)))
             return Unexpected(ERROR("unexpected end of section"));
 
-        size_t header_end = in.tellg();
+        size_t header_end = static_cast<size_t>(in.tellg());
 
         if (header.version != 2)
             return Unexpected(ERROR(fmt::format(
@@ -68,7 +68,7 @@ Expected<DebugLineSection> DebugLineSection::parse(std::istream& in) {
 
                 if (op == 0) {
                     Expected<bool> is_end_of_seq_exp =
-                        handle_extended_opcode(in, op, header, state, states);
+                        handle_extended_opcode(in, state, states);
                     if (!is_end_of_seq_exp)
                         return Unexpected(PROPAGATE(is_end_of_seq_exp));
 
@@ -76,7 +76,7 @@ Expected<DebugLineSection> DebugLineSection::parse(std::istream& in) {
                         break;
                 } else if (op >= 13) {
                     Expected<void> result =
-                        handle_special_opcode(in, op, header, state, states);
+                        handle_special_opcode(op, header, state, states);
                     if (!result)
                         return Unexpected(PROPAGATE(result));
                 } else {
@@ -97,7 +97,7 @@ Expected<DebugLineSection> DebugLineSection::parse(std::istream& in) {
                 Segment s;
                 s.start_addr = a.address;
                 s.end_addr = b.address;
-                s.src_file_idx = src_files.size() + a.file - 1;
+                s.src_file_idx = src_files.size() + static_cast<size_t>(a.file) - 1;
                 s.line = a.line;
 
                 segments.push_back(s);
@@ -121,7 +121,7 @@ DebugLineSection::parse_include_dirs(std::istream& in) {
         if (!c_exp)
             return Unexpected(PROPAGATE(c_exp));
 
-        char c = *c_exp;
+        char c = static_cast<char>(*c_exp);
 
         if (c == '\0') {
             if (directory_buffer.empty())
@@ -147,7 +147,7 @@ DebugLineSection::parse_source_files(std::istream& in) {
         if (!c_exp)
             return Unexpected(PROPAGATE(c_exp));
 
-        char c = *c_exp;
+        char c = static_cast<char>(*c_exp);
 
         if (c == '\0') {
             if (file_buffer.empty())
@@ -208,7 +208,7 @@ Expected<void> DebugLineSection::handle_standard_opcode(
         if (!file_exp)
             return Unexpected(PROPAGATE(file_exp));
 
-        state.file = *file_exp;
+        state.file = static_cast<int64_t>(*file_exp);
         break;
     }
     case DebugLineSectionOpcodes::set_column: {
@@ -216,7 +216,7 @@ Expected<void> DebugLineSection::handle_standard_opcode(
         if (!column_exp)
             return Unexpected(PROPAGATE(column_exp));
 
-        state.column = *column_exp;
+        state.column = static_cast<int64_t>(*column_exp);
         break;
     }
     case DebugLineSectionOpcodes::negate_stmt:
@@ -236,7 +236,7 @@ Expected<void> DebugLineSection::handle_standard_opcode(
 }
 
 Expected<void> DebugLineSection::handle_special_opcode(
-    std::istream& in, uint8_t op, CompilationUnitHeader& header, State& state,
+    uint8_t op, CompilationUnitHeader& header, State& state,
     std::vector<State>& states) {
     uint8_t adjusted_op = op - header.opcode_base;
 
@@ -251,7 +251,7 @@ Expected<void> DebugLineSection::handle_special_opcode(
 }
 
 Expected<bool> DebugLineSection::handle_extended_opcode(
-    std::istream& in, uint8_t op, CompilationUnitHeader& header, State& state,
+    std::istream& in, State& state,
     std::vector<State>& states) {
     Expected<U64> length_exp = U64::parse(in);
     if (!length_exp)

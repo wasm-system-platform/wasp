@@ -142,13 +142,13 @@ Expected<void> Instance::call(const std::string& name,
     return {};
 }
 
-void Instance::invoke(size_t func_idx) {
+void Instance::invoke(uint32_t func_idx) {
     Call call(func_idx, UINT32_MAX);
     run(call);
 }
 
 void Instance::invokeIndirect(uint32_t element_idx, size_t signature) {
-    active_context_->pushI32(element_idx);
+    active_context_->pushI32(static_cast<int32_t>(element_idx));
     CallIndirect call_indirect(signature);
     run(call_indirect);
 }

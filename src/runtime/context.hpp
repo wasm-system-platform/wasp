@@ -122,12 +122,12 @@ class Context {
 public:
     enum class RunState { rdy, running, waiting, in_syscall, suspended };
 
-    Context(size_t id) : id_(id) {}
-    Context(const Context& other, size_t id)
+    Context(uint32_t id) : id_(id) {}
+    Context(const Context& other, uint32_t id)
         : id_(id), locals_(other.locals_), stack_(other.stack_),
           epilogues_(other.epilogues_), run_state_(other.run_state_) {}
 
-    inline size_t getId() const { return id_; }
+    inline uint32_t getId() const { return id_; }
 
     size_t size() const { return stack_.size(); }
     inline void push(Value value) { stack_.push(value); }
@@ -168,7 +168,7 @@ public:
     }
 
 private:
-    size_t id_;
+    uint32_t id_;
 
     Locals locals_;
     Stack stack_;

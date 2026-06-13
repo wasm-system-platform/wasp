@@ -729,7 +729,7 @@ Expected<BranchTable> BranchTable::parse(std::istream& in) {
     std::vector<uint32_t> label_indices;
     label_indices.reserve(len);
 
-    for (int i = 0; i < len; i++) {
+    for (uint32_t i = 0; i < len; i++) {
         Expected<U32> label_idx_res = U32::parse(in);
         if (!label_idx_res)
             return Unexpected(PROPAGATE(label_idx_res));

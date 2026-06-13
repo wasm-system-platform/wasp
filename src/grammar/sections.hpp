@@ -95,7 +95,7 @@ public:
 
     const Name& getModule() const { return ImportBase::module_; }
     const Name& getName() const { return ImportBase::name_; }
-    const uint32_t getTypeIdx() const { return type_idx_; }
+    uint32_t getTypeIdx() const { return type_idx_; }
 
     std::string toString() const;
 
@@ -371,7 +371,7 @@ public:
     static Expected<CodeSection> parse(std::istream& in, size_t code_start);
 
     const std::vector<Function>& getFunctions() const { return funcs_; }
-    const size_t getCodeStart() const { return code_start_; }
+    size_t getCodeStart() const { return code_start_; }
 
     std::string toString() const;
 
@@ -393,7 +393,7 @@ public:
 
     const std::vector<uint8_t>& getBytes() const { return bytes_; }
 
-    const bool isActive() const { return offset_opt_.has_value(); }
+    bool isActive() const { return offset_opt_.has_value(); }
 
     const Expression& getOffset() const { return offset_opt_.value(); }
 

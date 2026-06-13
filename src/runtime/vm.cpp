@@ -255,7 +255,20 @@ Expected<Memory> GlobalState::createMemory(const grammar::Module& module) {
         return Unexpected(ERROR("multi memory is currently not supported"));
 
     const MemoryType& type = mem_imports[0].getMemoryType();
-    Memory memory(type.getInitial(), type.getMax());
+
+    const uint32_t init = type.getInitial();
+    if (init > UINT16_MAX)
+        return Unexpected(ERROR(fmt::format(
+            "memory initial size {} exceeds maximum allowed value ({})",
+            init, UINT16_MAX)));
+
+    const uint32_t max = type.getMax();
+    if (max > UINT16_MAX)
+        return Unexpected(ERROR(fmt::format(
+            "memory maximum size {} exceeds maximum allowed value ({})",
+            max, UINT16_MAX)));
+
+    Memory memory(static_cast<uint16_t>(init), static_cast<uint16_t>(max));
 
     /* copy active segments */
     const std::vector<grammar::Segment>& segments = data_section.getSegments();
@@ -286,7 +299,7 @@ Expected<Memory> GlobalState::createMemory(const grammar::Module& module) {
         if (dummy_context.size() != 1)
             return Unexpected(ERROR("malformed constant expression"));
 
-        uint32_t offset = dummy_context.pop().i32;
+        uint32_t offset = static_cast<uint32_t>(dummy_context.pop().i32);
 
         if (!memory.store(offset, segment.getBytes()))
             return Unexpected(ERROR("failed to copy segment"));
