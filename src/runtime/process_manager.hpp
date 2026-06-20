@@ -15,7 +15,7 @@ public:
     ProcessManager(Kernel& kernel) : kernel_(kernel) {}
 
     Errno createProcess(Instance& instance,
-                        std::span<const char>& program_bytes, uint32_t& pid);
+                        std::span<const uint8_t>& program_bytes, uint32_t& pid);
     Errno runProcess(uint32_t pid, Instance& instance, uint32_t execve_stack);
     Errno cloneProcess(uint32_t pid, uint32_t& clone_pid);
     Errno resumeProcess(uint32_t pid, Kernel& kernel, int32_t retval);

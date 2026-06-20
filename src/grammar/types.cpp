@@ -9,11 +9,8 @@
 /* Reference Type */
 /******************/
 
-Expected<ReferenceType> ReferenceType::parse(std::istream& in) {
-    Expected<Byte> type_exp = Byte::parse(in);
-    if (!type_exp)
-        return Unexpected(PROPAGATE(type_exp));
-    uint8_t type = *type_exp;
+Expected<ReferenceType> ReferenceType::parse(ByteCursor& in) {
+    uint8_t type = in.byte();
 
     switch (type) {
     case static_cast<uint8_t>(Type::funcref):
@@ -37,11 +34,8 @@ ReferenceType::ReferenceType(Type type) : type_(type) {}
 /* Value Type */
 /**************/
 
-Expected<ValueType> ValueType::parse(std::istream& in) {
-    Expected<Byte> type_exp = Byte::parse(in);
-    if (!type_exp)
-        return Unexpected(PROPAGATE(type_exp));
-    uint8_t type = *type_exp;
+Expected<ValueType> ValueType::parse(ByteCursor& in) {
+    uint8_t type = in.byte();
 
     switch (type) {
     case 0x7F:
@@ -79,7 +73,7 @@ std::string ValueType::toString() const {
     return TYPE_MAP.at(type_);
 }
 
-Expected<ExpectedType> ExpectedType::parse(std::istream& in) {
+Expected<ExpectedType> ExpectedType::parse(ByteCursor& in) {
     Expected<U32> len_exp = U32::parse(in);
     if (!len_exp)
         return Unexpected(PROPAGATE(len_exp));
@@ -216,11 +210,8 @@ const FunctionType& FunctionType::ProducerI32x8() {
     return TYPE;
 }
 
-Expected<FunctionType> FunctionType::parse(std::istream& in) {
-    Expected<Byte> comp_type_exp = Byte::parse(in);
-    if (!comp_type_exp)
-        return Unexpected(PROPAGATE(comp_type_exp));
-    uint8_t type = *comp_type_exp;
+Expected<FunctionType> FunctionType::parse(ByteCursor& in) {
+    uint8_t type = in.byte();
 
     if (type != 0x60)
         return Unexpected(ERROR("function type has the wrong composite type"));
@@ -253,11 +244,8 @@ FunctionType::FunctionType(const ExpectedType& param_types,
 /* Limits */
 /**********/
 
-Expected<Limits> Limits::parse(std::istream& in) {
-    Expected<Byte> flags_exp = Byte::parse(in);
-    if (!flags_exp)
-        return Unexpected(PROPAGATE(flags_exp));
-    uint8_t flags = *flags_exp;
+Expected<Limits> Limits::parse(ByteCursor& in) {
+    uint8_t flags = in.byte();
 
     Expected<U32> min_exp = U32::parse(in);
     if (!min_exp)
@@ -288,7 +276,7 @@ Limits::Limits(uint8_t flags, uint32_t min, uint32_t max)
 /* Memory Types */
 /****************/
 
-Expected<MemoryType> MemoryType::parse(std::istream& in) {
+Expected<MemoryType> MemoryType::parse(ByteCursor& in) {
     Expected<Limits> limits_exp = Limits::parse(in);
     if (!limits_exp)
         return Unexpected(PROPAGATE(limits_exp));
@@ -306,7 +294,7 @@ MemoryType::MemoryType(const Limits& limits) : Limits(limits) {}
 /* Table Types */
 /***************/
 
-Expected<TableType> TableType::parse(std::istream& in) {
+Expected<TableType> TableType::parse(ByteCursor& in) {
     Expected<ReferenceType> ref_type_exp = ReferenceType::parse(in);
     if (!ref_type_exp)
         return Unexpected(PROPAGATE(ref_type_exp));
@@ -329,21 +317,18 @@ TableType::TableType(const ReferenceType& ref_type, const Limits& limits)
 /* Global Types */
 /****************/
 
-Expected<GlobalType> GlobalType::parse(std::istream& in) {
+Expected<GlobalType> GlobalType::parse(ByteCursor& in) {
     Expected<ValueType> val_type_exp = ValueType::parse(in);
     if (!val_type_exp)
         return Unexpected(PROPAGATE(val_type_exp));
 
-    Expected<Byte> mut_exp = Byte::parse(in);
-    if (!mut_exp)
-        return Unexpected(PROPAGATE(mut_exp));
+    bool is_mutable = in.byte();
+    if (in.bad())
+        return Unexpected(ERROR("broken stream"));
 
-    return GlobalType(*val_type_exp, *mut_exp);
+    return GlobalType(std::move(*val_type_exp), is_mutable);
 }
 
 std::string GlobalType::toString() const {
-    return fmt::format("{} mutable={}", ValueType::toString(), mut_);
+    return fmt::format("{} mutable={}", ValueType::toString(), is_mutable_);
 }
-
-GlobalType::GlobalType(const ValueType& val_type, uint8_t mut)
-    : ValueType(val_type), mut_(mut) {}

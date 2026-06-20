@@ -49,7 +49,6 @@ int main(int argc, char** argv) {
         std::make_shared<dev::Terminal>());
     runtime::DeviceManager::instance().plugIn(std::make_shared<Timer>());
 
-
     auto ts_0 = std::chrono::steady_clock::now();
     for (int i = 0; i < 10; i++) {
         auto result = runtime::Kernel::create(args["kernel"].as<std::string>());

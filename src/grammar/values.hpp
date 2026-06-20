@@ -2,29 +2,15 @@
 
 #include <cstdint>
 
+#include "util/byte_cursor.hpp"
 #include "util/error_handling.hpp"
-
-/*********/
-/* Bytes */
-/*********/
-
-struct Byte {
-    static Expected<Byte> parse(std::istream& in);
-
-    operator uint8_t() const { return val_; }
-
-private:
-    uint8_t val_;
-
-    explicit Byte(uint8_t val) : val_(val) {}
-};
 
 /************/
 /* Integers */
 /************/
 
 struct S32 {
-    static Expected<S32> parse(std::istream& in);
+    static Expected<S32> parse(ByteCursor& in);
 
     operator int32_t() const { return val_; }
 
@@ -35,7 +21,7 @@ private:
 };
 
 struct U32 {
-    static Expected<U32> parse(std::istream& in);
+    static Expected<U32> parse(ByteCursor& in);
 
     operator uint32_t() const { return val_; }
 
@@ -46,7 +32,7 @@ private:
 };
 
 struct S64 {
-    static Expected<S64> parse(std::istream& in);
+    static Expected<S64> parse(ByteCursor& in);
 
     operator int64_t() const { return val_; }
 
@@ -57,7 +43,7 @@ private:
 };
 
 struct U64 {
-    static Expected<U64> parse(std::istream& in);
+    static Expected<U64> parse(ByteCursor& in);
 
     operator uint64_t() const { return val_; }
 
@@ -73,7 +59,7 @@ private:
 
 struct F32 {
 public:
-    static Expected<F32> parse(std::istream& in);
+    static Expected<F32> parse(ByteCursor& in);
 
     float getVal() const { return val_; }
 
@@ -84,7 +70,7 @@ private:
 };
 
 struct F64 {
-    static Expected<F64> parse(std::istream& in);
+    static Expected<F64> parse(ByteCursor& in);
 
     double getVal() const { return val_; }
 
@@ -99,12 +85,12 @@ private:
 /*********/
 
 struct Name {
-    static Expected<Name> parse(std::istream& in);
+    static Expected<Name> parse(ByteCursor& in);
 
-    operator const std::string&() const { return val_; }
+    std::string_view value() const { return val_; }
 
 private:
-    std::string val_;
+    std::string_view val_;
 
-    explicit Name(std::string&& val) : val_(std::move(val)) {}
+    explicit Name(std::string_view val) : val_(val) {}
 };

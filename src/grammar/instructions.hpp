@@ -19,7 +19,7 @@ using Instruction = std::shared_ptr<InstructionBase>;
 
 struct Expression {
 public:
-    static Expected<Expression> parse(std::istream& in, size_t code_start);
+    static Expected<Expression> parse(ByteCursor& in, size_t code_start);
 
     const std::vector<Instruction>& getInstructions() const {
         return instructions_;
@@ -44,7 +44,7 @@ private:
 
 class InstructionBase {
 public:
-    static Expected<Instruction> parse(std::istream& in, size_t code_start);
+    static Expected<Instruction> parse(ByteCursor& in, size_t code_start);
 
     virtual ~InstructionBase() = default;
 
@@ -75,7 +75,7 @@ class ExtendedIntstructionBase : public InstructionBase {
 public:
     static constexpr uint8_t OPCODE = 0xFC;
 
-    static Expected<Instruction> parse(std::istream& in, size_t addr);
+    static Expected<Instruction> parse(ByteCursor& in, size_t addr);
 
     uint32_t getExtendedOpcode() const { return ext_opcode_; }
 
@@ -119,7 +119,7 @@ public:
 
 class BlockType {
 public:
-    static Expected<BlockType> parse(std::istream& in);
+    static Expected<BlockType> parse(ByteCursor& in);
 
     std::string toString() const;
 
@@ -134,7 +134,7 @@ class Block : public InstructionBase {
 public:
     static constexpr uint8_t OPCODE = 0x02;
 
-    static Expected<Block> parse(std::istream& in, size_t code_start);
+    static Expected<Block> parse(ByteCursor& in, size_t code_start);
 
     const std::vector<Instruction>& getInstruction() const {
         return instructions_;
@@ -155,7 +155,7 @@ class Loop : public InstructionBase {
 public:
     static constexpr uint8_t OPCODE = 0x03;
 
-    static Expected<Loop> parse(std::istream& in, size_t addr,
+    static Expected<Loop> parse(ByteCursor& in, size_t addr,
                                 size_t code_start);
 
     const std::vector<Instruction>& getInstruction() const {
@@ -178,7 +178,7 @@ class IfElse : public InstructionBase {
 public:
     static constexpr uint8_t OPCODE = 0x04;
 
-    static Expected<IfElse> parse(std::istream& in, size_t addr,
+    static Expected<IfElse> parse(ByteCursor& in, size_t addr,
                                   size_t code_start);
 
     const Expression& getThenExpr() const { return then_expr_; }
@@ -230,7 +230,7 @@ class Branch : public InstructionBase {
 public:
     static constexpr uint8_t OPCODE = 0x0C;
 
-    static Expected<Branch> parse(std::istream& in);
+    static Expected<Branch> parse(ByteCursor& in);
 
     uint32_t getLabelIdx() const { return label_idx_; }
 
@@ -247,7 +247,7 @@ class BranchIf : public InstructionBase {
 public:
     static constexpr uint8_t OPCODE = 0x0D;
 
-    static Expected<BranchIf> parse(std::istream& in, size_t addr);
+    static Expected<BranchIf> parse(ByteCursor& in, size_t addr);
 
     uint32_t getLabelIdx() const { return label_idx_; }
 
@@ -264,7 +264,7 @@ class BranchTable : public InstructionBase {
 public:
     static constexpr uint8_t OPCODE = 0x0E;
 
-    static Expected<BranchTable> parse(std::istream& in);
+    static Expected<BranchTable> parse(ByteCursor& in);
 
     const std::vector<uint32_t>& getLabelIndices() const {
         return label_indices_;
@@ -283,7 +283,7 @@ class Call : public InstructionBase {
 public:
     static constexpr uint8_t OPCODE = 0x10;
 
-    static Expected<Call> parse(std::istream& in, size_t addr);
+    static Expected<Call> parse(ByteCursor& in, size_t addr);
 
     uint32_t getFuncIdx() const { return func_idx_; }
 
@@ -300,7 +300,7 @@ class CallIndirect : public InstructionBase {
 public:
     static constexpr uint8_t OPCODE = 0x11;
 
-    static Expected<CallIndirect> parse(std::istream& in, size_t addr);
+    static Expected<CallIndirect> parse(ByteCursor& in, size_t addr);
 
     uint32_t getTypeIdx() const { return type_idx_; }
     uint32_t getTableIdx() const { return table_idx_; }
@@ -324,7 +324,7 @@ class LocalGet : public InstructionBase {
 public:
     static constexpr uint32_t OPCODE = 0x20;
 
-    static Expected<LocalGet> parse(std::istream& in, size_t addr);
+    static Expected<LocalGet> parse(ByteCursor& in, size_t addr);
 
     uint32_t getLocalIdx() const { return local_idx_; }
 
@@ -341,7 +341,7 @@ class LocalSet : public InstructionBase {
 public:
     static constexpr uint32_t OPCODE = 0x21;
 
-    static Expected<LocalSet> parse(std::istream& in, size_t addr);
+    static Expected<LocalSet> parse(ByteCursor& in, size_t addr);
 
     uint32_t getLocalIdx() const { return local_idx_; }
 
@@ -358,7 +358,7 @@ class LocalTee : public InstructionBase {
 public:
     static constexpr uint32_t OPCODE = 0x22;
 
-    static Expected<LocalTee> parse(std::istream& in, size_t addr);
+    static Expected<LocalTee> parse(ByteCursor& in, size_t addr);
 
     uint32_t getLocalIdx() const { return local_idx_; }
 
@@ -375,7 +375,7 @@ class GlobalGet : public InstructionBase {
 public:
     static constexpr uint32_t OPCODE = 0x23;
 
-    static Expected<GlobalGet> parse(std::istream& in);
+    static Expected<GlobalGet> parse(ByteCursor& in);
 
     uint32_t getGlobalIdx() const { return global_idx_; }
 
@@ -392,7 +392,7 @@ class GlobalSet : public InstructionBase {
 public:
     static constexpr uint32_t OPCODE = 0x24;
 
-    static Expected<GlobalSet> parse(std::istream& in);
+    static Expected<GlobalSet> parse(ByteCursor& in);
 
     uint32_t getGlobalIdx() const { return global_idx_; }
 
@@ -435,7 +435,7 @@ class I32Const : public InstructionBase {
 public:
     static constexpr uint8_t OPCODE = 0x41;
 
-    static Expected<I32Const> parse(std::istream& in, size_t addr);
+    static Expected<I32Const> parse(ByteCursor& in, size_t addr);
 
     int32_t getVal() const { return i_; }
 
@@ -451,7 +451,7 @@ class I64Const : public InstructionBase {
 public:
     static constexpr uint8_t OPCODE = 0x42;
 
-    static Expected<I64Const> parse(std::istream& in);
+    static Expected<I64Const> parse(ByteCursor& in);
 
     int64_t getVal() const { return i_; }
 
@@ -467,7 +467,7 @@ class F32Const : public InstructionBase, public F32 {
 public:
     static constexpr uint8_t OPCODE = 0x43;
 
-    static Expected<F32Const> parse(std::istream& in);
+    static Expected<F32Const> parse(ByteCursor& in);
 
     std::string toString() const override;
 
@@ -479,7 +479,7 @@ class F64Const : public InstructionBase, public F64 {
 public:
     static constexpr uint8_t OPCODE = 0x44;
 
-    static Expected<F64Const> parse(std::istream& in);
+    static Expected<F64Const> parse(ByteCursor& in);
 
     std::string toString() const override;
 
@@ -1396,7 +1396,7 @@ public:
 
 class MemoryArgument {
 public:
-    static Expected<MemoryArgument> parse(std::istream& in);
+    static Expected<MemoryArgument> parse(ByteCursor& in);
 
     uint32_t getOffset() const { return offset_; }
     uint32_t getAlign() const { return align_; }
@@ -1415,7 +1415,7 @@ class I32Load : public InstructionBase {
 public:
     static constexpr uint8_t OPCODE = 0x28;
 
-    static Expected<I32Load> parse(std::istream& in, size_t addr);
+    static Expected<I32Load> parse(ByteCursor& in, size_t addr);
 
     const MemoryArgument& getMemArg() const { return mem_arg_; }
 
@@ -1432,7 +1432,7 @@ class I64Load : public InstructionBase {
 public:
     static constexpr uint8_t OPCODE = 0x29;
 
-    static Expected<I64Load> parse(std::istream& in);
+    static Expected<I64Load> parse(ByteCursor& in);
 
     const MemoryArgument& getMemArg() const { return mem_arg_; }
 
@@ -1449,7 +1449,7 @@ class F32Load : public InstructionBase {
 public:
     static constexpr uint8_t OPCODE = 0x2A;
 
-    static Expected<F32Load> parse(std::istream& in);
+    static Expected<F32Load> parse(ByteCursor& in);
 
     const MemoryArgument& getMemArg() const { return mem_arg_; }
 
@@ -1466,7 +1466,7 @@ class F64Load : public InstructionBase {
 public:
     static constexpr uint8_t OPCODE = 0x2B;
 
-    static Expected<F64Load> parse(std::istream& in);
+    static Expected<F64Load> parse(ByteCursor& in);
 
     const MemoryArgument& getMemArg() const { return mem_arg_; }
 
@@ -1483,7 +1483,7 @@ class I32Load8Signed : public InstructionBase {
 public:
     static constexpr uint8_t OPCODE = 0x2C;
 
-    static Expected<I32Load8Signed> parse(std::istream& in);
+    static Expected<I32Load8Signed> parse(ByteCursor& in);
 
     const MemoryArgument& getMemArg() const { return mem_arg_; }
 
@@ -1500,7 +1500,7 @@ class I32Load8Unsigned : public InstructionBase {
 public:
     static constexpr uint8_t OPCODE = 0x2D;
 
-    static Expected<I32Load8Unsigned> parse(std::istream& in);
+    static Expected<I32Load8Unsigned> parse(ByteCursor& in);
 
     const MemoryArgument& getMemArg() const { return mem_arg_; }
 
@@ -1517,7 +1517,7 @@ class I32Load16Signed : public InstructionBase {
 public:
     static constexpr uint8_t OPCODE = 0x2E;
 
-    static Expected<I32Load16Signed> parse(std::istream& in);
+    static Expected<I32Load16Signed> parse(ByteCursor& in);
 
     const MemoryArgument& getMemArg() const { return mem_arg_; }
 
@@ -1534,7 +1534,7 @@ class I32Load16Unsigned : public InstructionBase {
 public:
     static constexpr uint8_t OPCODE = 0x2F;
 
-    static Expected<I32Load16Unsigned> parse(std::istream& in);
+    static Expected<I32Load16Unsigned> parse(ByteCursor& in);
 
     const MemoryArgument& getMemArg() const { return mem_arg_; }
 
@@ -1551,7 +1551,7 @@ class I64Load8Signed : public InstructionBase, public MemoryArgument {
 public:
     static constexpr uint8_t OPCODE = 0x30;
 
-    static Expected<I64Load8Signed> parse(std::istream& in);
+    static Expected<I64Load8Signed> parse(ByteCursor& in);
 
     std::string toString() const override;
 
@@ -1564,7 +1564,7 @@ class I64Load8Unsigned : public InstructionBase, public MemoryArgument {
 public:
     static constexpr uint8_t OPCODE = 0x31;
 
-    static Expected<I64Load8Unsigned> parse(std::istream& in);
+    static Expected<I64Load8Unsigned> parse(ByteCursor& in);
 
     std::string toString() const override;
 
@@ -1577,7 +1577,7 @@ class I64Load16Signed : public InstructionBase, public MemoryArgument {
 public:
     static constexpr uint8_t OPCODE = 0x32;
 
-    static Expected<I64Load16Signed> parse(std::istream& in);
+    static Expected<I64Load16Signed> parse(ByteCursor& in);
 
     std::string toString() const override;
 
@@ -1590,7 +1590,7 @@ class I64Load16Unsigned : public InstructionBase, public MemoryArgument {
 public:
     static constexpr uint8_t OPCODE = 0x33;
 
-    static Expected<I64Load16Unsigned> parse(std::istream& in);
+    static Expected<I64Load16Unsigned> parse(ByteCursor& in);
 
     std::string toString() const override;
 
@@ -1603,7 +1603,7 @@ class I64Load32Signed : public InstructionBase, public MemoryArgument {
 public:
     static constexpr uint8_t OPCODE = 0x34;
 
-    static Expected<I64Load32Signed> parse(std::istream& in);
+    static Expected<I64Load32Signed> parse(ByteCursor& in);
 
     std::string toString() const override;
 
@@ -1616,7 +1616,7 @@ class I64Load32Unsigned : public InstructionBase, public MemoryArgument {
 public:
     static constexpr uint8_t OPCODE = 0x35;
 
-    static Expected<I64Load32Unsigned> parse(std::istream& in);
+    static Expected<I64Load32Unsigned> parse(ByteCursor& in);
 
     std::string toString() const override;
 
@@ -1629,7 +1629,7 @@ class I32Store : public InstructionBase {
 public:
     static constexpr uint8_t OPCODE = 0x36;
 
-    static Expected<I32Store> parse(std::istream& in, size_t addr);
+    static Expected<I32Store> parse(ByteCursor& in, size_t addr);
 
     const MemoryArgument& getMemArg() const { return mem_arg_; }
 
@@ -1646,7 +1646,7 @@ class I64Store : public InstructionBase {
 public:
     static constexpr uint8_t OPCODE = 0x37;
 
-    static Expected<I64Store> parse(std::istream& in);
+    static Expected<I64Store> parse(ByteCursor& in);
 
     const MemoryArgument& getMemArg() const { return mem_arg_; }
 
@@ -1663,7 +1663,7 @@ class F32Store : public InstructionBase, public MemoryArgument {
 public:
     static constexpr uint8_t OPCODE = 0x38;
 
-    static Expected<F32Store> parse(std::istream& in);
+    static Expected<F32Store> parse(ByteCursor& in);
 
     std::string toString() const override;
 
@@ -1676,7 +1676,7 @@ class F64Store : public InstructionBase, public MemoryArgument {
 public:
     static constexpr uint8_t OPCODE = 0x39;
 
-    static Expected<F64Store> parse(std::istream& in);
+    static Expected<F64Store> parse(ByteCursor& in);
 
     std::string toString() const override;
 
@@ -1689,7 +1689,7 @@ class I32Store8 : public InstructionBase {
 public:
     static constexpr uint8_t OPCODE = 0x3A;
 
-    static Expected<I32Store8> parse(std::istream& in);
+    static Expected<I32Store8> parse(ByteCursor& in);
 
     const MemoryArgument& getMemArg() const { return mem_arg_; }
 
@@ -1706,7 +1706,7 @@ class I32Store16 : public InstructionBase {
 public:
     static constexpr uint8_t OPCODE = 0x3B;
 
-    static Expected<I32Store16> parse(std::istream& in);
+    static Expected<I32Store16> parse(ByteCursor& in);
 
     const MemoryArgument& getMemArg() const { return mem_arg_; }
 
@@ -1723,7 +1723,7 @@ class I64Store8 : public InstructionBase {
 public:
     static constexpr uint8_t OPCODE = 0x3C;
 
-    static Expected<I64Store8> parse(std::istream& in);
+    static Expected<I64Store8> parse(ByteCursor& in);
 
     const MemoryArgument& getMemArg() const { return mem_arg_; }
 
@@ -1740,7 +1740,7 @@ class I64Store16 : public InstructionBase {
 public:
     static constexpr uint8_t OPCODE = 0x3D;
 
-    static Expected<I64Store16> parse(std::istream& in);
+    static Expected<I64Store16> parse(ByteCursor& in);
 
     const MemoryArgument& getMemArg() const { return mem_arg_; }
 
@@ -1757,7 +1757,7 @@ class I64Store32 : public InstructionBase {
 public:
     static constexpr uint8_t OPCODE = 0x3E;
 
-    static Expected<I64Store32> parse(std::istream& in);
+    static Expected<I64Store32> parse(ByteCursor& in);
 
     const MemoryArgument& getMemArg() const { return mem_arg_; }
 
@@ -1774,7 +1774,7 @@ class MemoryGrow : public InstructionBase {
 public:
     static constexpr uint8_t OPCODE = 0x40;
 
-    static Expected<MemoryGrow> parse(std::istream& in, size_t addr);
+    static Expected<MemoryGrow> parse(ByteCursor& in, size_t addr);
 
     std::string toString() const override;
 
@@ -1786,7 +1786,7 @@ class MemoryInit : public ExtendedIntstructionBase {
 public:
     static constexpr uint32_t EXT_OPCODE = 0x08;
 
-    static Expected<MemoryInit> parse(std::istream& in);
+    static Expected<MemoryInit> parse(ByteCursor& in);
 
     uint32_t getSegmentIdx() const { return segment_idx_; }
 
@@ -1803,7 +1803,7 @@ class DataDrop : public ExtendedIntstructionBase {
 public:
     static constexpr uint32_t EXT_OPCODE = 0x09;
 
-    static Expected<DataDrop> parse(std::istream& in);
+    static Expected<DataDrop> parse(ByteCursor& in);
 
     uint32_t getSegmentIdx() const { return segment_idx_; }
 
@@ -1820,7 +1820,7 @@ class MemoryCopy : public ExtendedIntstructionBase {
 public:
     static constexpr uint32_t EXT_OPCODE = 0x0A;
 
-    static Expected<MemoryCopy> parse(std::istream& in);
+    static Expected<MemoryCopy> parse(ByteCursor& in);
 
     std::string toString() const override { return "memory.copy 0 0"; }
 
@@ -1832,7 +1832,7 @@ class MemoryFill : public ExtendedIntstructionBase {
 public:
     static constexpr uint32_t EXT_OPCODE = 0x0B;
 
-    static Expected<MemoryFill> parse(std::istream& in, size_t addr);
+    static Expected<MemoryFill> parse(ByteCursor& in, size_t addr);
 
     std::string toString() const override { return "memory.fill"; }
 
@@ -1848,7 +1848,7 @@ class AtomicIntstructionBase : public InstructionBase {
 public:
     static constexpr uint8_t OPCODE = 0xFE;
 
-    static Expected<Instruction> parse(std::istream& in);
+    static Expected<Instruction> parse(ByteCursor& in);
 
     uint32_t getAtomicOpcode() const { return atomic_opcode_; }
 
@@ -1872,7 +1872,7 @@ class AtomicNotify : public AtomicIntstructionBase {
 public:
     static constexpr uint32_t ATOMIC_OPCODE = 0x00;
 
-    static Expected<AtomicNotify> parse(std::istream& in);
+    static Expected<AtomicNotify> parse(ByteCursor& in);
 
     const MemoryArgument& getMemArg() const { return mem_arg_; }
 
@@ -1889,7 +1889,7 @@ class AtomicWait32 : public AtomicIntstructionBase {
 public:
     static constexpr uint32_t ATOMIC_OPCODE = 0x01;
 
-    static Expected<AtomicWait32> parse(std::istream& in);
+    static Expected<AtomicWait32> parse(ByteCursor& in);
 
     const MemoryArgument& getMemArg() const { return mem_arg_; }
 
@@ -1906,7 +1906,7 @@ class AtomicLoad : public AtomicIntstructionBase {
 public:
     static constexpr uint32_t ATOMIC_OPCODE = 0x10;
 
-    static Expected<AtomicLoad> parse(std::istream& in);
+    static Expected<AtomicLoad> parse(ByteCursor& in);
 
     const MemoryArgument& getMemArg() const { return mem_arg_; }
 
@@ -1923,7 +1923,7 @@ class AtomicLoad8Unsigned : public AtomicIntstructionBase {
 public:
     static constexpr uint32_t ATOMIC_OPCODE = 0x12;
 
-    static Expected<AtomicLoad8Unsigned> parse(std::istream& in);
+    static Expected<AtomicLoad8Unsigned> parse(ByteCursor& in);
 
     const MemoryArgument& getMemArg() const { return mem_arg_; }
 
@@ -1940,7 +1940,7 @@ class AtomicStore : public AtomicIntstructionBase {
 public:
     static constexpr uint32_t ATOMIC_OPCODE = 0x17;
 
-    static Expected<AtomicStore> parse(std::istream& in);
+    static Expected<AtomicStore> parse(ByteCursor& in);
 
     const MemoryArgument& getMemArg() const { return mem_arg_; }
 
@@ -1957,7 +1957,7 @@ class AtomicStore8 : public AtomicIntstructionBase {
 public:
     static constexpr uint32_t ATOMIC_OPCODE = 0x19;
 
-    static Expected<AtomicStore8> parse(std::istream& in);
+    static Expected<AtomicStore8> parse(ByteCursor& in);
 
     const MemoryArgument& getMemArg() const { return mem_arg_; }
 
@@ -1974,7 +1974,7 @@ class AtomicAdd : public AtomicIntstructionBase {
 public:
     static constexpr uint32_t ATOMIC_OPCODE = 0x1E;
 
-    static Expected<AtomicAdd> parse(std::istream& in);
+    static Expected<AtomicAdd> parse(ByteCursor& in);
 
     const MemoryArgument& getMemArg() const { return mem_arg_; }
 
@@ -1991,7 +1991,7 @@ class AtomicExchange8Unsigned : public AtomicIntstructionBase {
 public:
     static constexpr uint32_t ATOMIC_OPCODE = 0x43;
 
-    static Expected<AtomicExchange8Unsigned> parse(std::istream& in);
+    static Expected<AtomicExchange8Unsigned> parse(ByteCursor& in);
 
     const MemoryArgument& getMemArg() const { return mem_arg_; }
 
@@ -2008,7 +2008,7 @@ class AtomicCompareExchange : public AtomicIntstructionBase {
 public:
     static constexpr uint32_t ATOMIC_OPCODE = 0x48;
 
-    static Expected<AtomicCompareExchange> parse(std::istream& in);
+    static Expected<AtomicCompareExchange> parse(ByteCursor& in);
 
     const MemoryArgument& getMemArg() const { return mem_arg_; }
 
@@ -2025,7 +2025,7 @@ class AtomicCompareExchange8Unsigned : public AtomicIntstructionBase {
 public:
     static constexpr uint32_t ATOMIC_OPCODE = 0x4A;
 
-    static Expected<AtomicCompareExchange8Unsigned> parse(std::istream& in);
+    static Expected<AtomicCompareExchange8Unsigned> parse(ByteCursor& in);
 
     std::string toString() const override;
 

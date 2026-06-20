@@ -11,12 +11,27 @@ namespace runtime {
 
 Expected<std::shared_ptr<Kernel>>
 Kernel::create(const std::string& kernel_path) {
-    std::ifstream kernel_fstream;
-    kernel_fstream.open(kernel_path, std::ios::in | std::ios::binary);
+    std::ifstream file(kernel_path, std::ios::binary | std::ios::ate);
+    if (!file)
+        return Unexpected(ERROR("failed to open kernel file"));
+
+    const std::ifstream::pos_type size = file.tellg();
+    if (size < 0)
+        return Unexpected(ERROR("failed to determine kernel file size"));
+
+    file.seekg(0, std::ios::beg);
+
+    std::vector<std::uint8_t> bytes(static_cast<std::size_t>(size));
+
+    file.read(reinterpret_cast<char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+    if (!file)
+        return Unexpected(ERROR("failed to read kernel file"));
+
+    ByteCursor in(std::span<const std::uint8_t>(bytes.data(), bytes.size()));
 
     // parse module
     Expected<grammar::Module> module_exp =
-        grammar::Module::parse(kernel_fstream);
+        grammar::Module::parse(in);
     if (!module_exp)
         return Unexpected(PROPAGATE(module_exp));
 
@@ -204,9 +219,9 @@ Expected<Imports> Kernel::createImports() {
             return static_cast<int32_t>(Errno::BAD_ADDRESS);
         }
 
-        char* program_ptr;
+        uint8_t* program_ptr;
         memory.ptr(program_offset, &program_ptr);
-        std::span<const char> program_bytes(program_ptr, program_size);
+        std::span<const uint8_t> program_bytes(program_ptr, program_size);
 
         uint32_t* pid_ptr;
         if (!memory.ptr(pid_offset, &pid_ptr)) {

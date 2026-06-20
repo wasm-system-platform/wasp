@@ -10,7 +10,7 @@ class Sigsetjmp;
 class Process : public TaggedInstance<Process> {
 public:
     static Expected<std::shared_ptr<Process>>
-    create(std::span<const char>& program_bytes, Instance& instance,
+    create(std::span<const uint8_t>& program_bytes, Instance& instance,
            uint32_t id);
 
     Kernel& getKernel() { return kernel_; }

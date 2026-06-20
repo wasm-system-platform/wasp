@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <span>
 
 #include "file_memory.hpp"
 #include "vector_memory.hpp"
@@ -13,8 +14,8 @@ public:
         : num_max_pages_(num_max_pages), num_curr_pages_(num_init_pages),
           impl(num_init_pages) {}
 
-    bool contains(uint32_t offset, uint32_t len) {
-        uint32_t size = static_cast<uint32_t>(num_curr_pages_) << 16;
+    bool contains(uint32_t offset, uint64_t len) {
+        uint64_t size = static_cast<uint64_t>(num_curr_pages_) << 16;
         return offset <= size && len <= size - offset;
     }
 
@@ -56,6 +57,14 @@ public:
             return false;
 
         impl.store(offset, src_buffer);
+        return true;
+    }
+
+    bool store(uint32_t offset, std::span<const uint8_t> data) {
+        if (!contains(offset, data.size()))
+            return false;
+
+        impl.store(offset, data);
         return true;
     }
 

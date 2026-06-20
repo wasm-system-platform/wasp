@@ -4,12 +4,13 @@
 
 #include "grammar/dwarf.hpp"
 #include "sections.hpp"
+#include "util/byte_cursor.hpp"
 
 namespace grammar {
 
 class Module {
 public:
-    static Expected<Module> parse(std::istream& in);
+    static Expected<Module> parse(ByteCursor& in);
 
     bool hasFunctionSection() const { return func_section_.has_value(); }
     bool hasExportSection() const { return export_section_.has_value(); }

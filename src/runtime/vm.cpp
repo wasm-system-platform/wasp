@@ -53,7 +53,8 @@ Expected<DataInstances> DataInstances::create(const grammar::Module& module) {
 
     std::vector<std::vector<uint8_t>> segments;
     for (const grammar::Segment& segment : data_segments) {
-        segments.push_back(segment.getBytes());
+        std::span<const uint8_t> bytes = segment.getBytes();
+        segments.emplace_back(std::vector<uint8_t>(bytes.begin(), bytes.end()));
     }
 
     return DataInstances(std::move(segments));
@@ -169,9 +170,7 @@ Expected<std::vector<Function>> GlobalState::createFunctions(
         type_section.getFunctionTypes();
 
     for (const auto& func : import_section.getFunctionImports()) {
-        const std::string& module = func.getModule();
-        const std::string& name = func.getName();
-        std::string id = fmt::format("{}.{}", module, name);
+        std::string id = fmt::format("{}.{}", func.getModule().value(), func.getName().value());
 
         auto it = imports.find(id);
         if (it == imports.end())
@@ -187,8 +186,8 @@ Expected<std::vector<Function>> GlobalState::createFunctions(
 
         if (!import.isCompatible(*type_exp))
             return Unexpected(ERROR(fmt::format(
-                "function provided for {}.{} is not compatible with {}", module,
-                name, type_exp->toString())));
+                "function provided for {}.{} is not compatible with {}", func.getModule().value(),
+                func.getName().value(), type_exp->toString())));
 
         funcs.push_back(import);
     }

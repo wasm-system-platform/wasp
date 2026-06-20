@@ -21,22 +21,22 @@ enum class DebugLineSectionExtendedOpcodes {
     define_file = 3
 };
 
-Expected<DebugLineSection> DebugLineSection::parse(std::istream& in) {
+Expected<DebugLineSection> DebugLineSection::parse(ByteCursor& in) {
     std::vector<std::string> src_files;
     std::vector<Segment> segments;
 
-    while (in.peek() != EOF) {
-        CompilationUnitHeader header;
-        if (!in.read(reinterpret_cast<char*>(&header),
-                     sizeof(CompilationUnitHeader)))
-            return Unexpected(ERROR("unexpected end of section"));
+    while (!in.eof()) {
+        std::span<const uint8_t> header_bytes = in.read(sizeof(CompilationUnitHeader));
+        if (in.bad())
+            return Unexpected(ERROR("broken stream"));
 
-        size_t header_end = static_cast<size_t>(in.tellg());
+        const CompilationUnitHeader* header = reinterpret_cast<const CompilationUnitHeader*>(header_bytes.data());
+        size_t header_end = in.offset();
 
-        if (header.version != 2)
+        if (header->version != 2)
             return Unexpected(ERROR(fmt::format(
                 "only DWARF version 2 is currently supported (found: {})",
-                header.version)));
+                header->version)));
 
         Expected<std::vector<std::string>> include_dirs_exp =
             parse_include_dirs(in);
@@ -50,21 +50,17 @@ Expected<DebugLineSection> DebugLineSection::parse(std::istream& in) {
         std::vector<std::string>& cu_src_files = *unit_source_files_exp;
 
         while (true) {
-            if (static_cast<size_t>(in.tellg()) +
-                    sizeof(CompilationUnitHeader) - header_end >=
-                header.length)
+            if (in.offset() + sizeof(CompilationUnitHeader) - header_end >= header->length)
                 break;
 
             State state;
-            state.is_stmt = header.default_is_stmt;
+            state.is_stmt = header->default_is_stmt;
             std::vector<State> states;
 
             while (true) {
-                Expected<Byte> op_exp = Byte::parse(in);
-                if (!op_exp)
-                    return Unexpected(PROPAGATE(op_exp));
-
-                uint8_t op = *op_exp;
+                uint8_t op = in.byte();
+                if (in.bad())
+                    return Unexpected(ERROR("broken stream"));
 
                 if (op == 0) {
                     Expected<bool> is_end_of_seq_exp =
@@ -76,12 +72,12 @@ Expected<DebugLineSection> DebugLineSection::parse(std::istream& in) {
                         break;
                 } else if (op >= 13) {
                     Expected<void> result =
-                        handle_special_opcode(op, header, state, states);
+                        handle_special_opcode(op, *header, state, states);
                     if (!result)
                         return Unexpected(PROPAGATE(result));
                 } else {
                     Expected<void> result =
-                        handle_standard_opcode(in, op, header, state, states);
+                        handle_standard_opcode(in, op, *header, state, states);
                     if (!result)
                         return Unexpected(PROPAGATE(result));
                 }
@@ -112,16 +108,12 @@ Expected<DebugLineSection> DebugLineSection::parse(std::istream& in) {
 }
 
 Expected<std::vector<std::string>>
-DebugLineSection::parse_include_dirs(std::istream& in) {
+DebugLineSection::parse_include_dirs(ByteCursor& in) {
     std::vector<std::string> include_dirs;
 
     std::string directory_buffer;
-    while (true) {
-        Expected<Byte> c_exp = Byte::parse(in);
-        if (!c_exp)
-            return Unexpected(PROPAGATE(c_exp));
-
-        char c = static_cast<char>(*c_exp);
+    while (!in.bad()) {
+        char c = static_cast<char>(in.byte());
 
         if (c == '\0') {
             if (directory_buffer.empty())
@@ -134,20 +126,19 @@ DebugLineSection::parse_include_dirs(std::istream& in) {
         }
     }
 
+    if (in.bad())
+        return Unexpected(ERROR("broken stream"));
+
     return include_dirs;
 }
 
 Expected<std::vector<std::string>>
-DebugLineSection::parse_source_files(std::istream& in) {
+DebugLineSection::parse_source_files(ByteCursor& in) {
     std::vector<std::string> source_files;
 
     std::string file_buffer;
-    while (true) {
-        Expected<Byte> c_exp = Byte::parse(in);
-        if (!c_exp)
-            return Unexpected(PROPAGATE(c_exp));
-
-        char c = static_cast<char>(*c_exp);
+    while (!in.bad()) {
+        char c = static_cast<char>(in.bad());
 
         if (c == '\0') {
             if (file_buffer.empty())
@@ -165,10 +156,6 @@ DebugLineSection::parse_source_files(std::istream& in) {
             if (!size_exp)
                 return Unexpected(PROPAGATE(size_exp));
 
-            // int64_t dir_idx = *dir_idx_exp;
-            // int64_t time = *time_exp;
-            // int64_t size = *size_exp;
-
             source_files.push_back(file_buffer);
             file_buffer.clear();
         } else {
@@ -176,11 +163,14 @@ DebugLineSection::parse_source_files(std::istream& in) {
         }
     }
 
+    if (!in.bad())
+        return Unexpected(ERROR("broken stream"));
+
     return source_files;
 }
 
 Expected<void> DebugLineSection::handle_standard_opcode(
-    std::istream& in, uint8_t op, CompilationUnitHeader& header, State& state,
+    ByteCursor& in, uint8_t op, const CompilationUnitHeader& header, State& state,
     std::vector<State>& states) {
     switch (static_cast<DebugLineSectionOpcodes>(op)) {
     case DebugLineSectionOpcodes::copy: {
@@ -236,7 +226,7 @@ Expected<void> DebugLineSection::handle_standard_opcode(
 }
 
 Expected<void> DebugLineSection::handle_special_opcode(
-    uint8_t op, CompilationUnitHeader& header, State& state,
+    uint8_t op, const CompilationUnitHeader& header, State& state,
     std::vector<State>& states) {
     uint8_t adjusted_op = op - header.opcode_base;
 
@@ -251,21 +241,16 @@ Expected<void> DebugLineSection::handle_special_opcode(
 }
 
 Expected<bool> DebugLineSection::handle_extended_opcode(
-    std::istream& in, State& state,
+    ByteCursor& in, State& state,
     std::vector<State>& states) {
     Expected<U64> length_exp = U64::parse(in);
     if (!length_exp)
         return Unexpected(PROPAGATE(length_exp));
 
     uint64_t length = *length_exp;
+    uint8_t xop = in.byte();
 
-    Expected<Byte> eop_exp = Byte::parse(in);
-    if (!eop_exp)
-        return Unexpected(PROPAGATE(eop_exp));
-
-    uint8_t eop = *eop_exp;
-
-    switch (static_cast<DebugLineSectionExtendedOpcodes>(eop)) {
+    switch (static_cast<DebugLineSectionExtendedOpcodes>(xop)) {
     case DebugLineSectionExtendedOpcodes::end_sequence: {
         if (length != 1)
             return Unexpected(ERROR("unexpected extended operation size"));
@@ -278,14 +263,15 @@ Expected<bool> DebugLineSection::handle_extended_opcode(
             return Unexpected(
                 ERROR(fmt::format("unexpected address size: {}", length)));
 
-        uint32_t address;
-        in.read(reinterpret_cast<char*>(&address), sizeof(uint32_t));
+        uint32_t address = in.u32_le();
+        if (in.bad())
+            return Unexpected(ERROR("broken stream"));
 
         state.address = address;
         return false;
     }
     default:
         return Unexpected(
-            ERROR(fmt::format("unhandled extended opcode: {}", eop)));
+            ERROR(fmt::format("unhandled extended opcode: {}", xop)));
     }
 }

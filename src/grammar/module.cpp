@@ -9,28 +9,17 @@
 
 namespace grammar {
 
-Expected<Module> Module::parse(std::istream& in) {
-    if (!in) {
-        return Unexpected(ERROR("broken file stream"));
-    }
-
+Expected<Module> Module::parse(ByteCursor& in) {
     constexpr std::array<unsigned char, 4> expected_magic = {0x00, 0x61, 0x73,
                                                              0x6D};
     constexpr std::array<unsigned char, 4> expected_version = {0x01, 0x00, 0x00,
                                                                0x00};
 
-    std::array<unsigned char, 4> magic{};
-    std::array<unsigned char, 4> version{};
+    in.expect(expected_magic);
+    in.expect(expected_version);
 
-    if (!in.read(reinterpret_cast<char*>(magic.data()), magic.size()) ||
-        magic != expected_magic) {
-        return Unexpected(ERROR("invalid or missing magic bytes"));
-    }
-
-    if (!in.read(reinterpret_cast<char*>(version.data()), version.size()) ||
-        version != expected_version) {
-        return Unexpected(ERROR("invalid or missing magic bytes"));
-    }
+    if (in.bad())
+        return Unexpected(ERROR("invalid header bytes"));
 
     std::optional<TypeSection> type_section;
     std::optional<ImportSection> import_section;
@@ -47,19 +36,14 @@ Expected<Module> Module::parse(std::istream& in) {
     std::vector<CustomSection> custom_sections;
 
     while (true) {
-        Expected<Byte> section_id_exp = Byte::parse(in);
-        if (!section_id_exp)
-            return Unexpected(PROPAGATE(section_id_exp));
-        uint8_t section_id = *section_id_exp;
+        uint8_t section_id = in.byte();
 
         Expected<U32> size_res = U32::parse(in);
         if (!size_res)
             return Unexpected(PROPAGATE(size_res));
         uint32_t size = *size_res;
 
-        /* This needed for the debug info but i don't know which address is used
-         * by llvm as base address, maybe adjust */
-        size_t module_start = static_cast<size_t>(in.tellg());
+        size_t module_start = static_cast<size_t>(in.offset());
 
         switch (section_id) {
         case CustomSection::ID: {
@@ -160,7 +144,7 @@ Expected<Module> Module::parse(std::istream& in) {
                 ERROR(fmt::format("unknown section id: {}", section_id)));
         }
 
-        if (in.peek() == std::char_traits<char>::eof())
+        if (in.eof())
             break;
     }
 
@@ -168,14 +152,11 @@ Expected<Module> Module::parse(std::istream& in) {
         if (custom_section.getName() != ".debug_line")
             continue;
 
-        const std::vector<uint8_t>& custom_bytes = custom_section.getBytes();
-        std::string custom_string(
-            reinterpret_cast<const char*>(custom_bytes.data()),
-            custom_bytes.size());
-        std::stringstream custom_stream(custom_string);
+        std::span<const uint8_t> custom_bytes = custom_section.getBytes();
+        ByteCursor custom_in(custom_bytes);
 
         Expected<DebugLineSection> debug_line_section_exp =
-            DebugLineSection::parse(custom_stream);
+            DebugLineSection::parse(custom_in);
         if (!debug_line_section_exp) {
             fmt::println("[warning] failed to parse debug line section: {}",
                          debug_line_section_exp.error().toString());

@@ -4,6 +4,7 @@
 #include <fstream>
 #include <vector>
 
+#include "util/byte_cursor.hpp"
 #include "util/error_handling.hpp"
 #include "util/hash.hpp"
 
@@ -13,7 +14,7 @@
 
 struct ReferenceType {
 public:
-    static Expected<ReferenceType> parse(std::istream& in);
+    static Expected<ReferenceType> parse(ByteCursor& in);
 
     std::string toString() const;
 
@@ -45,7 +46,7 @@ public:
 
     ValueType(Type type) : type_(type) {}
 
-    static Expected<ValueType> parse(std::istream& in);
+    static Expected<ValueType> parse(ByteCursor& in);
 
     Type getType() const { return type_; }
 
@@ -57,7 +58,7 @@ private:
 
 struct ExpectedType {
 public:
-    static Expected<ExpectedType> parse(std::istream& in);
+    static Expected<ExpectedType> parse(ByteCursor& in);
 
     ExpectedType(std::vector<ValueType>&& value_types)
         : value_types_(std::move(value_types)) {}
@@ -102,7 +103,7 @@ public:
     static const FunctionType&
     ProducerI32x8(); // (i32, i32, i32, i32, i32, i32, i32) -> (i32)
 
-    static Expected<FunctionType> parse(std::istream& in);
+    static Expected<FunctionType> parse(ByteCursor& in);
 
     const ExpectedType& getParamTypes() const { return param_types_; }
     const ExpectedType& getExpectedTypes() const { return result_types_; }
@@ -134,7 +135,7 @@ template <> struct std::hash<FunctionType> {
 
 struct Limits {
 public:
-    static Expected<Limits> parse(std::istream& in);
+    static Expected<Limits> parse(ByteCursor& in);
 
     std::string toString() const;
 
@@ -152,7 +153,7 @@ protected:
 
 struct MemoryType : Limits {
 public:
-    static Expected<MemoryType> parse(std::istream& in);
+    static Expected<MemoryType> parse(ByteCursor& in);
 
     uint32_t getInitial() const { return min_; }
 
@@ -172,7 +173,7 @@ private:
 
 struct TableType : public ReferenceType, public Limits {
 public:
-    static Expected<TableType> parse(std::istream& in);
+    static Expected<TableType> parse(ByteCursor& in);
 
     std::string toString() const;
 
@@ -186,12 +187,12 @@ private:
 
 struct GlobalType : ValueType {
 public:
-    static Expected<GlobalType> parse(std::istream& in);
+    static Expected<GlobalType> parse(ByteCursor& in);
 
     std::string toString() const;
 
 private:
-    uint8_t mut_;
+    bool is_mutable_;
 
-    GlobalType(const ValueType& val_type, uint8_t mut);
+    GlobalType(ValueType&& val_type, bool is_mutable) : ValueType(std::move(val_type)), is_mutable_(is_mutable) {}
 };

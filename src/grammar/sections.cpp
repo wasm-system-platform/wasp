@@ -12,37 +12,29 @@ namespace grammar {
 /* Custom Section */
 /******************/
 
-Expected<CustomSection> CustomSection::parse(std::istream& in, uint32_t size) {
-    size_t start = static_cast<size_t>(in.tellg());
+Expected<CustomSection> CustomSection::parse(ByteCursor& in, uint32_t size) {
+    size_t start = in.offset();
 
     Expected<Name> name_exp = Name::parse(in);
     if (!name_exp)
         return Unexpected(PROPAGATE(name_exp));
 
-    size_t offset = static_cast<size_t>(in.tellg()) - start;
+    size_t offset = in.offset() - start;
     if (offset > size)
         return Unexpected(ERROR("custom section has an invalid size"));
 
-    std::vector<uint8_t> bytes(size - offset);
-    for (size_t i = 0; i < size - offset; i++) {
-        Expected<Byte> b_exp = Byte::parse(in);
-        if (!b_exp)
-            return Unexpected(PROPAGATE(b_exp));
+    std::span<const uint8_t> bytes = in.read(size - offset);
+    if (in.bad())
+        return Unexpected(ERROR("broken stream"));
 
-        bytes[i] = *b_exp;
-    }
-
-    return CustomSection(*name_exp, std::move(bytes));
+    return CustomSection(std::move(*name_exp), bytes);
 }
-
-CustomSection::CustomSection(const Name& name, std::vector<uint8_t>&& bytes)
-    : name_(name), bytes_(std::move(bytes)) {}
 
 /****************/
 /* Type Section */
 /****************/
 
-Expected<TypeSection> TypeSection::parse(std::istream& in) {
+Expected<TypeSection> TypeSection::parse(ByteCursor& in) {
     Expected<U32> len_exp = U32::parse(in);
     if (!len_exp)
         return Unexpected(PROPAGATE(len_exp));
@@ -87,7 +79,7 @@ TypeSection::TypeSection(std::vector<FunctionType>&& func_types)
 /* Import Section */
 /******************/
 
-Expected<Import> ImportBase::parse(std::istream& in) {
+Expected<Import> ImportBase::parse(ByteCursor& in) {
     Expected<Name> module_res = Name::parse(in);
     if (!module_res)
         return Unexpected(PROPAGATE(module_res));
@@ -130,8 +122,7 @@ ImportBase::ImportBase(uint8_t desc_id, const Name& module, const Name& name)
     : module_(module), name_(name), desc_id_(desc_id) {}
 
 std::string ImportBase::toString() const {
-    return fmt::format("{}.{}", static_cast<const std::string&>(module_),
-                       static_cast<const std::string&>(name_));
+    return fmt::format("{}.{}", module_.value(), name_.value());
 }
 
 FunctionImport::FunctionImport(const Name& module, const Name& name,
@@ -153,7 +144,7 @@ std::string MemoryImport::toString() const {
                        ImportBase::toString());
 }
 
-Expected<ImportSection> ImportSection::parse(std::istream& in) {
+Expected<ImportSection> ImportSection::parse(ByteCursor& in) {
     std::vector<FunctionImport> func_imports;
     std::vector<MemoryImport> mem_imports;
 
@@ -207,7 +198,7 @@ ImportSection::ImportSection(std::vector<FunctionImport>&& func_imports,
 /* Function Section */
 /********************/
 
-Expected<FunctionSection> FunctionSection::parse(std::istream& in) {
+Expected<FunctionSection> FunctionSection::parse(ByteCursor& in) {
     Expected<U32> len_res = U32::parse(in);
     if (!len_res)
         return Unexpected(PROPAGATE(len_res));
@@ -248,7 +239,7 @@ FunctionSection::FunctionSection(std::vector<uint32_t>&& type_indices)
 /* Table Section */
 /*****************/
 
-Expected<TableSection> TableSection::parse(std::istream& in) {
+Expected<TableSection> TableSection::parse(ByteCursor& in) {
     Expected<U32> len_res = U32::parse(in);
     if (!len_res)
         return Unexpected(PROPAGATE(len_res));
@@ -287,7 +278,7 @@ TableSection::TableSection(std::vector<TableType>&& tables)
 /* Global Section */
 /******************/
 
-Expected<Global> Global::parse(std::istream& in) {
+Expected<Global> Global::parse(ByteCursor& in) {
     Expected<GlobalType> global_type_res = GlobalType::parse(in);
     if (!global_type_res)
         return Unexpected(PROPAGATE(global_type_res));
@@ -307,7 +298,7 @@ std::string Global::toString() const {
 Global::Global(const GlobalType& global_type, const Expression& expression)
     : GlobalType(global_type), Expression(expression) {}
 
-Expected<GlobalSection> GlobalSection::parse(std::istream& in) {
+Expected<GlobalSection> GlobalSection::parse(ByteCursor& in) {
     Expected<U32> len_res = U32::parse(in);
     if (!len_res)
         return Unexpected(PROPAGATE(len_res));
@@ -346,16 +337,13 @@ GlobalSection::GlobalSection(std::vector<Global>&& globals)
 /* Export Section */
 /******************/
 
-Expected<Export> ExportBase::parse(std::istream& in) {
+Expected<Export> ExportBase::parse(ByteCursor& in) {
     Expected<Name> name_res = Name::parse(in);
     if (!name_res)
         return Unexpected(PROPAGATE(name_res));
     const Name& name = *name_res;
 
-    Expected<Byte> descriptor_type_res = Byte::parse(in);
-    if (!descriptor_type_res)
-        return Unexpected(PROPAGATE(descriptor_type_res));
-    uint8_t descriptor_type = *descriptor_type_res;
+    uint8_t descriptor_type = in.byte();
 
     Expected<U32> idx_res = U32::parse(in);
     if (!idx_res)
@@ -372,10 +360,10 @@ Expected<Export> ExportBase::parse(std::istream& in) {
 }
 
 std::string FunctionExport::toString() const {
-    return fmt::format("func={} -> {}", idx_, static_cast<std::string>(*this));
+    return fmt::format("func={} -> {}", idx_, ExportBase::getName());
 }
 
-Expected<ExportSection> ExportSection::parse(std::istream& in) {
+Expected<ExportSection> ExportSection::parse(ByteCursor& in) {
     Expected<U32> len_res = U32::parse(in);
     if (!len_res)
         return Unexpected(PROPAGATE(len_res));
@@ -417,7 +405,7 @@ std::string ExportSection::toString() const {
 /* Start Section */
 /*****************/
 
-Expected<StartSection> StartSection::parse(std::istream& in) {
+Expected<StartSection> StartSection::parse(ByteCursor& in) {
     Expected<U32> func_idx_res = U32::parse(in);
     if (!func_idx_res)
         return Unexpected(PROPAGATE(func_idx_res));
@@ -432,7 +420,7 @@ std::string StartSection::toString() const {
 /* Element Section */
 /*******************/
 
-Expected<ElementSegment> ElementSegment::parse(std::istream& in) {
+Expected<ElementSegment> ElementSegment::parse(ByteCursor& in) {
     Expected<U32> bitfield_res = U32::parse(in);
     if (!bitfield_res)
         return Unexpected(PROPAGATE(bitfield_res));
@@ -477,7 +465,7 @@ std::string ElementSegment::toString() const {
                        fmt::join(fmt_func_indices, "\n"));
 }
 
-Expected<ElemenSection> ElemenSection::parse(std::istream& in) {
+Expected<ElemenSection> ElemenSection::parse(ByteCursor& in) {
     Expected<U32> len_res = U32::parse(in);
     if (!len_res)
         return Unexpected(PROPAGATE(len_res));
@@ -513,7 +501,7 @@ std::string ElemenSection::toString() const {
 /* Code Section */
 /****************/
 
-Expected<Function> Function::parse(std::istream& in, size_t code_start) {
+Expected<Function> Function::parse(ByteCursor& in, size_t code_start) {
     Expected<U32> len_res = U32::parse(in);
     if (!len_res)
         return Unexpected(PROPAGATE(len_res));
@@ -556,7 +544,7 @@ std::string Function::toString() const {
                        body_.toString());
 }
 
-Expected<CodeSection> CodeSection::parse(std::istream& in, size_t code_start) {
+Expected<CodeSection> CodeSection::parse(ByteCursor& in, size_t code_start) {
     Expected<U32> len_res = U32::parse(in);
     if (!len_res)
         return Unexpected(PROPAGATE(len_res));
@@ -596,21 +584,17 @@ std::string CodeSection::toString() const {
 /* Data Section */
 /****************/
 
-Expected<Segment> Segment::parse(std::istream& in) {
-    Expected<Byte> b_res = Byte::parse(in);
-    if (!b_res)
-        return Unexpected(PROPAGATE(b_res));
-
-    uint8_t b = *b_res;
+Expected<Segment> Segment::parse(ByteCursor& in) {
+    uint8_t mode = in.byte();
 
     std::optional<Expression> offset_opt;
-    if (b == 0x00) {
+    if (mode == 0x00) {
         Expected<Expression> offset_exp = Expression::parse(in, UINT32_MAX);
         if (!offset_exp)
             return Unexpected(PROPAGATE(offset_exp));
 
         offset_opt = *offset_exp;
-    } else if (b != 0x01) {
+    } else if (mode != 0x01) {
         return Unexpected(
             ERROR("multi memory data segments currently not supported"));
     }
@@ -620,14 +604,11 @@ Expected<Segment> Segment::parse(std::istream& in) {
         return Unexpected(PROPAGATE(len_res));
     uint32_t len = static_cast<uint32_t>(*len_res);
 
-    std::vector<uint8_t> bytes;
-    bytes.resize(len);
+    std::span<const uint8_t> bytes = in.read(len);
+    if (in.bad())
+        return Unexpected(ERROR("unexpected end of segment"));
 
-    if (!in.read(reinterpret_cast<char*>(bytes.data()), static_cast<uint32_t>(bytes.size()))) {
-        return Unexpected(ERROR("unexpected end of file"));
-    }
-
-    return Segment(std::move(bytes), std::move(offset_opt));
+    return Segment(bytes, std::move(offset_opt));
 }
 
 std::string Segment::toString() const {
@@ -643,7 +624,7 @@ std::string Segment::toString() const {
     return fmt::to_string(buf);
 }
 
-Expected<DataSection> DataSection::parse(std::istream& in) {
+Expected<DataSection> DataSection::parse(ByteCursor& in) {
     Expected<U32> len_res = U32::parse(in);
     if (!len_res)
         return Unexpected(PROPAGATE(len_res));
@@ -681,7 +662,7 @@ std::string DataSection::toString() const {
 /* Data Count Section */
 /**********************/
 
-Expected<DataCountSection> DataCountSection::parse(std::istream& in) {
+Expected<DataCountSection> DataCountSection::parse(ByteCursor& in) {
     Expected<U32> data_count_res = U32::parse(in);
     if (!data_count_res)
         return Unexpected(PROPAGATE(data_count_res));

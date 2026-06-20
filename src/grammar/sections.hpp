@@ -5,6 +5,7 @@
 #include "grammar/instructions.hpp"
 #include "grammar/types.hpp"
 #include "grammar/values.hpp"
+#include "util/byte_cursor.hpp"
 #include "util/error_handling.hpp"
 
 namespace grammar {
@@ -17,18 +18,18 @@ class CustomSection {
 public:
     static constexpr uint8_t ID = 0x00;
 
-    static Expected<CustomSection> parse(std::istream& in, uint32_t size);
+    static Expected<CustomSection> parse(ByteCursor& in, uint32_t size);
 
-    const std::string& getName() const { return name_; }
-    const std::vector<uint8_t>& getBytes() const { return bytes_; }
+    std::string_view getName() const { return name_.value(); }
+    std::span<const uint8_t> getBytes() const { return bytes_; }
 
     std::string toString() const;
 
 private:
     Name name_;
-    std::vector<uint8_t> bytes_;
+    std::span<const uint8_t> bytes_;
 
-    CustomSection(const Name& name, std::vector<uint8_t>&& bytes);
+    CustomSection(Name&& name, std::span<const uint8_t> bytes) : name_(std::move(name)), bytes_(bytes) {}
 };
 
 /****************/
@@ -41,7 +42,7 @@ public:
 
     TypeSection() {}
 
-    static Expected<TypeSection> parse(std::istream& in);
+    static Expected<TypeSection> parse(ByteCursor& in);
 
     Expected<FunctionType> getFunctionType(uint32_t idx) const;
     const std::vector<FunctionType>& getFunctionTypes() const {
@@ -65,7 +66,7 @@ using Import = std::shared_ptr<ImportBase>;
 
 class ImportBase {
 public:
-    static Expected<Import> parse(std::istream& in);
+    static Expected<Import> parse(ByteCursor& in);
 
     std::string toString() const;
 
@@ -124,7 +125,7 @@ public:
 
     ImportSection() {}
 
-    static Expected<ImportSection> parse(std::istream& in);
+    static Expected<ImportSection> parse(ByteCursor& in);
 
     const std::vector<FunctionImport>& getFunctionImports() const {
         return func_imports_;
@@ -152,7 +153,7 @@ class FunctionSection {
 public:
     static constexpr uint8_t ID = 0x03;
 
-    static Expected<FunctionSection> parse(std::istream& in);
+    static Expected<FunctionSection> parse(ByteCursor& in);
 
     const std::vector<uint32_t>& getTypes() const { return type_indices_; }
 
@@ -172,7 +173,7 @@ class TableSection {
 public:
     static constexpr uint8_t ID = 0x04;
 
-    static Expected<TableSection> parse(std::istream& in);
+    static Expected<TableSection> parse(ByteCursor& in);
 
     std::string toString() const;
 
@@ -188,7 +189,7 @@ private:
 
 class Global : public GlobalType, public Expression {
 public:
-    static Expected<Global> parse(std::istream& in);
+    static Expected<Global> parse(ByteCursor& in);
 
     std::string toString() const;
 
@@ -202,7 +203,7 @@ public:
 
     static constexpr uint8_t ID = 0x06;
 
-    static Expected<GlobalSection> parse(std::istream& in);
+    static Expected<GlobalSection> parse(ByteCursor& in);
 
     const std::vector<Global>& getGlobals() const { return globals_; }
 
@@ -223,9 +224,9 @@ using Export = std::shared_ptr<ExportBase>;
 
 class ExportBase : public Name {
 public:
-    static Expected<Export> parse(std::istream& in);
+    static Expected<Export> parse(ByteCursor& in);
 
-    const std::string& getName() const { return *this; }
+    std::string_view getName() const { return Name::value(); }
     uint32_t getIdx() const { return idx_; }
 
     template <class Derived> bool is() const { return type_ == Derived::TYPE; }
@@ -268,7 +269,7 @@ class ExportSection {
 public:
     static constexpr uint8_t ID = 0x07;
 
-    static Expected<ExportSection> parse(std::istream& in);
+    static Expected<ExportSection> parse(ByteCursor& in);
 
     const std::vector<FunctionExport>& getFunctionExports() const {
         return func_exports_;
@@ -291,7 +292,7 @@ class StartSection {
 public:
     static constexpr uint8_t ID = 0x08;
 
-    static Expected<StartSection> parse(std::istream& in);
+    static Expected<StartSection> parse(ByteCursor& in);
 
     uint32_t getFunctionIdx() const { return func_idx_; }
 
@@ -309,7 +310,7 @@ private:
 
 class ElementSegment {
 public:
-    static Expected<ElementSegment> parse(std::istream& in);
+    static Expected<ElementSegment> parse(ByteCursor& in);
 
     std::string toString() const;
 
@@ -330,7 +331,7 @@ public:
 
     ElemenSection() = default;
 
-    static Expected<ElemenSection> parse(std::istream& in);
+    static Expected<ElemenSection> parse(ByteCursor& in);
 
     std::string toString() const;
 
@@ -349,7 +350,7 @@ private:
 
 class Function {
 public:
-    static Expected<Function> parse(std::istream& in, size_t code_start);
+    static Expected<Function> parse(ByteCursor& in, size_t code_start);
 
     const std::vector<ValueType>& getLocals() const { return locals_; }
     const Expression& getBody() const { return body_; }
@@ -368,7 +369,7 @@ class CodeSection {
 public:
     static constexpr uint8_t ID = 10;
 
-    static Expected<CodeSection> parse(std::istream& in, size_t code_start);
+    static Expected<CodeSection> parse(ByteCursor& in, size_t code_start);
 
     const std::vector<Function>& getFunctions() const { return funcs_; }
     size_t getCodeStart() const { return code_start_; }
@@ -389,9 +390,9 @@ private:
 
 class Segment {
 public:
-    static Expected<Segment> parse(std::istream& in);
+    static Expected<Segment> parse(ByteCursor& in);
 
-    const std::vector<uint8_t>& getBytes() const { return bytes_; }
+    std::span<const uint8_t> getBytes() const { return bytes_; }
 
     bool isActive() const { return offset_opt_.has_value(); }
 
@@ -400,11 +401,11 @@ public:
     std::string toString() const;
 
 private:
-    std::vector<uint8_t> bytes_;
+    std::span<const uint8_t> bytes_;
     std::optional<Expression> offset_opt_;
 
-    Segment(std::vector<uint8_t>&& bytes, std::optional<Expression>&& offset)
-        : bytes_(std::move(bytes)), offset_opt_(std::move(offset)) {}
+    Segment(std::span<const uint8_t> bytes, std::optional<Expression>&& offset)
+        : bytes_(bytes), offset_opt_(std::move(offset)) {}
 };
 
 class DataSection {
@@ -413,7 +414,7 @@ public:
 
     DataSection() {}
 
-    static Expected<DataSection> parse(std::istream& in);
+    static Expected<DataSection> parse(ByteCursor& in);
 
     const std::vector<Segment>& getSegments() const { return segments_; }
 
@@ -434,7 +435,7 @@ class DataCountSection {
 public:
     static constexpr uint8_t ID = 12;
 
-    static Expected<DataCountSection> parse(std::istream& in);
+    static Expected<DataCountSection> parse(ByteCursor& in);
 
     std::string toString() const;
 

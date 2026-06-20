@@ -6,12 +6,12 @@
 namespace runtime {
 
 Expected<std::shared_ptr<Process>>
-Process::create(std::span<const char>& program_bytes, Instance& instance,
+Process::create(std::span<const uint8_t>& program_bytes, Instance& instance,
                 uint32_t id) {
-    MemoryIStream program_stream(program_bytes.data(), program_bytes.size());
+    ByteCursor in(program_bytes);
 
     Expected<grammar::Module> module_exp =
-        grammar::Module::parse(program_stream);
+        grammar::Module::parse(in);
     if (!module_exp)
         return Unexpected(PROPAGATE(module_exp));
 

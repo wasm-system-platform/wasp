@@ -8,7 +8,7 @@ namespace runtime {
 using hw::mem::VIRT_MEMORY;
 
 Errno ProcessManager::createProcess(Instance& instance,
-                                    std::span<const char>& program_bytes,
+                                    std::span<const uint8_t>& program_bytes,
                                     uint32_t& pid) {
     pid = allocateProcessId();
 

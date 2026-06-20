@@ -1,5 +1,6 @@
 #pragma once
 
+#include "util/byte_cursor.hpp"
 #include "util/error_handling.hpp"
 #include <istream>
 
@@ -14,7 +15,7 @@ public:
 
     DebugLineSection() = default;
 
-    static Expected<DebugLineSection> parse(std::istream& in);
+    static Expected<DebugLineSection> parse(ByteCursor& in);
 
     const std::vector<Segment>& getSegments() const { return segments_; }
     const std::vector<std::string>& getSourceFiles() const {
@@ -50,19 +51,19 @@ private:
         : segments_(std::move(segments)), src_files_(std::move(src_files)) {}
 
     static Expected<std::vector<std::string>>
-    parse_include_dirs(std::istream& in);
+    parse_include_dirs(ByteCursor& in);
     static Expected<std::vector<std::string>>
-    parse_source_files(std::istream& in);
+    parse_source_files(ByteCursor& in);
 
-    static Expected<void> handle_standard_opcode(std::istream& in, uint8_t op,
-                                                 CompilationUnitHeader& header,
+    static Expected<void> handle_standard_opcode(ByteCursor& in, uint8_t op,
+                                                 const CompilationUnitHeader& header,
                                                  State& state,
                                                  std::vector<State>& states);
     static Expected<void> handle_special_opcode(uint8_t op,
-                                                CompilationUnitHeader& header,
+                                                const CompilationUnitHeader& header,
                                                 State& state,
                                                 std::vector<State>& states);
-    static Expected<bool> handle_extended_opcode(std::istream& in,
+    static Expected<bool> handle_extended_opcode(ByteCursor& in,
                                                  State& state,
                                                  std::vector<State>& states);
 };

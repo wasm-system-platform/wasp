@@ -3,123 +3,113 @@
 #include "fmt/format.h"
 #include "grammar/values.hpp"
 
-Expected<Byte> Byte::parse(std::istream& in) {
-    uint8_t b;
 
-    if (!in.read(reinterpret_cast<char*>(&b), 1)) {
-        return Unexpected(ERROR("unexpected end of file"));
-    }
-
-    return Byte(b);
-}
-
-Expected<S32> S32::parse(std::istream& in) {
-    int32_t result = 0;
-    int shift = 0;
-    uint8_t byte;
-
-    do {
-        if (shift >= 32)
-            return Unexpected(ERROR("integer too large"));
-
-        if (!in.read(reinterpret_cast<char*>(&byte), 1))
-            return Unexpected(ERROR("unexpected end of file"));
-
-        result |= static_cast<int32_t>(byte & 0x7F) << shift;
-        shift += 7;
-
-    } while (byte & 0x80);
-
-    if ((shift < 32) && ((byte & 0x40) != 0))
-        result |= (~0 << shift);
-
-    return S32(result);
-}
-
-Expected<U32> U32::parse(std::istream& in) {
+Expected<S32> S32::parse(ByteCursor& in) {
     uint32_t result = 0;
     int shift = 0;
-    uint8_t byte;
 
-    do {
-        if (shift >= 32)
-            return Unexpected(ERROR("integer too large"));
-
-        if (!in.read(reinterpret_cast<char*>(&byte), 1))
-            return Unexpected(ERROR("unexpected end of file"));
-
+    for (int i = 0; i < 5; i++) {
+        uint8_t byte = in.byte();
         result |= static_cast<uint32_t>(byte & 0x7F) << shift;
         shift += 7;
-    } while (byte & 0x80);
 
-    return U32(result);
+        if ((byte & 0x80) == 0) {
+            if (in.bad())
+                return Unexpected(ERROR("broken reader"));
+
+            if ((byte & 0x40) != 0 && shift < 32)
+                result |= (~uint32_t{0}) << shift;
+
+            return S32(static_cast<int32_t>(result));
+        }
+    }
+
+    return Unexpected(ERROR("invalid s32 LEB128"));
 }
 
-Expected<S64> S64::parse(std::istream& in) {
-    int64_t result = 0;
+Expected<U32> U32::parse(ByteCursor& in) {
+    uint32_t result = 0;
     int shift = 0;
-    uint8_t byte;
 
-    do {
-        if (shift >= 64) {
-            return Unexpected(ERROR(fmt::format(
-                "integer overflow at {}", static_cast<size_t>(in.tellg()))));
+    for (int i = 0; i < 5; i++) {
+        uint8_t byte = in.byte();
+        result |= static_cast<uint32_t>(byte & 0x7F) << shift;
+
+        if ((byte & 0x80) == 0) {
+            if (in.bad())
+                return Unexpected(ERROR("broken reader"));
+
+            return U32(result);
         }
 
-        if (!in.read(reinterpret_cast<char*>(&byte), 1)) {
-            return Unexpected(ERROR("unexpected end of file"));
-        }
-
-        result |= static_cast<int64_t>(byte & 0x7F) << shift;
         shift += 7;
+    }
 
-    } while (byte & 0x80);
-
-    if ((shift < 64) && ((byte & 0x40) != 0))
-        result |= (~0 << shift);
-
-    return S64(result);
+    return Unexpected(ERROR("invalid u32 LEB128"));
 }
 
-Expected<U64> U64::parse(std::istream& in) {
+Expected<S64> S64::parse(ByteCursor& in) {
     uint64_t result = 0;
     int shift = 0;
-    uint8_t byte;
 
-    do {
-        if (shift >= 64)
-            return Unexpected(ERROR("integer too large"));
-
-        if (!in.read(reinterpret_cast<char*>(&byte), 1))
-            return Unexpected(ERROR("unexpected end of file"));
-
+    for (int i = 0; i < 10; i++) {
+        uint8_t byte = in.byte();
         result |= static_cast<uint64_t>(byte & 0x7F) << shift;
         shift += 7;
-    } while (byte & 0x80);
 
-    return U64(result);
+        if ((byte & 0x80) == 0) {
+            if (in.bad())
+                return Unexpected(ERROR("broken reader"));
+
+            if ((byte & 0x40) != 0 && shift < 32)
+                result |= (~uint64_t{0}) << shift;
+
+            return S64(static_cast<int32_t>(result));
+        }
+    }
+
+    return Unexpected(ERROR("invalid s64 LEB128"));
+}
+
+Expected<U64> U64::parse(ByteCursor& in) {
+    uint64_t result = 0;
+    int shift = 0;
+
+    for (int i = 0; i < 10; i++) {
+        uint8_t byte = in.byte();
+        result |= static_cast<uint64_t>(byte & 0x7F) << shift;
+
+        if ((byte & 0x80) == 0) {
+            if (in.bad())
+                return Unexpected(ERROR("broken reader"));
+
+            return U64(result);
+        }
+
+        shift += 7;
+    }
+
+    return Unexpected(ERROR("invalid u64 LEB128"));
 }
 
 /******************/
 /* Floating-Point */
 /******************/
 
-Expected<F32> F32::parse(std::istream& in) {
-    float f;
+Expected<F32> F32::parse(ByteCursor& in) {
+    float f = in.f32();
 
-    if (!in.read(reinterpret_cast<char*>(&f), sizeof(float))) {
-        return Unexpected(ERROR("unexpected end of file"));
-    }
+    if (in.bad())
+        return Unexpected(ERROR("invalid f32"));
 
     return F32(f);
 }
 
-Expected<F64> F64::parse(std::istream& in) {
-    double f;
+Expected<F64> F64::parse(ByteCursor& in) {
+    double f = in.f64();
 
-    if (!in.read(reinterpret_cast<char*>(&f), sizeof(double))) {
-        return Unexpected(ERROR("unexpected end of file"));
-    }
+    if (in.bad())
+        return Unexpected(ERROR("invalid f64"));
 
     return F64(f);
 }
@@ -128,17 +118,16 @@ Expected<F64> F64::parse(std::istream& in) {
 /* Names */
 /*********/
 
-Expected<Name> Name::parse(std::istream& in) {
+Expected<Name> Name::parse(ByteCursor& in) {
     Expected<U32> u32_exp = U32::parse(in);
     if (!u32_exp.has_value())
         return Unexpected(PROPAGATE(u32_exp));
 
     uint32_t len = *u32_exp;
-    std::string val(len, '\0');
+    std::span<const uint8_t> bytes = in.read(len);
+    
+    if (in.bad())
+        return Unexpected(ERROR("invalid name"));
 
-    if (!in.read(val.data(), len)) {
-        return Unexpected(ERROR("unexpected end of file"));
-    }
-
-    return Name(std::move(val));
+    return Name(std::string_view(reinterpret_cast<const char*>(bytes.data()), bytes.size()));
 }

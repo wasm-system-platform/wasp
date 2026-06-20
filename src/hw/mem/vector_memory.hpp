@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <cstring>
+#include <span>
 #include <vector>
 
 #include "hw/mem/memory_traits.hpp"
@@ -35,6 +36,10 @@ public:
     void store(uint32_t offset, const T& src_buffer) {
         std::memcpy(data_.data() + offset, src_buffer.data(),
                     src_buffer.size());
+    }
+
+    void store(uint32_t offset, std::span<const uint8_t> data) {
+        std::memcpy(data_.data() + offset, data.data(), data.size());
     }
 
     void fill(uint32_t offset, uint8_t value, uint32_t count) {
