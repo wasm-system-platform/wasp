@@ -1,5 +1,6 @@
 #include <array>
 #include <iostream>
+#include <memory_resource>
 #include <sstream>
 
 #include <fmt/format.h>
@@ -34,6 +35,11 @@ Expected<Module> Module::parse(ByteCursor& in) {
     DebugLineSection debug_line_section;
 
     std::vector<CustomSection> custom_sections;
+
+    // We use an arena for all allocations, which only live during parsing.
+    std::unique_ptr<std::pmr::monotonic_buffer_resource> mbr =
+        std::make_unique<std::pmr::monotonic_buffer_resource>(in.size());
+    std::pmr::polymorphic_allocator arena(mbr.get());
 
     while (true) {
         uint8_t section_id = in.byte();
@@ -72,7 +78,7 @@ Expected<Module> Module::parse(ByteCursor& in) {
         }
         case FunctionSection::ID: {
             Expected<FunctionSection> func_section_res =
-                FunctionSection::parse(in);
+                FunctionSection::parse(in, arena);
             if (!func_section_res)
                 return Unexpected(PROPAGATE(func_section_res));
             func_section = *func_section_res;
@@ -87,7 +93,7 @@ Expected<Module> Module::parse(ByteCursor& in) {
         }
         case GlobalSection::ID: {
             Expected<GlobalSection> global_section_res =
-                GlobalSection::parse(in);
+                GlobalSection::parse(in, arena);
             if (!global_section_res)
                 return Unexpected(PROPAGATE(global_section_res));
             global_section = *global_section_res;
@@ -110,7 +116,7 @@ Expected<Module> Module::parse(ByteCursor& in) {
         }
         case ElemenSection::ID: {
             Expected<ElemenSection> element_section_res =
-                ElemenSection::parse(in);
+                ElemenSection::parse(in, arena);
             if (!element_section_res)
                 return Unexpected(PROPAGATE(element_section_res));
             element_section = std::move(*element_section_res);
@@ -118,14 +124,15 @@ Expected<Module> Module::parse(ByteCursor& in) {
         }
         case CodeSection::ID: {
             Expected<CodeSection> code_section_res =
-                CodeSection::parse(in, module_start);
+                CodeSection::parse(in, module_start, arena);
             if (!code_section_res)
                 return Unexpected(PROPAGATE(code_section_res));
             code_section = *code_section_res;
             break;
         }
         case DataSection::ID: {
-            Expected<DataSection> data_section_res = DataSection::parse(in);
+            Expected<DataSection> data_section_res =
+                DataSection::parse(in, arena);
             if (!data_section_res)
                 return Unexpected(PROPAGATE(data_section_res));
             data_section = *data_section_res;
@@ -166,13 +173,14 @@ Expected<Module> Module::parse(ByteCursor& in) {
         debug_line_section = std::move(*debug_line_section_exp);
     }
 
-    return Module(
-        type_section.value_or(TypeSection()),
-        import_section.value_or(ImportSection()), std::move(func_section),
-        std::move(table_section), global_section.value_or(GlobalSection()),
-        std::move(export_section), std::move(start_section),
-        std::move(element_section), std::move(code_section),
-        data_section.value_or(DataSection()), std::move(debug_line_section));
+    return Module(type_section.value_or(TypeSection()),
+                  import_section.value_or(ImportSection()),
+                  std::move(func_section), std::move(table_section),
+                  global_section.value_or(GlobalSection()),
+                  std::move(export_section), std::move(start_section),
+                  std::move(element_section), std::move(code_section),
+                  data_section.value_or(DataSection()),
+                  std::move(debug_line_section), std::move(mbr));
 }
 
 } // namespace grammar

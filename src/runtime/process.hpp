@@ -49,11 +49,9 @@ private:
 
     Operation entry_;
 
-    static Expected<Imports>
-    createImports(Instance& instance);
+    static Expected<Imports> createImports(Instance& instance);
 
-    Expected<void>
-    validateExports();
+    Expected<void> validateExports();
 };
 
 } // namespace runtime

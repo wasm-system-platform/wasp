@@ -948,7 +948,8 @@ public:
     using InType = Values<1>;
     using OutType = Values<1>;
 
-    static OutType impl(I32ReinterpretF32& i32_reinterpret_f32, Instance& instance, Value in);
+    static OutType impl(I32ReinterpretF32& i32_reinterpret_f32,
+                        Instance& instance, Value in);
 };
 
 class I64ReinterpretF64 : public TaggedOperation<I64ReinterpretF64> {
@@ -956,7 +957,8 @@ public:
     using InType = Values<1>;
     using OutType = Values<1>;
 
-    static OutType impl(I64ReinterpretF64& i64_reinterpret_f64, Instance& instance, Value in);
+    static OutType impl(I64ReinterpretF64& i64_reinterpret_f64,
+                        Instance& instance, Value in);
 };
 
 class F32ReinterpretI32 : public GenericOperation<F32ReinterpretI32> {
@@ -964,7 +966,8 @@ public:
     using InType = Values<1>;
     using OutType = Values<1>;
 
-    static OutType impl(F32ReinterpretI32& f32_reinterpret_i32, Instance& instance, Value in);
+    static OutType impl(F32ReinterpretI32& f32_reinterpret_i32,
+                        Instance& instance, Value in);
 };
 
 class F64ReinterpretI64 : public GenericOperation<F64ReinterpretI64> {
@@ -972,7 +975,8 @@ public:
     using InType = Values<1>;
     using OutType = Values<1>;
 
-    static OutType impl(F64ReinterpretI64& f64_reinterpret_i64, Instance& instance, Value in);
+    static OutType impl(F64ReinterpretI64& f64_reinterpret_i64,
+                        Instance& instance, Value in);
 };
 
 class I32Extend8Signed : public TaggedOperation<I32Extend8Signed> {

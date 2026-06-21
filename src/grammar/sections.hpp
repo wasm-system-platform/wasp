@@ -29,7 +29,8 @@ private:
     Name name_;
     std::span<const uint8_t> bytes_;
 
-    CustomSection(Name&& name, std::span<const uint8_t> bytes) : name_(std::move(name)), bytes_(bytes) {}
+    CustomSection(Name&& name, std::span<const uint8_t> bytes)
+        : name_(std::move(name)), bytes_(bytes) {}
 };
 
 /****************/
@@ -153,16 +154,17 @@ class FunctionSection {
 public:
     static constexpr uint8_t ID = 0x03;
 
-    static Expected<FunctionSection> parse(ByteCursor& in);
+    static Expected<FunctionSection>
+    parse(ByteCursor& in, std::pmr::polymorphic_allocator<std::byte>& arena);
 
-    const std::vector<uint32_t>& getTypes() const { return type_indices_; }
+    const std::pmr::vector<uint32_t>& getTypes() const { return type_indices_; }
 
     std::string toString() const;
 
 private:
-    std::vector<uint32_t> type_indices_;
+    std::pmr::vector<uint32_t> type_indices_;
 
-    FunctionSection(std::vector<uint32_t>&& type_indices);
+    FunctionSection(std::pmr::vector<uint32_t>&& type_indices);
 };
 
 /*****************/
@@ -189,7 +191,8 @@ private:
 
 class Global : public GlobalType, public Expression {
 public:
-    static Expected<Global> parse(ByteCursor& in);
+    static Expected<Global>
+    parse(ByteCursor& in, std::pmr::polymorphic_allocator<std::byte>& arena);
 
     std::string toString() const;
 
@@ -203,7 +206,8 @@ public:
 
     static constexpr uint8_t ID = 0x06;
 
-    static Expected<GlobalSection> parse(ByteCursor& in);
+    static Expected<GlobalSection>
+    parse(ByteCursor& in, std::pmr::polymorphic_allocator<std::byte>& arena);
 
     const std::vector<Global>& getGlobals() const { return globals_; }
 
@@ -310,7 +314,8 @@ private:
 
 class ElementSegment {
 public:
-    static Expected<ElementSegment> parse(ByteCursor& in);
+    static Expected<ElementSegment>
+    parse(ByteCursor& in, std::pmr::polymorphic_allocator<std::byte>& arena);
 
     std::string toString() const;
 
@@ -331,7 +336,8 @@ public:
 
     ElemenSection() = default;
 
-    static Expected<ElemenSection> parse(ByteCursor& in);
+    static Expected<ElemenSection>
+    parse(ByteCursor& in, std::pmr::polymorphic_allocator<std::byte>& arena);
 
     std::string toString() const;
 
@@ -350,7 +356,9 @@ private:
 
 class Function {
 public:
-    static Expected<Function> parse(ByteCursor& in, size_t code_start);
+    static Expected<Function>
+    parse(ByteCursor& in, size_t code_start,
+          std::pmr::polymorphic_allocator<std::byte>& arena);
 
     const std::vector<ValueType>& getLocals() const { return locals_; }
     const Expression& getBody() const { return body_; }
@@ -369,18 +377,20 @@ class CodeSection {
 public:
     static constexpr uint8_t ID = 10;
 
-    static Expected<CodeSection> parse(ByteCursor& in, size_t code_start);
+    static Expected<CodeSection>
+    parse(ByteCursor& in, size_t code_start,
+          std::pmr::polymorphic_allocator<std::byte>& arena);
 
-    const std::vector<Function>& getFunctions() const { return funcs_; }
+    const std::pmr::vector<Function>& getFunctions() const { return funcs_; }
     size_t getCodeStart() const { return code_start_; }
 
     std::string toString() const;
 
 private:
-    std::vector<Function> funcs_;
+    std::pmr::vector<Function> funcs_;
     size_t code_start_;
 
-    CodeSection(std::vector<Function>&& funcs, size_t code_start)
+    CodeSection(std::pmr::vector<Function>&& funcs, size_t code_start)
         : funcs_(std::move(funcs)), code_start_(code_start) {}
 };
 
@@ -390,7 +400,8 @@ private:
 
 class Segment {
 public:
-    static Expected<Segment> parse(ByteCursor& in);
+    static Expected<Segment>
+    parse(ByteCursor& in, std::pmr::polymorphic_allocator<std::byte>& arena);
 
     std::span<const uint8_t> getBytes() const { return bytes_; }
 
@@ -414,16 +425,17 @@ public:
 
     DataSection() {}
 
-    static Expected<DataSection> parse(ByteCursor& in);
+    static Expected<DataSection>
+    parse(ByteCursor& in, std::pmr::polymorphic_allocator<std::byte>& arena);
 
-    const std::vector<Segment>& getSegments() const { return segments_; }
+    const std::pmr::vector<Segment>& getSegments() const { return segments_; }
 
     std::string toString() const;
 
 private:
-    std::vector<Segment> segments_;
+    std::pmr::vector<Segment> segments_;
 
-    DataSection(std::vector<Segment>&& segments)
+    DataSection(std::pmr::vector<Segment>&& segments)
         : segments_(std::move(segments)) {}
 };
 

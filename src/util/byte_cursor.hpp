@@ -7,19 +7,16 @@
 class ByteCursor {
 public:
     explicit ByteCursor(std::span<const std::uint8_t> bytes)
-        : begin_(bytes.data()), cur_(bytes.data()), end_(bytes.data() + bytes.size()) {}
+        : begin_(bytes.data()), cur_(bytes.data()),
+          end_(bytes.data() + bytes.size()) {}
 
-    bool eof() const {
-        return cur_ == end_;
-    }
+    bool eof() const { return cur_ == end_; }
 
-    bool bad() const {
-        return badbit_;
-    }
+    size_t size() const { return static_cast<size_t>(end_ - begin_); }
 
-    size_t offset() const {
-        return static_cast<size_t>(cur_ - begin_);
-    }
+    bool bad() const { return badbit_; }
+
+    size_t offset() const { return static_cast<size_t>(cur_ - begin_); }
 
     uint8_t byte() {
         if (badbit_)
@@ -41,7 +38,7 @@ public:
             badbit_ = true;
             return 0xFF;
         }
-        
+
         return *cur_;
     }
 
@@ -51,9 +48,8 @@ public:
         if (badbit_)
             return 0xFF'FF;
 
-        return static_cast<uint16_t>(
-             static_cast<uint16_t>(bytes[0])
-           | static_cast<uint16_t>(bytes[1]) << 8);
+        return static_cast<uint16_t>(static_cast<uint16_t>(bytes[0]) |
+                                     static_cast<uint16_t>(bytes[1]) << 8);
     }
 
     uint32_t u32_le() {
@@ -62,10 +58,10 @@ public:
         if (badbit_)
             return 0;
 
-        return static_cast<uint32_t>(bytes[0])
-             | static_cast<uint32_t>(bytes[1]) << 8
-             | static_cast<uint32_t>(bytes[2]) << 16
-             | static_cast<uint32_t>(bytes[3]) << 24;
+        return static_cast<uint32_t>(bytes[0]) |
+               static_cast<uint32_t>(bytes[1]) << 8 |
+               static_cast<uint32_t>(bytes[2]) << 16 |
+               static_cast<uint32_t>(bytes[3]) << 24;
     }
 
     float f32() {
@@ -103,7 +99,7 @@ public:
         return {start, len};
     }
 
-    template<size_t NUM>
+    template <size_t NUM>
     void expect(const std::array<uint8_t, NUM>& expected) {
         if (badbit_)
             return;
@@ -129,14 +125,14 @@ private:
         if (badbit_)
             return 0;
 
-        return static_cast<uint64_t>(bytes[0])
-             | static_cast<uint64_t>(bytes[1]) << 8
-             | static_cast<uint64_t>(bytes[2]) << 16
-             | static_cast<uint64_t>(bytes[3]) << 24
-             | static_cast<uint64_t>(bytes[4]) << 32
-             | static_cast<uint64_t>(bytes[5]) << 40
-             | static_cast<uint64_t>(bytes[6]) << 48
-             | static_cast<uint64_t>(bytes[7]) << 56;
+        return static_cast<uint64_t>(bytes[0]) |
+               static_cast<uint64_t>(bytes[1]) << 8 |
+               static_cast<uint64_t>(bytes[2]) << 16 |
+               static_cast<uint64_t>(bytes[3]) << 24 |
+               static_cast<uint64_t>(bytes[4]) << 32 |
+               static_cast<uint64_t>(bytes[5]) << 40 |
+               static_cast<uint64_t>(bytes[6]) << 48 |
+               static_cast<uint64_t>(bytes[7]) << 56;
     }
 
     const uint8_t* begin_;

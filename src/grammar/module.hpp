@@ -1,5 +1,6 @@
 #pragma once
 
+#include <memory_resource>
 #include <optional>
 
 #include "grammar/dwarf.hpp"
@@ -43,6 +44,8 @@ private:
     DataSection data_section_;
     DebugLineSection debug_line_section_;
 
+    std::unique_ptr<std::pmr::monotonic_buffer_resource> mbr_;
+
     Module(TypeSection&& type_section, ImportSection&& import_section,
            std::optional<FunctionSection>&& function_section,
            std::optional<TableSection>&& table_section,
@@ -51,7 +54,8 @@ private:
            std::optional<StartSection>&& start_section,
            ElemenSection&& element_section,
            std::optional<CodeSection>&& code_section, DataSection data_section,
-           DebugLineSection&& debug_line_section)
+           DebugLineSection&& debug_line_section,
+           std::unique_ptr<std::pmr::monotonic_buffer_resource>&& mbr)
         : type_section_(std::move(type_section)),
           import_section_(std::move(import_section)),
           func_section_(std::move(function_section)),
@@ -62,7 +66,8 @@ private:
           element_section_(std::move(element_section)),
           code_section_(std::move(code_section)),
           data_section_(std::move(data_section)),
-          debug_line_section_(std::move(debug_line_section)) {}
+          debug_line_section_(std::move(debug_line_section)),
+          mbr_(std::move(mbr)) {}
 };
 
 } // namespace grammar

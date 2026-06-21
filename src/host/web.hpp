@@ -4,7 +4,7 @@
 
 namespace host {
 
-template<class Impl> class BasicArch;
+template <class Impl> class BasicArch;
 
 class WebArch {
 private:
@@ -24,4 +24,4 @@ private:
     double last_yield_time_ms_;
 };
 
-}
+} // namespace host

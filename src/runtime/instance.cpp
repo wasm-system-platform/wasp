@@ -76,7 +76,8 @@ Instance::createExports(const grammar::Module& module) {
     grammar::FunctionSection function_section = module.getFunctionSection();
     grammar::ExportSection export_section = module.getExportSection();
 
-    std::vector<uint32_t> type_indices = function_section.getTypes();
+    const std::pmr::vector<uint32_t>& type_indices =
+        function_section.getTypes();
     std::hash<FunctionType> signature_hasher;
 
     std::shared_ptr<Exports> exports = std::make_shared<Exports>();

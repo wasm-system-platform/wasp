@@ -21,8 +21,7 @@ public:
     using InType = Values<num_in>;
     using OutType = Values<num_out>;
 
-    static std::pair<size_t, Operation (*)(Operation&, Operation&)>
-    recipe() {
+    static std::pair<size_t, Operation (*)(Operation&, Operation&)> recipe() {
         return {combineId(decltype(first_)::static_type(),
                           decltype(second_)::static_type()),
                 create};
@@ -56,8 +55,7 @@ public:
     using InType = Values<num_in>;
     using OutType = Values<num_out>;
 
-    static std::pair<size_t, Operation (*)(Operation&, Operation&)>
-    recipe() {
+    static std::pair<size_t, Operation (*)(Operation&, Operation&)> recipe() {
         return {combineId(decltype(first_)::static_type(),
                           decltype(second_)::static_type()),
                 create};
@@ -147,8 +145,7 @@ using LocalGet_LocalGet_I32Const = Sequence<LocalGet_LocalGet, I32Const, 0, 3>;
 template <>
 template <typename... Args>
 inline LocalGet_LocalGet_I32Const::OutType
-LocalGet_LocalGet_I32Const::impl(Sequence& seq, Instance& instance,
-                                 Args...) {
+LocalGet_LocalGet_I32Const::impl(Sequence& seq, Instance& instance, Args...) {
     auto [v1, v2] = LocalGet_LocalGet::impl(seq.first_, instance);
     return {v1, v2, I32Const::impl(seq.second_, instance)};
 }
@@ -344,14 +341,17 @@ void printStats() {
     fmt::println("=== Optimization Stats ===");
     fmt::println("merge attempts: {}", mergeAttempts);
     fmt::println("merge success rate: {}%\n",
-                 (static_cast<double>(mergesPerformed) * 100.0) / static_cast<double>(mergeAttempts));
+                 (static_cast<double>(mergesPerformed) * 100.0) /
+                     static_cast<double>(mergeAttempts));
 
     size_t limit = std::min<size_t>(10, stats.size());
     fmt::println("=== Top {} Optimization Misses ===", limit);
     for (size_t i = 0; i < limit; i++) {
         fmt::println("{:>2.4f}% : {}",
-                 (static_cast<double>(100.0) * static_cast<double>(stats[i].second)) / static_cast<double>(mergeAttempts),
-                 stats[i].first);
+                     (static_cast<double>(100.0) *
+                      static_cast<double>(stats[i].second)) /
+                         static_cast<double>(mergeAttempts),
+                     stats[i].first);
     }
 }
 

@@ -11,9 +11,7 @@ public:
         return arch;
     }
 
-    void tick() {
-        impl_.tick();
-    }
+    void tick() { impl_.tick(); }
 
     template <typename Atomic, typename T>
     void wait(Atomic& atomic, T old_value) {
@@ -42,4 +40,4 @@ using Arch = BasicArch<WebArch>;
 using Arch = BasicArch<GenericArch>;
 #endif
 
-}
+} // namespace host

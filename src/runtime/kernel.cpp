@@ -23,15 +23,15 @@ Kernel::create(const std::string& kernel_path) {
 
     std::vector<std::uint8_t> bytes(static_cast<std::size_t>(size));
 
-    file.read(reinterpret_cast<char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+    file.read(reinterpret_cast<char*>(bytes.data()),
+              static_cast<std::streamsize>(bytes.size()));
     if (!file)
         return Unexpected(ERROR("failed to read kernel file"));
 
     ByteCursor in(std::span<const std::uint8_t>(bytes.data(), bytes.size()));
 
     // parse module
-    Expected<grammar::Module> module_exp =
-        grammar::Module::parse(in);
+    Expected<grammar::Module> module_exp = grammar::Module::parse(in);
     if (!module_exp)
         return Unexpected(PROPAGATE(module_exp));
 

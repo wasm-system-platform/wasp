@@ -48,7 +48,7 @@ GlobalInstances::create(const grammar::Module& module) {
 
 Expected<DataInstances> DataInstances::create(const grammar::Module& module) {
     const grammar::DataSection& data_section = module.getDataSection();
-    const std::vector<grammar::Segment>& data_segments =
+    const std::pmr::vector<grammar::Segment>& data_segments =
         data_section.getSegments();
 
     std::vector<std::vector<uint8_t>> segments;
@@ -170,7 +170,8 @@ Expected<std::vector<Function>> GlobalState::createFunctions(
         type_section.getFunctionTypes();
 
     for (const auto& func : import_section.getFunctionImports()) {
-        std::string id = fmt::format("{}.{}", func.getModule().value(), func.getName().value());
+        std::string id = fmt::format("{}.{}", func.getModule().value(),
+                                     func.getName().value());
 
         auto it = imports.find(id);
         if (it == imports.end())
@@ -186,14 +187,15 @@ Expected<std::vector<Function>> GlobalState::createFunctions(
 
         if (!import.isCompatible(*type_exp))
             return Unexpected(ERROR(fmt::format(
-                "function provided for {}.{} is not compatible with {}", func.getModule().value(),
-                func.getName().value(), type_exp->toString())));
+                "function provided for {}.{} is not compatible with {}",
+                func.getModule().value(), func.getName().value(),
+                type_exp->toString())));
 
         funcs.push_back(import);
     }
 
-    const std::vector<uint32_t>& type_indices = func_section.getTypes();
-    const std::vector<grammar::Function>& functions =
+    const std::pmr::vector<uint32_t>& type_indices = func_section.getTypes();
+    const std::pmr::vector<grammar::Function>& functions =
         code_section.getFunctions();
 
     if (type_indices.size() != functions.size())
@@ -258,19 +260,20 @@ Expected<Memory> GlobalState::createMemory(const grammar::Module& module) {
     const uint32_t init = type.getInitial();
     if (init > UINT16_MAX)
         return Unexpected(ERROR(fmt::format(
-            "memory initial size {} exceeds maximum allowed value ({})",
-            init, UINT16_MAX)));
+            "memory initial size {} exceeds maximum allowed value ({})", init,
+            UINT16_MAX)));
 
     const uint32_t max = type.getMax();
     if (max > UINT16_MAX)
         return Unexpected(ERROR(fmt::format(
-            "memory maximum size {} exceeds maximum allowed value ({})",
-            max, UINT16_MAX)));
+            "memory maximum size {} exceeds maximum allowed value ({})", max,
+            UINT16_MAX)));
 
     Memory memory(static_cast<uint16_t>(init), static_cast<uint16_t>(max));
 
     /* copy active segments */
-    const std::vector<grammar::Segment>& segments = data_section.getSegments();
+    const std::pmr::vector<grammar::Segment>& segments =
+        data_section.getSegments();
     for (const auto& segment : segments) {
         if (!segment.isActive())
             continue;

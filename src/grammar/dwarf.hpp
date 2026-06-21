@@ -55,15 +55,13 @@ private:
     static Expected<std::vector<std::string>>
     parse_source_files(ByteCursor& in);
 
-    static Expected<void> handle_standard_opcode(ByteCursor& in, uint8_t op,
-                                                 const CompilationUnitHeader& header,
-                                                 State& state,
-                                                 std::vector<State>& states);
-    static Expected<void> handle_special_opcode(uint8_t op,
-                                                const CompilationUnitHeader& header,
-                                                State& state,
-                                                std::vector<State>& states);
-    static Expected<bool> handle_extended_opcode(ByteCursor& in,
-                                                 State& state,
+    static Expected<void>
+    handle_standard_opcode(ByteCursor& in, uint8_t op,
+                           const CompilationUnitHeader& header, State& state,
+                           std::vector<State>& states);
+    static Expected<void>
+    handle_special_opcode(uint8_t op, const CompilationUnitHeader& header,
+                          State& state, std::vector<State>& states);
+    static Expected<bool> handle_extended_opcode(ByteCursor& in, State& state,
                                                  std::vector<State>& states);
 };

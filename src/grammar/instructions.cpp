@@ -11,12 +11,15 @@ namespace grammar {
 /* Expression */
 /**************/
 
-Expected<Expression> Expression::parse(ByteCursor& in, size_t code_start) {
+Expected<Expression>
+Expression::parse(ByteCursor& in, size_t code_start,
+                  std::pmr::polymorphic_allocator<std::byte>& arena) {
     std::vector<Instruction> instructions;
     Instruction terminator;
 
     while (true) {
-        Expected<Instruction> inst_exp = InstructionBase::parse(in, code_start);
+        Expected<Instruction> inst_exp =
+            InstructionBase::parse(in, code_start, arena);
         if (!inst_exp)
             return Unexpected(PROPAGATE(inst_exp));
         const Instruction& inst = *inst_exp;
@@ -47,520 +50,522 @@ std::string Expression::toString() const {
 /* Instructions */
 /****************/
 
-Expected<Instruction> InstructionBase::parse(ByteCursor& in,
-                                             size_t code_start) {
-    size_t addr = (code_start == UINT32_MAX)
-                      ? code_start
-                      : in.offset() - code_start;
+Expected<Instruction>
+InstructionBase::parse(ByteCursor& in, size_t code_start,
+                       std::pmr::polymorphic_allocator<std::byte>& arena) {
+    size_t addr =
+        (code_start == UINT32_MAX) ? code_start : in.offset() - code_start;
 
     uint8_t opcode = in.byte();
 
     switch (opcode) {
     case Unreachable::OPCODE: {
-        return std::make_shared<Unreachable>(addr);
+        return arena.new_object<Unreachable>(addr);
     }
     case Nop::OPCODE: {
-        return std::make_shared<Nop>();
+        return arena.new_object<Nop>();
     }
     case Block::OPCODE: {
-        Expected<Block> block_exp = Block::parse(in, code_start);
+        Expected<Block> block_exp = Block::parse(in, code_start, arena);
         if (!block_exp)
             return Unexpected(PROPAGATE(block_exp));
-        return std::make_shared<Block>(*block_exp);
+        return arena.new_object<Block>(*block_exp);
     }
     case Loop::OPCODE: {
-        Expected<Loop> loop_exp = Loop::parse(in, addr, code_start);
+        Expected<Loop> loop_exp = Loop::parse(in, addr, code_start, arena);
         if (!loop_exp)
             return Unexpected(PROPAGATE(loop_exp));
-        return std::make_shared<Loop>(*loop_exp);
+        return arena.new_object<Loop>(*loop_exp);
     }
     case IfElse::OPCODE: {
-        Expected<IfElse> if_else_exp = IfElse::parse(in, addr, code_start);
+        Expected<IfElse> if_else_exp =
+            IfElse::parse(in, addr, code_start, arena);
         if (!if_else_exp)
             return Unexpected(PROPAGATE(if_else_exp));
-        return std::make_shared<IfElse>(*if_else_exp);
+        return arena.new_object<IfElse>(*if_else_exp);
     }
     case Else::OPCODE:
-        return std::make_shared<Else>();
+        return arena.new_object<Else>();
     case Return::OPCODE:
-        return std::make_shared<Return>();
+        return arena.new_object<Return>();
     case End::OPCODE:
-        return std::make_shared<End>();
+        return arena.new_object<End>();
     case Branch::OPCODE: {
         Expected<Branch> br_exp = Branch::parse(in);
         if (!br_exp)
             return Unexpected(PROPAGATE(br_exp));
-        return std::make_shared<Branch>(*br_exp);
+        return arena.new_object<Branch>(*br_exp);
     }
     case BranchIf::OPCODE: {
         Expected<BranchIf> br_if_exp = BranchIf::parse(in, addr);
         if (!br_if_exp)
             return Unexpected(PROPAGATE(br_if_exp));
-        return std::make_shared<BranchIf>(*br_if_exp);
+        return arena.new_object<BranchIf>(*br_if_exp);
     }
     case BranchTable::OPCODE: {
         Expected<BranchTable> br_table_exp = BranchTable::parse(in);
         if (!br_table_exp)
             return Unexpected(PROPAGATE(br_table_exp));
-        return std::make_shared<BranchTable>(*br_table_exp);
+        return arena.new_object<BranchTable>(*br_table_exp);
     }
     case Call::OPCODE: {
         Expected<Call> call_exp = Call::parse(in, addr);
         if (!call_exp)
             return Unexpected(PROPAGATE(call_exp));
-        return std::make_shared<Call>(*call_exp);
+        return arena.new_object<Call>(*call_exp);
     }
     case CallIndirect::OPCODE: {
         Expected<CallIndirect> call_indirect_exp =
             CallIndirect::parse(in, addr);
         if (!call_indirect_exp)
             return Unexpected(PROPAGATE(call_indirect_exp));
-        return std::make_shared<CallIndirect>(*call_indirect_exp);
+        return arena.new_object<CallIndirect>(*call_indirect_exp);
     }
     case LocalGet::OPCODE: {
         Expected<LocalGet> local_get_exp = LocalGet::parse(in, addr);
         if (!local_get_exp)
             return Unexpected(PROPAGATE(local_get_exp));
-        return std::make_shared<LocalGet>(*local_get_exp);
+        return arena.new_object<LocalGet>(*local_get_exp);
     }
     case LocalSet::OPCODE: {
         Expected<LocalSet> local_set_exp = LocalSet::parse(in, addr);
         if (!local_set_exp)
             return Unexpected(PROPAGATE(local_set_exp));
-        return std::make_shared<LocalSet>(*local_set_exp);
+        return arena.new_object<LocalSet>(*local_set_exp);
     }
     case LocalTee::OPCODE: {
         Expected<LocalTee> local_tee_exp = LocalTee::parse(in, addr);
         if (!local_tee_exp)
             return Unexpected(PROPAGATE(local_tee_exp));
-        return std::make_shared<LocalTee>(*local_tee_exp);
+        return arena.new_object<LocalTee>(*local_tee_exp);
     }
     case GlobalGet::OPCODE: {
         Expected<GlobalGet> global_get_exp = GlobalGet::parse(in);
         if (!global_get_exp)
             return Unexpected(PROPAGATE(global_get_exp));
-        return std::make_shared<GlobalGet>(*global_get_exp);
+        return arena.new_object<GlobalGet>(*global_get_exp);
     }
     case GlobalSet::OPCODE: {
         Expected<GlobalSet> global_set_exp = GlobalSet::parse(in);
         if (!global_set_exp)
             return Unexpected(PROPAGATE(global_set_exp));
-        return std::make_shared<GlobalSet>(*global_set_exp);
+        return arena.new_object<GlobalSet>(*global_set_exp);
     }
     case Drop::OPCODE:
-        return std::make_shared<Drop>(addr);
+        return arena.new_object<Drop>(addr);
     case Select::OPCODE:
-        return std::make_shared<Select>();
+        return arena.new_object<Select>();
     case I32Const::OPCODE: {
         Expected<I32Const> i32_const_exp = I32Const::parse(in, addr);
         if (!i32_const_exp)
             return Unexpected(PROPAGATE(i32_const_exp));
-        return std::make_shared<I32Const>(*i32_const_exp);
+        return arena.new_object<I32Const>(*i32_const_exp);
     }
     case I64Const::OPCODE: {
         Expected<I64Const> i64_const_exp = I64Const::parse(in);
         if (!i64_const_exp)
             return Unexpected(PROPAGATE(i64_const_exp));
-        return std::make_shared<I64Const>(*i64_const_exp);
+        return arena.new_object<I64Const>(*i64_const_exp);
     }
     case F32Const::OPCODE: {
         Expected<F32Const> f32_const_exp = F32Const::parse(in);
         if (!f32_const_exp)
             return Unexpected(PROPAGATE(f32_const_exp));
-        return std::make_shared<F32Const>(*f32_const_exp);
+        return arena.new_object<F32Const>(*f32_const_exp);
     }
     case F64Const::OPCODE: {
         Expected<F64Const> f64_const_exp = F64Const::parse(in);
         if (!f64_const_exp)
             return Unexpected(PROPAGATE(f64_const_exp));
-        return std::make_shared<F64Const>(*f64_const_exp);
+        return arena.new_object<F64Const>(*f64_const_exp);
     }
     case I32EqualZero::OPCODE:
-        return std::make_shared<I32EqualZero>();
+        return arena.new_object<I32EqualZero>();
     case I32Equal::OPCODE:
-        return std::make_shared<I32Equal>();
+        return arena.new_object<I32Equal>();
     case I32NotEqual::OPCODE:
-        return std::make_shared<I32NotEqual>();
+        return arena.new_object<I32NotEqual>();
     case I32LessThanSigned::OPCODE:
-        return std::make_shared<I32LessThanSigned>();
+        return arena.new_object<I32LessThanSigned>();
     case I32LessThanUnsigned::OPCODE:
-        return std::make_shared<I32LessThanUnsigned>();
+        return arena.new_object<I32LessThanUnsigned>();
     case I32GreaterThanSigned::OPCODE:
-        return std::make_shared<I32GreaterThanSigned>();
+        return arena.new_object<I32GreaterThanSigned>();
     case I32GreaterThanUnsigned::OPCODE:
-        return std::make_shared<I32GreaterThanUnsigned>();
+        return arena.new_object<I32GreaterThanUnsigned>();
     case I32LessEqualSigned::OPCODE:
-        return std::make_shared<I32LessEqualSigned>();
+        return arena.new_object<I32LessEqualSigned>();
     case I32LessEqualUnsigned::OPCODE:
-        return std::make_shared<I32LessEqualUnsigned>();
+        return arena.new_object<I32LessEqualUnsigned>();
     case I32GreaterEqualSigned::OPCODE:
-        return std::make_shared<I32GreaterEqualSigned>();
+        return arena.new_object<I32GreaterEqualSigned>();
     case I32GreaterEqualUnsigned::OPCODE:
-        return std::make_shared<I32GreaterEqualUnsigned>();
+        return arena.new_object<I32GreaterEqualUnsigned>();
     case I64EqualZero::OPCODE:
-        return std::make_shared<I64EqualZero>();
+        return arena.new_object<I64EqualZero>();
     case I64Equal::OPCODE:
-        return std::make_shared<I64Equal>();
+        return arena.new_object<I64Equal>();
     case I64NotEqual::OPCODE:
-        return std::make_shared<I64NotEqual>();
+        return arena.new_object<I64NotEqual>();
     case I64LessThanSigned::OPCODE:
-        return std::make_shared<I64LessThanSigned>();
+        return arena.new_object<I64LessThanSigned>();
     case I64LessThanUnsigned::OPCODE:
-        return std::make_shared<I64LessThanUnsigned>();
+        return arena.new_object<I64LessThanUnsigned>();
     case I64GreaterThanSigned::OPCODE:
-        return std::make_shared<I64GreaterThanSigned>();
+        return arena.new_object<I64GreaterThanSigned>();
     case I64GreaterThanUnsigned::OPCODE:
-        return std::make_shared<I64GreaterThanUnsigned>();
+        return arena.new_object<I64GreaterThanUnsigned>();
     case I64LessEqualSigned::OPCODE:
-        return std::make_shared<I64LessEqualSigned>();
+        return arena.new_object<I64LessEqualSigned>();
     case I64LessEqualUnsigned::OPCODE:
-        return std::make_shared<I64LessEqualUnsigned>();
+        return arena.new_object<I64LessEqualUnsigned>();
     case I64GreaterEqualSigned::OPCODE:
-        return std::make_shared<I64GreaterEqualSigned>();
+        return arena.new_object<I64GreaterEqualSigned>();
     case I64GreaterEqualUnsigned::OPCODE:
-        return std::make_shared<I64GreaterEqualUnsigned>();
+        return arena.new_object<I64GreaterEqualUnsigned>();
     case F32Equal::OPCODE:
-        return std::make_shared<F32Equal>();
+        return arena.new_object<F32Equal>();
     case F32NotEqual::OPCODE:
-        return std::make_shared<F32NotEqual>();
+        return arena.new_object<F32NotEqual>();
     case F32LessThan::OPCODE:
-        return std::make_shared<F32LessThan>();
+        return arena.new_object<F32LessThan>();
     case F32GreaterThan::OPCODE:
-        return std::make_shared<F32GreaterThan>();
+        return arena.new_object<F32GreaterThan>();
     case F32LessEqual::OPCODE:
-        return std::make_shared<F32LessEqual>();
+        return arena.new_object<F32LessEqual>();
     case F32GreaterEqual::OPCODE:
-        return std::make_shared<F32GreaterEqual>();
+        return arena.new_object<F32GreaterEqual>();
     case F64Equal::OPCODE:
-        return std::make_shared<F64Equal>();
+        return arena.new_object<F64Equal>();
     case F64NotEqual::OPCODE:
-        return std::make_shared<F64NotEqual>();
+        return arena.new_object<F64NotEqual>();
     case F64LessThan::OPCODE:
-        return std::make_shared<F64LessThan>();
+        return arena.new_object<F64LessThan>();
     case F64GreaterThan::OPCODE:
-        return std::make_shared<F64GreaterThan>();
+        return arena.new_object<F64GreaterThan>();
     case F64LessEqual::OPCODE:
-        return std::make_shared<F64LessEqual>();
+        return arena.new_object<F64LessEqual>();
     case F64GreaterEqual::OPCODE:
-        return std::make_shared<F64GreaterEqual>();
+        return arena.new_object<F64GreaterEqual>();
     case I32CountLeadingZeros::OPCODE:
-        return std::make_shared<I32CountLeadingZeros>();
+        return arena.new_object<I32CountLeadingZeros>();
     case I32CountTrailingZeros::OPCODE:
-        return std::make_shared<I32CountTrailingZeros>();
+        return arena.new_object<I32CountTrailingZeros>();
     case I32PopCount::OPCODE:
-        return std::make_shared<I32PopCount>();
+        return arena.new_object<I32PopCount>();
     case I32Add::OPCODE:
-        return std::make_shared<I32Add>(addr);
+        return arena.new_object<I32Add>(addr);
     case I32Sub::OPCODE:
-        return std::make_shared<I32Sub>(addr);
+        return arena.new_object<I32Sub>(addr);
     case I32Mul::OPCODE:
-        return std::make_shared<I32Mul>();
+        return arena.new_object<I32Mul>();
     case I32DivideSigned::OPCODE:
-        return std::make_shared<I32DivideSigned>();
+        return arena.new_object<I32DivideSigned>();
     case I32DivideUnsigned::OPCODE:
-        return std::make_shared<I32DivideUnsigned>();
+        return arena.new_object<I32DivideUnsigned>();
     case I32RemainderSigned::OPCODE:
-        return std::make_shared<I32RemainderSigned>();
+        return arena.new_object<I32RemainderSigned>();
     case I32RemainderUnsigned::OPCODE:
-        return std::make_shared<I32RemainderUnsigned>();
+        return arena.new_object<I32RemainderUnsigned>();
     case I32And::OPCODE:
-        return std::make_shared<I32And>();
+        return arena.new_object<I32And>();
     case I32Or::OPCODE:
-        return std::make_shared<I32Or>();
+        return arena.new_object<I32Or>();
     case I32Xor::OPCODE:
-        return std::make_shared<I32Xor>();
+        return arena.new_object<I32Xor>();
     case I32ShiftLeft::OPCODE:
-        return std::make_shared<I32ShiftLeft>();
+        return arena.new_object<I32ShiftLeft>();
     case I32ShiftRightSigned::OPCODE:
-        return std::make_shared<I32ShiftRightSigned>();
+        return arena.new_object<I32ShiftRightSigned>();
     case I32ShiftRightUnsigned::OPCODE:
-        return std::make_shared<I32ShiftRightUnsigned>();
+        return arena.new_object<I32ShiftRightUnsigned>();
     case I32RotateLeft::OPCODE:
-        return std::make_shared<I32RotateLeft>();
+        return arena.new_object<I32RotateLeft>();
     case I32RotateRight::OPCODE:
-        return std::make_shared<I32RotateRight>();
+        return arena.new_object<I32RotateRight>();
     case I64CountLeadingZeros::OPCODE:
-        return std::make_shared<I64CountLeadingZeros>();
+        return arena.new_object<I64CountLeadingZeros>();
     case I64CountTrailingZeros::OPCODE:
-        return std::make_shared<I64CountTrailingZeros>();
+        return arena.new_object<I64CountTrailingZeros>();
     case I64Add::OPCODE:
-        return std::make_shared<I64Add>();
+        return arena.new_object<I64Add>();
     case I64Sub::OPCODE:
-        return std::make_shared<I64Sub>();
+        return arena.new_object<I64Sub>();
     case I64Mul::OPCODE:
-        return std::make_shared<I64Mul>();
+        return arena.new_object<I64Mul>();
     case I64DivideSigned::OPCODE:
-        return std::make_shared<I64DivideSigned>();
+        return arena.new_object<I64DivideSigned>();
     case I64DivideUnsigned::OPCODE:
-        return std::make_shared<I64DivideUnsigned>();
+        return arena.new_object<I64DivideUnsigned>();
     case I64RemainderSigned::OPCODE:
-        return std::make_shared<I64RemainderSigned>();
+        return arena.new_object<I64RemainderSigned>();
     case I64RemainderUnsigned::OPCODE:
-        return std::make_shared<I64RemainderUnsigned>();
+        return arena.new_object<I64RemainderUnsigned>();
     case I64And::OPCODE:
-        return std::make_shared<I64And>();
+        return arena.new_object<I64And>();
     case I64Or::OPCODE:
-        return std::make_shared<I64Or>();
+        return arena.new_object<I64Or>();
     case I64Xor::OPCODE:
-        return std::make_shared<I64Xor>();
+        return arena.new_object<I64Xor>();
     case I64ShiftLeft::OPCODE:
-        return std::make_shared<I64ShiftLeft>();
+        return arena.new_object<I64ShiftLeft>();
     case I64ShiftRightSigned::OPCODE:
-        return std::make_shared<I64ShiftRightSigned>();
+        return arena.new_object<I64ShiftRightSigned>();
     case I64ShiftRightUnsigned::OPCODE:
-        return std::make_shared<I64ShiftRightUnsigned>();
+        return arena.new_object<I64ShiftRightUnsigned>();
     case I64RotateLeft::OPCODE:
-        return std::make_shared<I64RotateLeft>();
+        return arena.new_object<I64RotateLeft>();
     case I64RotateRight::OPCODE:
-        return std::make_shared<I64RotateRight>();
+        return arena.new_object<I64RotateRight>();
     case F32Mul::OPCODE:
-        return std::make_shared<F32Mul>();
+        return arena.new_object<F32Mul>();
     case F32Div::OPCODE:
-        return std::make_shared<F32Div>();
+        return arena.new_object<F32Div>();
     case F64Neg::OPCODE:
-        return std::make_shared<F64Neg>();
+        return arena.new_object<F64Neg>();
     case F64Add::OPCODE:
-        return std::make_shared<F64Add>();
+        return arena.new_object<F64Add>();
     case F64Sub::OPCODE:
-        return std::make_shared<F64Sub>();
+        return arena.new_object<F64Sub>();
     case F64Mul::OPCODE:
-        return std::make_shared<F64Mul>();
+        return arena.new_object<F64Mul>();
     case F64Div::OPCODE:
-        return std::make_shared<F64Div>();
+        return arena.new_object<F64Div>();
     case F64CopySign::OPCODE:
-        return std::make_shared<F64CopySign>();
+        return arena.new_object<F64CopySign>();
     case I32WrapI64::OPCODE:
-        return std::make_shared<I32WrapI64>();
+        return arena.new_object<I32WrapI64>();
     case I64ExtendI32Signed::OPCODE:
-        return std::make_shared<I64ExtendI32Signed>();
+        return arena.new_object<I64ExtendI32Signed>();
     case I64ExtendI32Unsigned::OPCODE:
-        return std::make_shared<I64ExtendI32Unsigned>();
+        return arena.new_object<I64ExtendI32Unsigned>();
     case F32ConvertI32Signed::OPCODE:
-        return std::make_shared<F32ConvertI32Signed>();
+        return arena.new_object<F32ConvertI32Signed>();
     case F32ConvertI32Unsigned::OPCODE:
-        return std::make_shared<F32ConvertI32Unsigned>();
+        return arena.new_object<F32ConvertI32Unsigned>();
     case F32DemoteF64::OPCODE:
-        return std::make_shared<F32DemoteF64>();
+        return arena.new_object<F32DemoteF64>();
     case F64ConvertI32Signed::OPCODE:
-        return std::make_shared<F64ConvertI32Signed>();
+        return arena.new_object<F64ConvertI32Signed>();
     case F64ConvertI32Unsigned::OPCODE:
-        return std::make_shared<F64ConvertI32Unsigned>();
+        return arena.new_object<F64ConvertI32Unsigned>();
     case F64ConvertI64Signed::OPCODE:
-        return std::make_shared<F64ConvertI64Signed>();
+        return arena.new_object<F64ConvertI64Signed>();
     case F64ConvertI64Unsigned::OPCODE:
-        return std::make_shared<F64ConvertI64Unsigned>();
+        return arena.new_object<F64ConvertI64Unsigned>();
     case F64PromoteF32::OPCODE:
-        return std::make_shared<F64PromoteF32>();
+        return arena.new_object<F64PromoteF32>();
     case I32ReinterpretF32::OPCODE:
-        return std::make_shared<I32ReinterpretF32>();
+        return arena.new_object<I32ReinterpretF32>();
     case I64ReinterpretF64::OPCODE:
-        return std::make_shared<I64ReinterpretF64>();
+        return arena.new_object<I64ReinterpretF64>();
     case F32ReinterpretI32::OPCODE:
-        return std::make_shared<F32ReinterpretI32>();
+        return arena.new_object<F32ReinterpretI32>();
     case F64ReinterpretI64::OPCODE:
-        return std::make_shared<F64ReinterpretI64>();
+        return arena.new_object<F64ReinterpretI64>();
     case I32Extend8Signed::OPCODE:
-        return std::make_shared<I32Extend8Signed>();
+        return arena.new_object<I32Extend8Signed>();
     case I32Extend16Signed::OPCODE:
-        return std::make_shared<I32Extend16Signed>();
+        return arena.new_object<I32Extend16Signed>();
     case I64Extend8Signed::OPCODE:
-        return std::make_shared<I64Extend8Signed>();
+        return arena.new_object<I64Extend8Signed>();
     case I64Extend16Signed::OPCODE:
-        return std::make_shared<I64Extend16Signed>();
+        return arena.new_object<I64Extend16Signed>();
     case I64Extend32Signed::OPCODE:
-        return std::make_shared<I64Extend32Signed>();
+        return arena.new_object<I64Extend32Signed>();
     case I32Load::OPCODE: {
         Expected<I32Load> i32_load_exp = I32Load::parse(in, addr);
         if (!i32_load_exp)
             return Unexpected(PROPAGATE(i32_load_exp));
-        return std::make_shared<I32Load>(*i32_load_exp);
+        return arena.new_object<I32Load>(*i32_load_exp);
     }
     case I64Load::OPCODE: {
         Expected<I64Load> i64_load_exp = I64Load::parse(in);
         if (!i64_load_exp)
             return Unexpected(PROPAGATE(i64_load_exp));
-        return std::make_shared<I64Load>(*i64_load_exp);
+        return arena.new_object<I64Load>(*i64_load_exp);
     }
     case F32Load::OPCODE: {
         Expected<F32Load> f32_load_exp = F32Load::parse(in);
         if (!f32_load_exp)
             return Unexpected(PROPAGATE(f32_load_exp));
-        return std::make_shared<F32Load>(*f32_load_exp);
+        return arena.new_object<F32Load>(*f32_load_exp);
     }
     case F64Load::OPCODE: {
         Expected<F64Load> f64_load_exp = F64Load::parse(in);
         if (!f64_load_exp)
             return Unexpected(PROPAGATE(f64_load_exp));
-        return std::make_shared<F64Load>(*f64_load_exp);
+        return arena.new_object<F64Load>(*f64_load_exp);
     }
     case I32Load8Signed::OPCODE: {
         Expected<I32Load8Signed> i32_load8_s_exp = I32Load8Signed::parse(in);
         if (!i32_load8_s_exp)
             return Unexpected(PROPAGATE(i32_load8_s_exp));
-        return std::make_shared<I32Load8Signed>(*i32_load8_s_exp);
+        return arena.new_object<I32Load8Signed>(*i32_load8_s_exp);
     }
     case I32Load8Unsigned::OPCODE: {
         Expected<I32Load8Unsigned> i32_load8_u_exp =
             I32Load8Unsigned::parse(in);
         if (!i32_load8_u_exp)
             return Unexpected(PROPAGATE(i32_load8_u_exp));
-        return std::make_shared<I32Load8Unsigned>(*i32_load8_u_exp);
+        return arena.new_object<I32Load8Unsigned>(*i32_load8_u_exp);
     }
     case I32Load16Signed::OPCODE: {
         Expected<I32Load16Signed> i32_load16_s_exp = I32Load16Signed::parse(in);
         if (!i32_load16_s_exp)
             return Unexpected(PROPAGATE(i32_load16_s_exp));
-        return std::make_shared<I32Load16Signed>(*i32_load16_s_exp);
+        return arena.new_object<I32Load16Signed>(*i32_load16_s_exp);
     }
     case I32Load16Unsigned::OPCODE: {
         Expected<I32Load16Unsigned> i32_load16_u_exp =
             I32Load16Unsigned::parse(in);
         if (!i32_load16_u_exp)
             return Unexpected(PROPAGATE(i32_load16_u_exp));
-        return std::make_shared<I32Load16Unsigned>(*i32_load16_u_exp);
+        return arena.new_object<I32Load16Unsigned>(*i32_load16_u_exp);
     }
     case I64Load8Signed::OPCODE: {
         Expected<I64Load8Signed> i64_load8_s_exp = I64Load8Signed::parse(in);
         if (!i64_load8_s_exp)
             return Unexpected(PROPAGATE(i64_load8_s_exp));
-        return std::make_shared<I64Load8Signed>(*i64_load8_s_exp);
+        return arena.new_object<I64Load8Signed>(*i64_load8_s_exp);
     }
     case I64Load8Unsigned::OPCODE: {
         Expected<I64Load8Unsigned> i64_load8_u_exp =
             I64Load8Unsigned::parse(in);
         if (!i64_load8_u_exp)
             return Unexpected(PROPAGATE(i64_load8_u_exp));
-        return std::make_shared<I64Load8Unsigned>(*i64_load8_u_exp);
+        return arena.new_object<I64Load8Unsigned>(*i64_load8_u_exp);
     }
     case I64Load16Signed::OPCODE: {
         Expected<I64Load16Signed> i64_load16_s_exp = I64Load16Signed::parse(in);
         if (!i64_load16_s_exp)
             return Unexpected(PROPAGATE(i64_load16_s_exp));
-        return std::make_shared<I64Load16Signed>(*i64_load16_s_exp);
+        return arena.new_object<I64Load16Signed>(*i64_load16_s_exp);
     }
     case I64Load16Unsigned::OPCODE: {
         Expected<I64Load16Unsigned> i64_load16_u_exp =
             I64Load16Unsigned::parse(in);
         if (!i64_load16_u_exp)
             return Unexpected(PROPAGATE(i64_load16_u_exp));
-        return std::make_shared<I64Load16Unsigned>(*i64_load16_u_exp);
+        return arena.new_object<I64Load16Unsigned>(*i64_load16_u_exp);
     }
     case I64Load32Signed::OPCODE: {
         Expected<I64Load32Signed> i64_load32_s_exp = I64Load32Signed::parse(in);
         if (!i64_load32_s_exp)
             return Unexpected(PROPAGATE(i64_load32_s_exp));
-        return std::make_shared<I64Load32Signed>(*i64_load32_s_exp);
+        return arena.new_object<I64Load32Signed>(*i64_load32_s_exp);
     }
     case I64Load32Unsigned::OPCODE: {
         Expected<I64Load32Unsigned> i64_load32_u_exp =
             I64Load32Unsigned::parse(in);
         if (!i64_load32_u_exp)
             return Unexpected(PROPAGATE(i64_load32_u_exp));
-        return std::make_shared<I64Load32Unsigned>(*i64_load32_u_exp);
+        return arena.new_object<I64Load32Unsigned>(*i64_load32_u_exp);
     }
     case I32Store::OPCODE: {
         Expected<I32Store> i32_store_exp = I32Store::parse(in, addr);
         if (!i32_store_exp)
             return Unexpected(PROPAGATE(i32_store_exp));
-        return std::make_shared<I32Store>(*i32_store_exp);
+        return arena.new_object<I32Store>(*i32_store_exp);
     }
     case I64Store::OPCODE: {
         Expected<I64Store> i64_store_exp = I64Store::parse(in);
         if (!i64_store_exp)
             return Unexpected(PROPAGATE(i64_store_exp));
-        return std::make_shared<I64Store>(*i64_store_exp);
+        return arena.new_object<I64Store>(*i64_store_exp);
     }
     case F32Store::OPCODE: {
         Expected<F32Store> f32_store_exp = F32Store::parse(in);
         if (!f32_store_exp)
             return Unexpected(PROPAGATE(f32_store_exp));
-        return std::make_shared<F32Store>(*f32_store_exp);
+        return arena.new_object<F32Store>(*f32_store_exp);
     }
     case F64Store::OPCODE: {
         Expected<F64Store> f64_store_exp = F64Store::parse(in);
         if (!f64_store_exp)
             return Unexpected(PROPAGATE(f64_store_exp));
-        return std::make_shared<F64Store>(*f64_store_exp);
+        return arena.new_object<F64Store>(*f64_store_exp);
     }
     case I32Store8::OPCODE: {
         Expected<I32Store8> i32_store8_exp = I32Store8::parse(in);
         if (!i32_store8_exp)
             return Unexpected(PROPAGATE(i32_store8_exp));
-        return std::make_shared<I32Store8>(*i32_store8_exp);
+        return arena.new_object<I32Store8>(*i32_store8_exp);
     }
     case I32Store16::OPCODE: {
         Expected<I32Store16> i32_store16_exp = I32Store16::parse(in);
         if (!i32_store16_exp)
             return Unexpected(PROPAGATE(i32_store16_exp));
-        return std::make_shared<I32Store16>(*i32_store16_exp);
+        return arena.new_object<I32Store16>(*i32_store16_exp);
     }
     case I64Store8::OPCODE: {
         Expected<I64Store8> i64_store8_exp = I64Store8::parse(in);
         if (!i64_store8_exp)
             return Unexpected(PROPAGATE(i64_store8_exp));
-        return std::make_shared<I64Store8>(*i64_store8_exp);
+        return arena.new_object<I64Store8>(*i64_store8_exp);
     }
     case I64Store16::OPCODE: {
         Expected<I64Store16> i64_store16_exp = I64Store16::parse(in);
         if (!i64_store16_exp)
             return Unexpected(PROPAGATE(i64_store16_exp));
-        return std::make_shared<I64Store16>(*i64_store16_exp);
+        return arena.new_object<I64Store16>(*i64_store16_exp);
     }
     case I64Store32::OPCODE: {
         Expected<I64Store32> i64_store32_exp = I64Store32::parse(in);
         if (!i64_store32_exp)
             return Unexpected(PROPAGATE(i64_store32_exp));
-        return std::make_shared<I64Store32>(*i64_store32_exp);
+        return arena.new_object<I64Store32>(*i64_store32_exp);
     }
     case MemoryGrow::OPCODE: {
         Expected<MemoryGrow> memory_grow_exp = MemoryGrow::parse(in, addr);
         if (!memory_grow_exp)
             return Unexpected(PROPAGATE(memory_grow_exp));
-        return std::make_shared<MemoryGrow>(*memory_grow_exp);
+        return arena.new_object<MemoryGrow>(*memory_grow_exp);
     }
     case ExtendedIntstructionBase::OPCODE:
-        return ExtendedIntstructionBase::parse(in, addr);
+        return ExtendedIntstructionBase::parse(in, addr, arena);
     case AtomicIntstructionBase::OPCODE:
-        return AtomicIntstructionBase::parse(in);
+        return AtomicIntstructionBase::parse(in, arena);
     default:
         return Unexpected(ERROR(fmt::format("unknown opcode: {:02X}", opcode)));
     }
 }
 
-Expected<Instruction> ExtendedIntstructionBase::parse(ByteCursor& in,
-                                                      size_t addr) {
+Expected<Instruction> ExtendedIntstructionBase::parse(
+    ByteCursor& in, size_t addr,
+    std::pmr::polymorphic_allocator<std::byte>& arena) {
     uint8_t xop = in.byte();
 
     switch (xop) {
     case I32TruncateSaturateF64Signed::EXT_OPCODE:
-        return std::make_shared<I32TruncateSaturateF64Signed>(addr);
+        return arena.new_object<I32TruncateSaturateF64Signed>(addr);
     case I32TruncateSaturateF64Unsigned::EXT_OPCODE:
-        return std::make_shared<I32TruncateSaturateF64Unsigned>(addr);
+        return arena.new_object<I32TruncateSaturateF64Unsigned>(addr);
     case I64TruncateSaturateF64Signed::EXT_OPCODE:
-        return std::make_shared<I64TruncateSaturateF64Signed>(addr);
+        return arena.new_object<I64TruncateSaturateF64Signed>(addr);
     case MemoryInit::EXT_OPCODE: {
         Expected<MemoryInit> mem_init_exp = MemoryInit::parse(in);
         if (!mem_init_exp)
             return Unexpected(PROPAGATE(mem_init_exp));
-        return std::make_shared<MemoryInit>(*mem_init_exp);
+        return arena.new_object<MemoryInit>(*mem_init_exp);
     }
     case DataDrop::EXT_OPCODE: {
         Expected<DataDrop> data_drop_exp = DataDrop::parse(in);
         if (!data_drop_exp)
             return Unexpected(PROPAGATE(data_drop_exp));
-        return std::make_shared<DataDrop>(*data_drop_exp);
+        return arena.new_object<DataDrop>(*data_drop_exp);
     }
     case MemoryCopy::EXT_OPCODE: {
         Expected<MemoryCopy> mem_copy_exp = MemoryCopy::parse(in);
         if (!mem_copy_exp)
             return Unexpected(PROPAGATE(mem_copy_exp));
-        return std::make_shared<MemoryCopy>(*mem_copy_exp);
+        return arena.new_object<MemoryCopy>(*mem_copy_exp);
     }
     case MemoryFill::EXT_OPCODE: {
         Expected<MemoryFill> mem_fill_exp = MemoryFill::parse(in, addr);
         if (!mem_fill_exp)
             return Unexpected(PROPAGATE(mem_fill_exp));
-        return std::make_shared<MemoryFill>(*mem_fill_exp);
+        return arena.new_object<MemoryFill>(*mem_fill_exp);
     }
     default:
         return Unexpected(ERROR(
@@ -575,7 +580,7 @@ Expected<Instruction> ExtendedIntstructionBase::parse(ByteCursor& in,
 
 Expected<BlockType> BlockType::parse(ByteCursor& in) {
     uint8_t byte = in.peeek();
-    
+
     if (byte == 0x40) {
         /* consume byte */
         in.byte();
@@ -593,7 +598,9 @@ std::string BlockType::toString() const {
     return val_type_opt_.has_value() ? val_type_opt_->toString() : "";
 }
 
-Expected<Block> Block::parse(ByteCursor& in, size_t code_start) {
+Expected<Block>
+Block::parse(ByteCursor& in, size_t code_start,
+             std::pmr::polymorphic_allocator<std::byte>& arena) {
     Expected<BlockType> block_type_exp = BlockType::parse(in);
     if (!block_type_exp)
         return Unexpected(PROPAGATE(block_type_exp));
@@ -601,7 +608,8 @@ Expected<Block> Block::parse(ByteCursor& in, size_t code_start) {
     std::vector<Instruction> instructions;
 
     while (true) {
-        Expected<Instruction> inst_exp = InstructionBase::parse(in, code_start);
+        Expected<Instruction> inst_exp =
+            InstructionBase::parse(in, code_start, arena);
         if (!inst_exp)
             return Unexpected(PROPAGATE(inst_exp));
         const Instruction& inst = *inst_exp;
@@ -625,7 +633,8 @@ std::string Block::toString() const {
     return fmt::format("block\n{}\nend", fmt::join(fmt_instructions, "\n"));
 }
 
-Expected<Loop> Loop::parse(ByteCursor& in, size_t addr, size_t code_start) {
+Expected<Loop> Loop::parse(ByteCursor& in, size_t addr, size_t code_start,
+                           std::pmr::polymorphic_allocator<std::byte>& arena) {
     Expected<BlockType> block_type_exp = BlockType::parse(in);
     if (!block_type_exp)
         return Unexpected(PROPAGATE(block_type_exp));
@@ -633,7 +642,8 @@ Expected<Loop> Loop::parse(ByteCursor& in, size_t addr, size_t code_start) {
     std::vector<Instruction> instructions;
 
     while (true) {
-        Expected<Instruction> inst_exp = InstructionBase::parse(in, code_start);
+        Expected<Instruction> inst_exp =
+            InstructionBase::parse(in, code_start, arena);
         if (!inst_exp)
             return Unexpected(PROPAGATE(inst_exp));
         const Instruction& inst = *inst_exp;
@@ -657,13 +667,15 @@ std::string Loop::toString() const {
     return fmt::format("loop\n{}\nend", fmt::join(fmt_instructions, "\n"));
 }
 
-Expected<IfElse> IfElse::parse(ByteCursor& in, size_t addr,
-                               size_t code_start) {
+Expected<IfElse>
+IfElse::parse(ByteCursor& in, size_t addr, size_t code_start,
+              std::pmr::polymorphic_allocator<std::byte>& arena) {
     Expected<BlockType> block_type_exp = BlockType::parse(in);
     if (!block_type_exp)
         return Unexpected(PROPAGATE(block_type_exp));
 
-    Expected<Expression> then_expr_exp = Expression::parse(in, code_start);
+    Expected<Expression> then_expr_exp =
+        Expression::parse(in, code_start, arena);
     if (!then_expr_exp)
         return Unexpected(PROPAGATE(then_expr_exp));
 
@@ -673,7 +685,8 @@ Expected<IfElse> IfElse::parse(ByteCursor& in, size_t addr,
 
     assert(then_expr.getTerminator()->is<Else>());
 
-    Expected<Expression> else_expr_exp = Expression::parse(in, code_start);
+    Expected<Expression> else_expr_exp =
+        Expression::parse(in, code_start, arena);
     if (!else_expr_exp)
         return Unexpected(PROPAGATE(else_expr_exp));
 
@@ -1227,7 +1240,7 @@ Expected<MemoryCopy> MemoryCopy::parse(ByteCursor& in) {
     uint16_t zero = in.u16_le();
     if (zero != 0)
         return Unexpected(ERROR("invalid trailing bytes"));
-    
+
     return MemoryCopy();
 }
 
@@ -1243,7 +1256,8 @@ Expected<MemoryFill> MemoryFill::parse(ByteCursor& in, size_t addr) {
 /* Atomic Memory Instructions */
 /******************************/
 
-Expected<Instruction> AtomicIntstructionBase::parse(ByteCursor& in) {
+Expected<Instruction> AtomicIntstructionBase::parse(
+    ByteCursor& in, std::pmr::polymorphic_allocator<std::byte>& arena) {
     uint8_t atomic_opcode = in.byte();
 
     switch (atomic_opcode) {
@@ -1251,65 +1265,65 @@ Expected<Instruction> AtomicIntstructionBase::parse(ByteCursor& in) {
         Expected<AtomicNotify> atomic_notify_exp = AtomicNotify::parse(in);
         if (!atomic_notify_exp)
             return Unexpected(PROPAGATE(atomic_notify_exp));
-        return std::make_shared<AtomicNotify>(*atomic_notify_exp);
+        return arena.new_object<AtomicNotify>(*atomic_notify_exp);
     }
     case AtomicWait32::ATOMIC_OPCODE: {
         Expected<AtomicWait32> atomic_wait_32_exp = AtomicWait32::parse(in);
         if (!atomic_wait_32_exp)
             return Unexpected(PROPAGATE(atomic_wait_32_exp));
-        return std::make_shared<AtomicWait32>(*atomic_wait_32_exp);
+        return arena.new_object<AtomicWait32>(*atomic_wait_32_exp);
     }
     case AtomicLoad::ATOMIC_OPCODE: {
         Expected<AtomicLoad> atomic_load_exp = AtomicLoad::parse(in);
         if (!atomic_load_exp)
             return Unexpected(PROPAGATE(atomic_load_exp));
-        return std::make_shared<AtomicLoad>(*atomic_load_exp);
+        return arena.new_object<AtomicLoad>(*atomic_load_exp);
     }
     case AtomicLoad8Unsigned::ATOMIC_OPCODE: {
         Expected<AtomicLoad8Unsigned> atomic_load8_u_exp =
             AtomicLoad8Unsigned::parse(in);
         if (!atomic_load8_u_exp)
             return Unexpected(PROPAGATE(atomic_load8_u_exp));
-        return std::make_shared<AtomicLoad8Unsigned>(*atomic_load8_u_exp);
+        return arena.new_object<AtomicLoad8Unsigned>(*atomic_load8_u_exp);
     }
     case AtomicStore::ATOMIC_OPCODE: {
         Expected<AtomicStore> atomic_store_exp = AtomicStore::parse(in);
         if (!atomic_store_exp)
             return Unexpected(PROPAGATE(atomic_store_exp));
-        return std::make_shared<AtomicStore>(*atomic_store_exp);
+        return arena.new_object<AtomicStore>(*atomic_store_exp);
     }
     case AtomicStore8::ATOMIC_OPCODE: {
         Expected<AtomicStore8> atomic_store8_exp = AtomicStore8::parse(in);
         if (!atomic_store8_exp)
             return Unexpected(PROPAGATE(atomic_store8_exp));
-        return std::make_shared<AtomicStore8>(*atomic_store8_exp);
+        return arena.new_object<AtomicStore8>(*atomic_store8_exp);
     }
     case AtomicAdd::ATOMIC_OPCODE: {
         Expected<AtomicAdd> atomic_add_exp = AtomicAdd::parse(in);
         if (!atomic_add_exp)
             return Unexpected(PROPAGATE(atomic_add_exp));
-        return std::make_shared<AtomicAdd>(*atomic_add_exp);
+        return arena.new_object<AtomicAdd>(*atomic_add_exp);
     }
     case AtomicExchange8Unsigned::ATOMIC_OPCODE: {
         Expected<AtomicExchange8Unsigned> atomic_xchg8_u_exp =
             AtomicExchange8Unsigned::parse(in);
         if (!atomic_xchg8_u_exp)
             return Unexpected(PROPAGATE(atomic_xchg8_u_exp));
-        return std::make_shared<AtomicExchange8Unsigned>(*atomic_xchg8_u_exp);
+        return arena.new_object<AtomicExchange8Unsigned>(*atomic_xchg8_u_exp);
     }
     case AtomicCompareExchange::ATOMIC_OPCODE: {
         Expected<AtomicCompareExchange> atomic_cmpxchg_exp =
             AtomicCompareExchange::parse(in);
         if (!atomic_cmpxchg_exp)
             return Unexpected(PROPAGATE(atomic_cmpxchg_exp));
-        return std::make_shared<AtomicCompareExchange>(*atomic_cmpxchg_exp);
+        return arena.new_object<AtomicCompareExchange>(*atomic_cmpxchg_exp);
     }
     case AtomicCompareExchange8Unsigned::ATOMIC_OPCODE: {
         Expected<AtomicCompareExchange8Unsigned> atomic_cmpxchg8_u_exp =
             AtomicCompareExchange8Unsigned::parse(in);
         if (!atomic_cmpxchg8_u_exp)
             return Unexpected(PROPAGATE(atomic_cmpxchg8_u_exp));
-        return std::make_shared<AtomicCompareExchange8Unsigned>(
+        return arena.new_object<AtomicCompareExchange8Unsigned>(
             *atomic_cmpxchg8_u_exp);
     }
     default:

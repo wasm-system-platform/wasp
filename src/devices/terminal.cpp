@@ -45,7 +45,7 @@ void Terminal::read(std::span<uint8_t> buffer) {
         Result result;
         uint32_t bytes_read;
         uint32_t buffer_size;
-        char *buffer;
+        char* buffer;
     } __attribute__((packed));
 
     if (buffer.size() < sizeof(ReadCommand)) {
@@ -81,7 +81,7 @@ void Terminal::write(std::span<uint8_t> buffer) {
         Result result;
         uint32_t bytes_written;
         uint32_t buffer_size;
-        char *buffer;
+        char* buffer;
     } __attribute__((packed));
 
     if (buffer.size() < sizeof(WriteCommand)) {

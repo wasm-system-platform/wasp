@@ -33,7 +33,8 @@ Continuation Interrupt::action(Instance& instance) {
         Function interrupt_handler =
             kernel.getGlobalState().getFunction(handler_idx_);
 
-        uint32_t port = static_cast<uint32_t>(instance_ctx.getStack().pop().i32);
+        uint32_t port =
+            static_cast<uint32_t>(instance_ctx.getStack().pop().i32);
 
         Context& kernel_ctx = kernel.getActiveContext();
         kernel_ctx.pushI32(static_cast<int32_t>(port));
@@ -144,7 +145,8 @@ Continuation PageFault::action(Instance& instance) {
         // push arguments on the kernel stack
         Kernel& kernel = instance.as<Process>().getKernel();
         Context& kernel_ctx = kernel.getActiveContext();
-        kernel_ctx.pushI32(static_cast<int32_t>(instance.as<Process>().getId()));
+        kernel_ctx.pushI32(
+            static_cast<int32_t>(instance.as<Process>().getId()));
         kernel_ctx.pushI32(faulting_address);
         kernel_ctx.pushI32(access_type);
 

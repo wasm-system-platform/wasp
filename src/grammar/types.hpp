@@ -194,5 +194,6 @@ public:
 private:
     bool is_mutable_;
 
-    GlobalType(ValueType&& val_type, bool is_mutable) : ValueType(std::move(val_type)), is_mutable_(is_mutable) {}
+    GlobalType(ValueType&& val_type, bool is_mutable)
+        : ValueType(std::move(val_type)), is_mutable_(is_mutable) {}
 };

@@ -1,6 +1,7 @@
+#include <memory_resource>
+
 #include <fmt/format.h>
 #include <fmt/ranges.h>
-#include <fstream>
 
 #include "grammar/sections.hpp"
 #include "grammar/types.hpp"
@@ -198,13 +199,15 @@ ImportSection::ImportSection(std::vector<FunctionImport>&& func_imports,
 /* Function Section */
 /********************/
 
-Expected<FunctionSection> FunctionSection::parse(ByteCursor& in) {
+Expected<FunctionSection>
+FunctionSection::parse(ByteCursor& in,
+                       std::pmr::polymorphic_allocator<std::byte>& arena) {
     Expected<U32> len_res = U32::parse(in);
     if (!len_res)
         return Unexpected(PROPAGATE(len_res));
     uint32_t len = static_cast<uint32_t>(*len_res);
 
-    std::vector<uint32_t> type_indices;
+    std::pmr::vector<uint32_t> type_indices(arena);
     type_indices.reserve(len);
 
     for (uint32_t i = 0; i < len; i++) {
@@ -232,7 +235,7 @@ std::string FunctionSection::toString() const {
                        fmt::join(fmt_funcs, "\n"));
 }
 
-FunctionSection::FunctionSection(std::vector<uint32_t>&& type_indices)
+FunctionSection::FunctionSection(std::pmr::vector<uint32_t>&& type_indices)
     : type_indices_(std::move(type_indices)) {}
 
 /*****************/
@@ -278,12 +281,14 @@ TableSection::TableSection(std::vector<TableType>&& tables)
 /* Global Section */
 /******************/
 
-Expected<Global> Global::parse(ByteCursor& in) {
+Expected<Global>
+Global::parse(ByteCursor& in,
+              std::pmr::polymorphic_allocator<std::byte>& arena) {
     Expected<GlobalType> global_type_res = GlobalType::parse(in);
     if (!global_type_res)
         return Unexpected(PROPAGATE(global_type_res));
 
-    Expected<Expression> expr_res = Expression::parse(in, UINT32_MAX);
+    Expected<Expression> expr_res = Expression::parse(in, UINT32_MAX, arena);
     if (!expr_res)
         return Unexpected(PROPAGATE(expr_res));
 
@@ -298,7 +303,9 @@ std::string Global::toString() const {
 Global::Global(const GlobalType& global_type, const Expression& expression)
     : GlobalType(global_type), Expression(expression) {}
 
-Expected<GlobalSection> GlobalSection::parse(ByteCursor& in) {
+Expected<GlobalSection>
+GlobalSection::parse(ByteCursor& in,
+                     std::pmr::polymorphic_allocator<std::byte>& arena) {
     Expected<U32> len_res = U32::parse(in);
     if (!len_res)
         return Unexpected(PROPAGATE(len_res));
@@ -308,7 +315,7 @@ Expected<GlobalSection> GlobalSection::parse(ByteCursor& in) {
     globals.reserve(len);
 
     for (uint32_t i = 0; i < len; i++) {
-        Expected<Global> global_res = Global::parse(in);
+        Expected<Global> global_res = Global::parse(in, arena);
         if (!global_res)
             return Unexpected(PROPAGATE(global_res));
         globals.push_back(*global_res);
@@ -420,7 +427,9 @@ std::string StartSection::toString() const {
 /* Element Section */
 /*******************/
 
-Expected<ElementSegment> ElementSegment::parse(ByteCursor& in) {
+Expected<ElementSegment>
+ElementSegment::parse(ByteCursor& in,
+                      std::pmr::polymorphic_allocator<std::byte>& arena) {
     Expected<U32> bitfield_res = U32::parse(in);
     if (!bitfield_res)
         return Unexpected(PROPAGATE(bitfield_res));
@@ -429,7 +438,7 @@ Expected<ElementSegment> ElementSegment::parse(ByteCursor& in) {
     if (bitfield != 0)
         return Unexpected(ERROR("unsupported element format"));
 
-    Expected<Expression> offset_res = Expression::parse(in, UINT32_MAX);
+    Expected<Expression> offset_res = Expression::parse(in, UINT32_MAX, arena);
     if (!offset_res)
         return Unexpected(PROPAGATE(offset_res));
 
@@ -465,7 +474,9 @@ std::string ElementSegment::toString() const {
                        fmt::join(fmt_func_indices, "\n"));
 }
 
-Expected<ElemenSection> ElemenSection::parse(ByteCursor& in) {
+Expected<ElemenSection>
+ElemenSection::parse(ByteCursor& in,
+                     std::pmr::polymorphic_allocator<std::byte>& arena) {
     Expected<U32> len_res = U32::parse(in);
     if (!len_res)
         return Unexpected(PROPAGATE(len_res));
@@ -475,7 +486,7 @@ Expected<ElemenSection> ElemenSection::parse(ByteCursor& in) {
     elements.reserve(len);
 
     for (uint32_t i = 0; i < len; i++) {
-        Expected<ElementSegment> element_res = ElementSegment::parse(in);
+        Expected<ElementSegment> element_res = ElementSegment::parse(in, arena);
         if (!element_res)
             return Unexpected(PROPAGATE(element_res));
         elements.push_back(*element_res);
@@ -501,7 +512,9 @@ std::string ElemenSection::toString() const {
 /* Code Section */
 /****************/
 
-Expected<Function> Function::parse(ByteCursor& in, size_t code_start) {
+Expected<Function>
+Function::parse(ByteCursor& in, size_t code_start,
+                std::pmr::polymorphic_allocator<std::byte>& arena) {
     Expected<U32> len_res = U32::parse(in);
     if (!len_res)
         return Unexpected(PROPAGATE(len_res));
@@ -526,7 +539,7 @@ Expected<Function> Function::parse(ByteCursor& in, size_t code_start) {
             locals.push_back(local);
     }
 
-    Expected<Expression> body_res = Expression::parse(in, code_start);
+    Expected<Expression> body_res = Expression::parse(in, code_start, arena);
     if (!body_res)
         return Unexpected(PROPAGATE(body_res));
 
@@ -544,13 +557,15 @@ std::string Function::toString() const {
                        body_.toString());
 }
 
-Expected<CodeSection> CodeSection::parse(ByteCursor& in, size_t code_start) {
+Expected<CodeSection>
+CodeSection::parse(ByteCursor& in, size_t code_start,
+                   std::pmr::polymorphic_allocator<std::byte>& arena) {
     Expected<U32> len_res = U32::parse(in);
     if (!len_res)
         return Unexpected(PROPAGATE(len_res));
     uint32_t len = static_cast<uint32_t>(*len_res);
 
-    std::vector<Function> funcs;
+    std::pmr::vector<Function> funcs(arena);
     funcs.reserve(len);
 
     for (uint32_t i = 0; i < len; i++) {
@@ -558,7 +573,7 @@ Expected<CodeSection> CodeSection::parse(ByteCursor& in, size_t code_start) {
         if (!size_res)
             return Unexpected(PROPAGATE(size_res));
 
-        Expected<Function> func_res = Function::parse(in, code_start);
+        Expected<Function> func_res = Function::parse(in, code_start, arena);
         if (!func_res)
             return Unexpected(PROPAGATE(func_res));
         funcs.push_back(*func_res);
@@ -584,12 +599,15 @@ std::string CodeSection::toString() const {
 /* Data Section */
 /****************/
 
-Expected<Segment> Segment::parse(ByteCursor& in) {
+Expected<Segment>
+Segment::parse(ByteCursor& in,
+               std::pmr::polymorphic_allocator<std::byte>& arena) {
     uint8_t mode = in.byte();
 
     std::optional<Expression> offset_opt;
     if (mode == 0x00) {
-        Expected<Expression> offset_exp = Expression::parse(in, UINT32_MAX);
+        Expected<Expression> offset_exp =
+            Expression::parse(in, UINT32_MAX, arena);
         if (!offset_exp)
             return Unexpected(PROPAGATE(offset_exp));
 
@@ -624,17 +642,19 @@ std::string Segment::toString() const {
     return fmt::to_string(buf);
 }
 
-Expected<DataSection> DataSection::parse(ByteCursor& in) {
+Expected<DataSection>
+DataSection::parse(ByteCursor& in,
+                   std::pmr::polymorphic_allocator<std::byte>& arena) {
     Expected<U32> len_res = U32::parse(in);
     if (!len_res)
         return Unexpected(PROPAGATE(len_res));
     uint32_t len = static_cast<uint32_t>(*len_res);
 
-    std::vector<Segment> segments;
+    std::pmr::vector<Segment> segments(arena);
     segments.reserve(len);
 
     for (uint32_t i = 0; i < len; i++) {
-        Expected<Segment> data_res = Segment::parse(in);
+        Expected<Segment> data_res = Segment::parse(in, arena);
         if (!data_res)
             return Unexpected(PROPAGATE(data_res));
 

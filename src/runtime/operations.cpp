@@ -2820,7 +2820,8 @@ Continuation MemoryFill::action(Instance& instance) {
                              : instance.as<Process>().getKernel();
         MemoryManagementUnit& mmu = kernel.getMMU();
         uint32_t faulting_addr;
-        if (!mmu.fill(dst_offset, static_cast<uint8_t>(value), count, faulting_addr)) {
+        if (!mmu.fill(dst_offset, static_cast<uint8_t>(value), count,
+                      faulting_addr)) {
             // repeat the operation after handling the page fault
             context.pushI32(static_cast<int32_t>(dst_offset));
             context.pushI32(value);

@@ -54,9 +54,9 @@ int main(int argc, char** argv) {
         auto result = runtime::Kernel::create(args["kernel"].as<std::string>());
     }
     auto ts_1 = std::chrono::steady_clock::now();
-    auto time_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
-                         ts_1 - ts_0)
-                         .count();
+    auto time_ns =
+        std::chrono::duration_cast<std::chrono::nanoseconds>(ts_1 - ts_0)
+            .count();
 
     std::cout << "[perf] parsing: " << time_ns / 1'000'000.0 << " ms\n";
 

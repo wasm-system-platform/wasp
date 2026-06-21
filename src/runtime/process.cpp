@@ -10,8 +10,7 @@ Process::create(std::span<const uint8_t>& program_bytes, Instance& instance,
                 uint32_t id) {
     ByteCursor in(program_bytes);
 
-    Expected<grammar::Module> module_exp =
-        grammar::Module::parse(in);
+    Expected<grammar::Module> module_exp = grammar::Module::parse(in);
     if (!module_exp)
         return Unexpected(PROPAGATE(module_exp));
 
@@ -67,8 +66,7 @@ Errno Process::clone(uint32_t new_id, std::shared_ptr<Process>& proc_out) {
     return Errno::success;
 }
 
-Expected<Imports>
-Process::createImports(Instance& instance) {
+Expected<Imports> Process::createImports(Instance& instance) {
     auto it = instance.exports_->find("sys_call_handler");
     if (it == instance.exports_->end()) {
         return Unexpected(ERROR("kernel export 'sys_call_handler' not found"));

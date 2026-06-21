@@ -40,7 +40,8 @@ void WebArch::tick() {
 }
 
 template <>
-void WebArch::wait<std::atomic<uint32_t>, uint32_t>(std::atomic<uint32_t>&, uint32_t) {
+void WebArch::wait<std::atomic<uint32_t>, uint32_t>(std::atomic<uint32_t>&,
+                                                    uint32_t) {
 #ifdef __EMSCRIPTEN__
     /* Yield to the browser. */
     emscripten_sleep(1);

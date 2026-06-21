@@ -11,7 +11,7 @@
 namespace grammar {
 
 class InstructionBase;
-using Instruction = std::shared_ptr<InstructionBase>;
+using Instruction = InstructionBase*;
 
 /**************/
 /* Expression */
@@ -19,7 +19,9 @@ using Instruction = std::shared_ptr<InstructionBase>;
 
 struct Expression {
 public:
-    static Expected<Expression> parse(ByteCursor& in, size_t code_start);
+    static Expected<Expression>
+    parse(ByteCursor& in, size_t code_start,
+          std::pmr::polymorphic_allocator<std::byte>& arena);
 
     const std::vector<Instruction>& getInstructions() const {
         return instructions_;
@@ -44,7 +46,9 @@ private:
 
 class InstructionBase {
 public:
-    static Expected<Instruction> parse(ByteCursor& in, size_t code_start);
+    static Expected<Instruction>
+    parse(ByteCursor& in, size_t code_start,
+          std::pmr::polymorphic_allocator<std::byte>& arena);
 
     virtual ~InstructionBase() = default;
 
@@ -75,7 +79,9 @@ class ExtendedIntstructionBase : public InstructionBase {
 public:
     static constexpr uint8_t OPCODE = 0xFC;
 
-    static Expected<Instruction> parse(ByteCursor& in, size_t addr);
+    static Expected<Instruction>
+    parse(ByteCursor& in, size_t addr,
+          std::pmr::polymorphic_allocator<std::byte>& arena);
 
     uint32_t getExtendedOpcode() const { return ext_opcode_; }
 
@@ -134,7 +140,9 @@ class Block : public InstructionBase {
 public:
     static constexpr uint8_t OPCODE = 0x02;
 
-    static Expected<Block> parse(ByteCursor& in, size_t code_start);
+    static Expected<Block>
+    parse(ByteCursor& in, size_t code_start,
+          std::pmr::polymorphic_allocator<std::byte>& arena);
 
     const std::vector<Instruction>& getInstruction() const {
         return instructions_;
@@ -155,8 +163,9 @@ class Loop : public InstructionBase {
 public:
     static constexpr uint8_t OPCODE = 0x03;
 
-    static Expected<Loop> parse(ByteCursor& in, size_t addr,
-                                size_t code_start);
+    static Expected<Loop>
+    parse(ByteCursor& in, size_t addr, size_t code_start,
+          std::pmr::polymorphic_allocator<std::byte>& arena);
 
     const std::vector<Instruction>& getInstruction() const {
         return instructions_;
@@ -178,8 +187,9 @@ class IfElse : public InstructionBase {
 public:
     static constexpr uint8_t OPCODE = 0x04;
 
-    static Expected<IfElse> parse(ByteCursor& in, size_t addr,
-                                  size_t code_start);
+    static Expected<IfElse>
+    parse(ByteCursor& in, size_t addr, size_t code_start,
+          std::pmr::polymorphic_allocator<std::byte>& arena);
 
     const Expression& getThenExpr() const { return then_expr_; }
     const Expression& getElseExpr() const { return *else_expr_; }
@@ -1848,7 +1858,8 @@ class AtomicIntstructionBase : public InstructionBase {
 public:
     static constexpr uint8_t OPCODE = 0xFE;
 
-    static Expected<Instruction> parse(ByteCursor& in);
+    static Expected<Instruction>
+    parse(ByteCursor& in, std::pmr::polymorphic_allocator<std::byte>& arena);
 
     uint32_t getAtomicOpcode() const { return atomic_opcode_; }
 

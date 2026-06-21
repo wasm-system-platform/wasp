@@ -3,8 +3,8 @@
 #include <istream>
 #include <streambuf>
 
-
-/* std::spanstream is not supported everywhere so we have to provide ourselves. */
+/* std::spanstream is not supported everywhere so we have to provide ourselves.
+ */
 class MemoryStreamBuf : public std::streambuf {
 public:
     MemoryStreamBuf(const char* data, std::size_t size) {
@@ -13,11 +13,9 @@ public:
     }
 
 protected:
-    pos_type seekoff(
-        off_type off,
-        std::ios_base::seekdir dir,
-        std::ios_base::openmode which = std::ios_base::in
-    ) override {
+    pos_type
+    seekoff(off_type off, std::ios_base::seekdir dir,
+            std::ios_base::openmode which = std::ios_base::in) override {
         if (!(which & std::ios_base::in)) {
             return pos_type(off_type(-1));
         }
@@ -28,17 +26,17 @@ protected:
         char* next = nullptr;
 
         switch (dir) {
-            case std::ios_base::beg:
-                next = base + off;
-                break;
-            case std::ios_base::cur:
-                next = current + off;
-                break;
-            case std::ios_base::end:
-                next = end + off;
-                break;
-            default:
-                return pos_type(off_type(-1));
+        case std::ios_base::beg:
+            next = base + off;
+            break;
+        case std::ios_base::cur:
+            next = current + off;
+            break;
+        case std::ios_base::end:
+            next = end + off;
+            break;
+        default:
+            return pos_type(off_type(-1));
         }
 
         if (next < base || next > end) {

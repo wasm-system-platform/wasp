@@ -69,7 +69,7 @@ inline Continuation IfElse::impl(IfElse& if_else, Instance& instance,
 
 inline Continuation BranchIf::impl(BranchIf& br_if, Instance& instance,
                                    Continuation next, Value cond) {
-    (void) instance;
+    (void)instance;
 
     TRACE_VERBOSE("[{:3}] {}: br_if --> {}: (cond={}) -> ()",
                   instance.getActiveContext().getEpilogues().size(),
@@ -121,7 +121,7 @@ inline Value LocalTee::impl(LocalTee& local_tee, Instance& instance, Value in) {
 /************************/
 
 inline Value I32Const::impl(I32Const& i32_const, Instance& instance) {
-    (void) instance;
+    (void)instance;
 
     Value out = i32_const.i_;
     TRACE_VERBOSE("[{:3}] {}: i32.const {}: () -> ({})",
@@ -134,8 +134,8 @@ inline Value I32Const::impl(I32Const& i32_const, Instance& instance) {
 
 inline Value I32Add::impl(I32Add& i32_add, Instance& instance, Value lhs,
                           Value rhs) {
-    (void) i32_add;
-    (void) instance;
+    (void)i32_add;
+    (void)instance;
 
     Value out = lhs.i32 + rhs.i32;
     TRACE_VERBOSE("[{:3}] {}: i32.add {}: ({}, {}) -> ({})",
@@ -148,8 +148,8 @@ inline Value I32Add::impl(I32Add& i32_add, Instance& instance, Value lhs,
 
 inline Value I32Sub::impl(I32Sub& i32_sub, Instance& instance, Value lhs,
                           Value rhs) {
-    (void) i32_sub;
-    (void) instance;
+    (void)i32_sub;
+    (void)instance;
 
     Value out = lhs.i32 - rhs.i32;
     TRACE_VERBOSE("[{:3}] {}: i32.sub {}: ({}, {}) -> ({})",
@@ -161,8 +161,8 @@ inline Value I32Sub::impl(I32Sub& i32_sub, Instance& instance, Value lhs,
 }
 
 inline Value F64Neg::impl(F64Neg& f64_neg, Instance& instance, Value in) {
-    (void) f64_neg;
-    (void) instance;
+    (void)f64_neg;
+    (void)instance;
 
     Value out = -in.f64;
     TRACE_VERBOSE("[{:3}] {}: f64.neg {}: ({}) -> ({})",
@@ -175,8 +175,8 @@ inline Value F64Neg::impl(F64Neg& f64_neg, Instance& instance, Value in) {
 
 inline Value F64Add::impl(F64Add& f64_add, Instance& instance, Value lhs,
                           Value rhs) {
-    (void) f64_add;
-    (void) instance;
+    (void)f64_add;
+    (void)instance;
 
     Value out = lhs.f64 + rhs.f64;
     TRACE_VERBOSE("[{:3}] {}: f64.add {}: ({}, {}) -> ({})",
@@ -189,8 +189,8 @@ inline Value F64Add::impl(F64Add& f64_add, Instance& instance, Value lhs,
 
 inline Value F64Sub::impl(F64Sub& f64_sub, Instance& instance, Value lhs,
                           Value rhs) {
-    (void) f64_sub;
-    (void) instance;
+    (void)f64_sub;
+    (void)instance;
 
     Value out = lhs.f64 - rhs.f64;
     TRACE_VERBOSE("[{:3}] {}: f64.sub {}: ({}, {}) -> ({})",
@@ -204,8 +204,8 @@ inline Value F64Sub::impl(F64Sub& f64_sub, Instance& instance, Value lhs,
 inline Value
 F32ConvertI32Unsigned::impl(F32ConvertI32Unsigned& f32_convert_i32_u,
                             Instance& instance, Value in) {
-    (void) f32_convert_i32_u;
-    (void) instance;
+    (void)f32_convert_i32_u;
+    (void)instance;
 
     Value out = static_cast<float>(static_cast<uint32_t>(in.i32));
     TRACE_VERBOSE("[{:3}] {}: f32.convert_i32_u: ({}) -> ({})",
@@ -219,8 +219,8 @@ F32ConvertI32Unsigned::impl(F32ConvertI32Unsigned& f32_convert_i32_u,
 inline Value
 F64ConvertI32Unsigned::impl(F64ConvertI32Unsigned& f64_convert_i32_u,
                             Instance& instance, Value in) {
-    (void) f64_convert_i32_u;
-    (void) instance;
+    (void)f64_convert_i32_u;
+    (void)instance;
 
     Value out = static_cast<double>(static_cast<uint32_t>(in.i32));
     TRACE_VERBOSE("[{:3}] {}: f64.convert_i32_u: ({}) -> ({})",
@@ -233,8 +233,8 @@ F64ConvertI32Unsigned::impl(F64ConvertI32Unsigned& f64_convert_i32_u,
 
 inline Value F64ConvertI64Signed::impl(F64ConvertI64Signed& f64_convert_i64_s,
                                        Instance& instance, Value in) {
-    (void) f64_convert_i64_s;
-    (void) instance;
+    (void)f64_convert_i64_s;
+    (void)instance;
 
     Value out = static_cast<double>(in.i64);
     TRACE_VERBOSE("[{:3}] {}: f64.convert_i64_s: ({}) -> ({})",
@@ -245,9 +245,10 @@ inline Value F64ConvertI64Signed::impl(F64ConvertI64Signed& f64_convert_i64_s,
     return out;
 }
 
-inline Value I32ReinterpretF32::impl(I32ReinterpretF32& i32_reinterpret_f32, Instance& instance, Value in) {
-    (void) i32_reinterpret_f32;
-    (void) instance;
+inline Value I32ReinterpretF32::impl(I32ReinterpretF32& i32_reinterpret_f32,
+                                     Instance& instance, Value in) {
+    (void)i32_reinterpret_f32;
+    (void)instance;
 
     Value out = static_cast<int32_t>(in.f32);
     TRACE_VERBOSE("[{:3}] {}: i32.reinterpret_f32: ({}) -> ({})",
@@ -258,9 +259,10 @@ inline Value I32ReinterpretF32::impl(I32ReinterpretF32& i32_reinterpret_f32, Ins
     return out;
 }
 
-inline Value I64ReinterpretF64::impl(I64ReinterpretF64& i64_reinterpret_f64, Instance& instance, Value in) {
-    (void) i64_reinterpret_f64;
-    (void) instance;
+inline Value I64ReinterpretF64::impl(I64ReinterpretF64& i64_reinterpret_f64,
+                                     Instance& instance, Value in) {
+    (void)i64_reinterpret_f64;
+    (void)instance;
 
     Value out = static_cast<int64_t>(in.f64);
     TRACE_VERBOSE("[{:3}] {}: i64.reinterpret_f64: ({}) -> ({})",
@@ -271,9 +273,10 @@ inline Value I64ReinterpretF64::impl(I64ReinterpretF64& i64_reinterpret_f64, Ins
     return out;
 }
 
-inline Value F32ReinterpretI32::impl(F32ReinterpretI32& f32_reinterpret_i32, Instance& instance, Value in) {
-    (void) f32_reinterpret_i32;
-    (void) instance;
+inline Value F32ReinterpretI32::impl(F32ReinterpretI32& f32_reinterpret_i32,
+                                     Instance& instance, Value in) {
+    (void)f32_reinterpret_i32;
+    (void)instance;
 
     Value out = static_cast<float>(in.i32);
     TRACE_VERBOSE("[{:3}] {}: f32.reinterpret_i32: ({}) -> ({})",
@@ -287,8 +290,8 @@ inline Value F32ReinterpretI32::impl(F32ReinterpretI32& f32_reinterpret_i32, Ins
 inline Value
 F64ConvertI64Unsigned::impl(F64ConvertI64Unsigned& f64_convert_i64_u,
                             Instance& instance, Value in) {
-    (void) f64_convert_i64_u;
-    (void) instance;
+    (void)f64_convert_i64_u;
+    (void)instance;
 
     Value out = static_cast<double>(static_cast<uint64_t>(in.i64));
     TRACE_VERBOSE("[{:3}] {}: f64.convert_i64_u: ({}) -> ({})",
@@ -299,11 +302,10 @@ F64ConvertI64Unsigned::impl(F64ConvertI64Unsigned& f64_convert_i64_u,
     return out;
 }
 
-inline Value
-F64ReinterpretI64::impl(F64ReinterpretI64& f64_reinterpret_i64,
-                            Instance& instance, Value in) {
-    (void) f64_reinterpret_i64;
-    (void) instance;
+inline Value F64ReinterpretI64::impl(F64ReinterpretI64& f64_reinterpret_i64,
+                                     Instance& instance, Value in) {
+    (void)f64_reinterpret_i64;
+    (void)instance;
 
     Value out = static_cast<double>(in.i64);
     TRACE_VERBOSE("[{:3}] {}: f64.reinterpret_i64: ({}) -> ({})",
@@ -317,8 +319,8 @@ F64ReinterpretI64::impl(F64ReinterpretI64& f64_reinterpret_i64,
 inline Value I32TruncateSaturateF64Signed::impl(
     I32TruncateSaturateF64Signed& i32_trunc_sat_f64_s, Instance& instance,
     Value in) {
-    (void) i32_trunc_sat_f64_s;
-    (void) instance;
+    (void)i32_trunc_sat_f64_s;
+    (void)instance;
 
     const double x = in.f64;
 
@@ -346,8 +348,8 @@ inline Value I32TruncateSaturateF64Signed::impl(
 inline Value I32TruncateSaturateF64Unsigned::impl(
     I32TruncateSaturateF64Unsigned& i32_trunc_sat_f64_u, Instance& instance,
     Value in) {
-    (void) i32_trunc_sat_f64_u;
-    (void) instance;
+    (void)i32_trunc_sat_f64_u;
+    (void)instance;
 
     const double x = in.f64;
 
@@ -373,8 +375,8 @@ inline Value I32TruncateSaturateF64Unsigned::impl(
 inline Value I64TruncateSaturateF64Signed::impl(
     I64TruncateSaturateF64Signed& i64_trunc_sat_f64_s, Instance& instance,
     Value in) {
-    (void) i64_trunc_sat_f64_s;
-    (void) instance;
+    (void)i64_trunc_sat_f64_s;
+    (void)instance;
 
     const double x = in.f64;
 

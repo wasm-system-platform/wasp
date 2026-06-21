@@ -3,7 +3,6 @@
 #include "fmt/format.h"
 #include "grammar/values.hpp"
 
-
 Expected<S32> S32::parse(ByteCursor& in) {
     uint32_t result = 0;
     int shift = 0;
@@ -125,9 +124,10 @@ Expected<Name> Name::parse(ByteCursor& in) {
 
     uint32_t len = *u32_exp;
     std::span<const uint8_t> bytes = in.read(len);
-    
+
     if (in.bad())
         return Unexpected(ERROR("invalid name"));
 
-    return Name(std::string_view(reinterpret_cast<const char*>(bytes.data()), bytes.size()));
+    return Name(std::string_view(reinterpret_cast<const char*>(bytes.data()),
+                                 bytes.size()));
 }

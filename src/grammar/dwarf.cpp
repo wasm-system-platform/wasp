@@ -26,11 +26,13 @@ Expected<DebugLineSection> DebugLineSection::parse(ByteCursor& in) {
     std::vector<Segment> segments;
 
     while (!in.eof()) {
-        std::span<const uint8_t> header_bytes = in.read(sizeof(CompilationUnitHeader));
+        std::span<const uint8_t> header_bytes =
+            in.read(sizeof(CompilationUnitHeader));
         if (in.bad())
             return Unexpected(ERROR("broken stream"));
 
-        const CompilationUnitHeader* header = reinterpret_cast<const CompilationUnitHeader*>(header_bytes.data());
+        const CompilationUnitHeader* header =
+            reinterpret_cast<const CompilationUnitHeader*>(header_bytes.data());
         size_t header_end = in.offset();
 
         if (header->version != 2)
@@ -50,7 +52,8 @@ Expected<DebugLineSection> DebugLineSection::parse(ByteCursor& in) {
         std::vector<std::string>& cu_src_files = *unit_source_files_exp;
 
         while (true) {
-            if (in.offset() + sizeof(CompilationUnitHeader) - header_end >= header->length)
+            if (in.offset() + sizeof(CompilationUnitHeader) - header_end >=
+                header->length)
                 break;
 
             State state;
@@ -93,7 +96,8 @@ Expected<DebugLineSection> DebugLineSection::parse(ByteCursor& in) {
                 Segment s;
                 s.start_addr = a.address;
                 s.end_addr = b.address;
-                s.src_file_idx = src_files.size() + static_cast<size_t>(a.file) - 1;
+                s.src_file_idx =
+                    src_files.size() + static_cast<size_t>(a.file) - 1;
                 s.line = a.line;
 
                 segments.push_back(s);
@@ -170,8 +174,8 @@ DebugLineSection::parse_source_files(ByteCursor& in) {
 }
 
 Expected<void> DebugLineSection::handle_standard_opcode(
-    ByteCursor& in, uint8_t op, const CompilationUnitHeader& header, State& state,
-    std::vector<State>& states) {
+    ByteCursor& in, uint8_t op, const CompilationUnitHeader& header,
+    State& state, std::vector<State>& states) {
     switch (static_cast<DebugLineSectionOpcodes>(op)) {
     case DebugLineSectionOpcodes::copy: {
         states.push_back(state);
@@ -240,9 +244,9 @@ Expected<void> DebugLineSection::handle_special_opcode(
     return {};
 }
 
-Expected<bool> DebugLineSection::handle_extended_opcode(
-    ByteCursor& in, State& state,
-    std::vector<State>& states) {
+Expected<bool>
+DebugLineSection::handle_extended_opcode(ByteCursor& in, State& state,
+                                         std::vector<State>& states) {
     Expected<U64> length_exp = U64::parse(in);
     if (!length_exp)
         return Unexpected(PROPAGATE(length_exp));
