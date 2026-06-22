@@ -14,7 +14,7 @@ struct Checkpoint {
     std::array<uint8_t, 12> nonce;
     std::array<uint8_t, 16> tag;
     uint32_t confidential_size;
-    uint8_t* confidential;
+    uint8_t confidential[];
 };
 
 class Encoder {
