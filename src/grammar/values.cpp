@@ -60,10 +60,10 @@ Expected<S64> S64::parse(ByteCursor& in) {
             if (in.bad())
                 return Unexpected(ERROR("broken reader"));
 
-            if ((byte & 0x40) != 0 && shift < 32)
+            if ((byte & 0x40) != 0 && shift < 64)
                 result |= (~uint64_t{0}) << shift;
 
-            return S64(static_cast<int32_t>(result));
+            return S64(static_cast<int64_t>(result));
         }
     }
 

@@ -142,7 +142,7 @@ DebugLineSection::parse_source_files(ByteCursor& in) {
 
     std::string file_buffer;
     while (!in.bad()) {
-        char c = static_cast<char>(in.bad());
+        char c = static_cast<char>(in.byte());
 
         if (c == '\0') {
             if (file_buffer.empty())
@@ -167,7 +167,7 @@ DebugLineSection::parse_source_files(ByteCursor& in) {
         }
     }
 
-    if (!in.bad())
+    if (in.bad())
         return Unexpected(ERROR("broken stream"));
 
     return source_files;
