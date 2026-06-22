@@ -12,10 +12,11 @@ Function::Function(Operation&& body, size_t num_params,
 
 Function Function::create(const FunctionType& type,
                           const std::vector<FunctionType>& types,
-                          const grammar::Function& func) {
+                          const grammar::Function& func,
+                          std::pmr::polymorphic_allocator<std::byte>& arena) {
     Operations targets;
-    Operation body =
-        OperationBase::create(func.getBody().getInstructions(), types, targets);
+    Operation body = OperationBase::create(func.getBody().getInstructions(),
+                                           types, targets, arena);
     size_t num_params = type.getParamTypes().getValueTypes().size();
 
     std::vector<Value> locals(num_params);

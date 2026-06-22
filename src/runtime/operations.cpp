@@ -9,6 +9,16 @@
 #include "runtime/optimization.hpp"
 #include "runtime/vm.hpp"
 
+namespace std::pmr {
+
+template <class T, class... Args>
+std::shared_ptr<T> make_shared(std::pmr::polymorphic_allocator<std::byte>& a,
+                               Args&&... args) {
+    return std::allocate_shared<T>(a, std::forward<Args>(args)...);
+}
+
+}; // namespace std::pmr
+
 namespace runtime {
 
 using hw::mem::VIRT_MEMORY;
@@ -16,7 +26,8 @@ using hw::mem::VIRT_MEMORY;
 Operation
 OperationBase::create(const std::vector<grammar::Instruction>& instructions,
                       const std::vector<FunctionType>& func_types,
-                      std::vector<Operation>& targets) {
+                      std::vector<Operation>& targets,
+                      std::pmr::polymorphic_allocator<std::byte>& arena) {
     Builder builder;
 
     for (size_t i = 0; i < instructions.size(); ++i) {
@@ -28,467 +39,493 @@ OperationBase::create(const std::vector<grammar::Instruction>& instructions,
         switch (opcode) {
         // Control Instructions
         case grammar::Unreachable::OPCODE:
-            next =
-                std::make_shared<Unreachable>(inst->as<grammar::Unreachable>());
+            next = std::pmr::make_shared<Unreachable>(
+                arena, inst->as<grammar::Unreachable>());
             break;
         case grammar::Nop::OPCODE:
             next = std::make_shared<Nop>(inst->as<grammar::Nop>());
             break;
         case grammar::Block::OPCODE:
-            next = std::make_shared<Block>(inst->as<grammar::Block>(),
-                                           func_types, targets);
+            next = std::pmr::make_shared<Block>(
+                arena, inst->as<grammar::Block>(), func_types, targets, arena);
             break;
         case grammar::Loop::OPCODE:
-            next = std::make_shared<Loop>(inst->as<grammar::Loop>(), func_types,
-                                          targets);
+            next = std::pmr::make_shared<Loop>(arena, inst->as<grammar::Loop>(),
+                                               func_types, targets, arena);
             break;
         case grammar::IfElse::OPCODE: {
             grammar::IfElse if_else_inst = inst->as<grammar::IfElse>();
 
             if (if_else_inst.hasElseExpression())
-                next =
-                    std::make_shared<IfElse>(if_else_inst, func_types, targets);
+                next = std::pmr::make_shared<IfElse>(
+                    arena, if_else_inst, func_types, targets, arena);
             else
-                next =
-                    std::make_shared<IfThen>(if_else_inst, func_types, targets);
+                next = std::pmr::make_shared<IfThen>(
+                    arena, if_else_inst, func_types, targets, arena);
 
             break;
         }
         case grammar::Branch::OPCODE:
-            next =
-                std::make_shared<Branch>(inst->as<grammar::Branch>(), targets);
+            next = std::pmr::make_shared<Branch>(
+                arena, inst->as<grammar::Branch>(), targets);
             break;
         case grammar::BranchIf::OPCODE:
-            next = std::make_shared<BranchIf>(inst->as<grammar::BranchIf>(),
-                                              targets);
+            next = std::pmr::make_shared<BranchIf>(
+                arena, inst->as<grammar::BranchIf>(), targets);
             break;
         case grammar::BranchTable::OPCODE:
-            next = std::make_shared<BranchTable>(
-                inst->as<grammar::BranchTable>(), targets);
+            next = std::pmr::make_shared<BranchTable>(
+                arena, inst->as<grammar::BranchTable>(), targets);
             break;
         case grammar::Call::OPCODE:
-            next = std::make_shared<Call>(inst->as<grammar::Call>());
+            next = std::pmr::make_shared<Call>(arena, inst->as<grammar::Call>(),
+                                               arena);
             break;
         case grammar::CallIndirect::OPCODE:
-            next = std::make_shared<CallIndirect>(
-                inst->as<grammar::CallIndirect>(), func_types);
+            next = std::pmr::make_shared<CallIndirect>(
+                arena, inst->as<grammar::CallIndirect>(), func_types);
             break;
         case grammar::Return::OPCODE:
-            next = std::make_shared<Return>();
+            next = std::pmr::make_shared<Return>(arena);
             break;
         // Parametric Instructions
         case grammar::Drop::OPCODE:
-            next = std::make_shared<Drop>(inst->as<grammar::Drop>());
+            next =
+                std::pmr::make_shared<Drop>(arena, inst->as<grammar::Drop>());
             break;
         case grammar::Select::OPCODE:
-            next = std::make_shared<Select>();
+            next = std::pmr::make_shared<Select>(arena);
             break;
         // Variable Instruction
         case grammar::LocalGet::OPCODE:
-            next = std::make_shared<LocalGet>(inst->as<grammar::LocalGet>());
+            next = std::pmr::make_shared<LocalGet>(
+                arena, inst->as<grammar::LocalGet>());
             break;
         case grammar::LocalSet::OPCODE:
-            next = std::make_shared<LocalSet>(inst->as<grammar::LocalSet>());
+            next = std::pmr::make_shared<LocalSet>(
+                arena, inst->as<grammar::LocalSet>());
             break;
         case grammar::LocalTee::OPCODE:
-            next = std::make_shared<LocalTee>(inst->as<grammar::LocalTee>());
+            next = std::pmr::make_shared<LocalTee>(
+                arena, inst->as<grammar::LocalTee>());
             break;
         case grammar::GlobalGet::OPCODE:
-            next = std::make_shared<GlobalGet>(inst->as<grammar::GlobalGet>());
+            next = std::pmr::make_shared<GlobalGet>(
+                arena, inst->as<grammar::GlobalGet>());
             break;
         case grammar::GlobalSet::OPCODE:
-            next = std::make_shared<GlobalSet>(inst->as<grammar::GlobalSet>());
+            next = std::pmr::make_shared<GlobalSet>(
+                arena, inst->as<grammar::GlobalSet>());
             break;
         // Numeric Instructions
         case grammar::I32Const::OPCODE:
-            next = std::make_shared<I32Const>(inst->as<grammar::I32Const>());
+            next = std::pmr::make_shared<I32Const>(
+                arena, inst->as<grammar::I32Const>());
             break;
         case grammar::I64Const::OPCODE:
-            next = std::make_shared<I64Const>(inst->as<grammar::I64Const>());
+            next = std::pmr::make_shared<I64Const>(
+                arena, inst->as<grammar::I64Const>());
             break;
         case grammar::F32Const::OPCODE:
-            next = std::make_shared<F32Const>(inst->as<grammar::F32Const>());
+            next = std::pmr::make_shared<F32Const>(
+                arena, inst->as<grammar::F32Const>());
             break;
         case grammar::F64Const::OPCODE:
-            next = std::make_shared<F64Const>(inst->as<grammar::F64Const>());
+            next = std::pmr::make_shared<F64Const>(
+                arena, inst->as<grammar::F64Const>());
             break;
         case grammar::I32EqualZero::OPCODE:
-            next = std::make_shared<I32EqualZero>();
+            next = std::pmr::make_shared<I32EqualZero>(arena);
             break;
         case grammar::I32Equal::OPCODE:
-            next = std::make_shared<I32Equal>();
+            next = std::pmr::make_shared<I32Equal>(arena);
             break;
         case grammar::I32NotEqual::OPCODE:
-            next = std::make_shared<I32NotEqual>();
+            next = std::pmr::make_shared<I32NotEqual>(arena);
             break;
         case grammar::I32LessThanSigned::OPCODE:
-            next = std::make_shared<I32LessThanSigned>();
+            next = std::pmr::make_shared<I32LessThanSigned>(arena);
             break;
         case grammar::I32LessThanUnsigned::OPCODE:
-            next = std::make_shared<I32LessThanUnsigned>();
+            next = std::pmr::make_shared<I32LessThanUnsigned>(arena);
             break;
         case grammar::I32GreaterThanSigned::OPCODE:
-            next = std::make_shared<I32GreaterThanSigned>();
+            next = std::pmr::make_shared<I32GreaterThanSigned>(arena);
             break;
         case grammar::I32GreaterThanUnsigned::OPCODE:
-            next = std::make_shared<I32GreaterThanUnsigned>();
+            next = std::pmr::make_shared<I32GreaterThanUnsigned>(arena);
             break;
         case grammar::I32LessEqualSigned::OPCODE:
-            next = std::make_shared<I32LessEqualSigned>();
+            next = std::pmr::make_shared<I32LessEqualSigned>(arena);
             break;
         case grammar::I32LessEqualUnsigned::OPCODE:
-            next = std::make_shared<I32LessEqualUnsigned>();
+            next = std::pmr::make_shared<I32LessEqualUnsigned>(arena);
             break;
         case grammar::I32GreaterEqualSigned::OPCODE:
-            next = std::make_shared<I32GreaterEqualSigned>();
+            next = std::pmr::make_shared<I32GreaterEqualSigned>(arena);
             break;
         case grammar::I32GreaterEqualUnsigned::OPCODE:
-            next = std::make_shared<I32GreaterEqualUnsigned>();
+            next = std::pmr::make_shared<I32GreaterEqualUnsigned>(arena);
             break;
         case grammar::I64EqualZero::OPCODE:
-            next = std::make_shared<I64EqualZero>();
+            next = std::pmr::make_shared<I64EqualZero>(arena);
             break;
         case grammar::I64Equal::OPCODE:
-            next = std::make_shared<I64Equal>();
+            next = std::pmr::make_shared<I64Equal>(arena);
             break;
         case grammar::I64NotEqual::OPCODE:
-            next = std::make_shared<I64NotEqual>();
+            next = std::pmr::make_shared<I64NotEqual>(arena);
             break;
         case grammar::I64LessThanSigned::OPCODE:
-            next = std::make_shared<I64LessThanSigned>();
+            next = std::pmr::make_shared<I64LessThanSigned>(arena);
             break;
         case grammar::I64LessThanUnsigned::OPCODE:
-            next = std::make_shared<I64LessThanUnsigned>();
+            next = std::pmr::make_shared<I64LessThanUnsigned>(arena);
             break;
         case grammar::I64GreaterThanSigned::OPCODE:
-            next = std::make_shared<I64GreaterThanSigned>();
+            next = std::pmr::make_shared<I64GreaterThanSigned>(arena);
             break;
         case grammar::I64GreaterThanUnsigned::OPCODE:
-            next = std::make_shared<I64GreaterThanUnsigned>();
+            next = std::pmr::make_shared<I64GreaterThanUnsigned>(arena);
             break;
         case grammar::I64LessEqualSigned::OPCODE:
-            next = std::make_shared<I64LessEqualSigned>();
+            next = std::pmr::make_shared<I64LessEqualSigned>(arena);
             break;
         case grammar::I64LessEqualUnsigned::OPCODE:
-            next = std::make_shared<I64LessEqualUnsigned>();
+            next = std::pmr::make_shared<I64LessEqualUnsigned>(arena);
             break;
         case grammar::I64GreaterEqualSigned::OPCODE:
-            next = std::make_shared<I64GreaterEqualSigned>();
+            next = std::pmr::make_shared<I64GreaterEqualSigned>(arena);
             break;
         case grammar::I64GreaterEqualUnsigned::OPCODE:
-            next = std::make_shared<I64GreaterEqualUnsigned>();
+            next = std::pmr::make_shared<I64GreaterEqualUnsigned>(arena);
             break;
         case grammar::F32Equal::OPCODE:
-            next = std::make_shared<F32Equal>();
+            next = std::pmr::make_shared<F32Equal>(arena);
             break;
         case grammar::F32NotEqual::OPCODE:
-            next = std::make_shared<F32NotEqual>();
+            next = std::pmr::make_shared<F32NotEqual>(arena);
             break;
         case grammar::F32LessThan::OPCODE:
-            next = std::make_shared<F32LessThan>();
+            next = std::pmr::make_shared<F32LessThan>(arena);
             break;
         case grammar::F32GreaterThan::OPCODE:
-            next = std::make_shared<F32GreaterThan>();
+            next = std::pmr::make_shared<F32GreaterThan>(arena);
             break;
         case grammar::F32LessEqual::OPCODE:
-            next = std::make_shared<F32LessEqual>();
+            next = std::pmr::make_shared<F32LessEqual>(arena);
             break;
         case grammar::F32GreaterEqual::OPCODE:
-            next = std::make_shared<F32GreaterEqual>();
+            next = std::pmr::make_shared<F32GreaterEqual>(arena);
             break;
         case grammar::F64Equal::OPCODE:
-            next = std::make_shared<F64Equal>();
+            next = std::pmr::make_shared<F64Equal>(arena);
             break;
         case grammar::F64NotEqual::OPCODE:
-            next = std::make_shared<F64NotEqual>();
+            next = std::pmr::make_shared<F64NotEqual>(arena);
             break;
         case grammar::F64LessThan::OPCODE:
-            next = std::make_shared<F64LessThan>();
+            next = std::pmr::make_shared<F64LessThan>(arena);
             break;
         case grammar::F64GreaterThan::OPCODE:
-            next = std::make_shared<F64GreaterThan>();
+            next = std::pmr::make_shared<F64GreaterThan>(arena);
             break;
         case grammar::F64LessEqual::OPCODE:
-            next = std::make_shared<F64LessEqual>();
+            next = std::pmr::make_shared<F64LessEqual>(arena);
             break;
         case grammar::F64GreaterEqual::OPCODE:
-            next = std::make_shared<F64GreaterEqual>();
+            next = std::pmr::make_shared<F64GreaterEqual>(arena);
             break;
         case grammar::I32CountLeadingZeros::OPCODE:
-            next = std::make_shared<I32CountLeadingZeros>();
+            next = std::pmr::make_shared<I32CountLeadingZeros>(arena);
             break;
         case grammar::I32CountTrailingZeros::OPCODE:
-            next = std::make_shared<I32CountTrailingZeros>();
+            next = std::pmr::make_shared<I32CountTrailingZeros>(arena);
             break;
         case grammar::I32PopCount::OPCODE:
-            next = std::make_shared<I32PopCount>();
+            next = std::pmr::make_shared<I32PopCount>(arena);
             break;
         case grammar::I32Add::OPCODE:
-            next = std::make_shared<I32Add>(inst->as<grammar::I32Add>());
+            next = std::pmr::make_shared<I32Add>(arena,
+                                                 inst->as<grammar::I32Add>());
             break;
         case grammar::I32Sub::OPCODE:
-            next = std::make_shared<I32Sub>(inst->as<grammar::I32Sub>());
+            next = std::pmr::make_shared<I32Sub>(arena,
+                                                 inst->as<grammar::I32Sub>());
             break;
         case grammar::I32Mul::OPCODE:
-            next = std::make_shared<I32Mul>();
+            next = std::pmr::make_shared<I32Mul>(arena);
             break;
         case grammar::I32DivideSigned::OPCODE:
-            next = std::make_shared<I32DivideSigned>();
+            next = std::pmr::make_shared<I32DivideSigned>(arena);
             break;
         case grammar::I32DivideUnsigned::OPCODE:
-            next = std::make_shared<I32DivideUnsigned>();
+            next = std::pmr::make_shared<I32DivideUnsigned>(arena);
             break;
         case grammar::I32RemainderSigned::OPCODE:
-            next = std::make_shared<I32RemainderSigned>();
+            next = std::pmr::make_shared<I32RemainderSigned>(arena);
             break;
         case grammar::I32RemainderUnsigned::OPCODE:
-            next = std::make_shared<I32RemainderUnsigned>();
+            next = std::pmr::make_shared<I32RemainderUnsigned>(arena);
             break;
         case grammar::I32And::OPCODE:
-            next = std::make_shared<I32And>();
+            next = std::pmr::make_shared<I32And>(arena);
             break;
         case grammar::I32Or::OPCODE:
-            next = std::make_shared<I32Or>();
+            next = std::pmr::make_shared<I32Or>(arena);
             break;
         case grammar::I32Xor::OPCODE:
-            next = std::make_shared<I32Xor>();
+            next = std::pmr::make_shared<I32Xor>(arena);
             break;
         case grammar::I32ShiftLeft::OPCODE:
-            next = std::make_shared<I32ShiftLeft>();
+            next = std::pmr::make_shared<I32ShiftLeft>(arena);
             break;
         case grammar::I32ShiftRightSigned::OPCODE:
-            next = std::make_shared<I32ShiftRightSigned>();
+            next = std::pmr::make_shared<I32ShiftRightSigned>(arena);
             break;
         case grammar::I32ShiftRightUnsigned::OPCODE:
-            next = std::make_shared<I32ShiftRightUnsigned>();
+            next = std::pmr::make_shared<I32ShiftRightUnsigned>(arena);
             break;
         case grammar::I32RotateLeft::OPCODE:
-            next = std::make_shared<I32RotateLeft>();
+            next = std::pmr::make_shared<I32RotateLeft>(arena);
             break;
         case grammar::I32RotateRight::OPCODE:
-            next = std::make_shared<I32RotateRight>();
+            next = std::pmr::make_shared<I32RotateRight>(arena);
             break;
         case grammar::I64CountLeadingZeros::OPCODE:
-            next = std::make_shared<I64CountLeadingZeros>();
+            next = std::pmr::make_shared<I64CountLeadingZeros>(arena);
             break;
         case grammar::I64CountTrailingZeros::OPCODE:
-            next = std::make_shared<I64CountTrailingZeros>();
+            next = std::pmr::make_shared<I64CountTrailingZeros>(arena);
             break;
         case grammar::I64Add::OPCODE:
-            next = std::make_shared<I64Add>();
+            next = std::pmr::make_shared<I64Add>(arena);
             break;
         case grammar::I64Sub::OPCODE:
-            next = std::make_shared<I64Sub>();
+            next = std::pmr::make_shared<I64Sub>(arena);
             break;
         case grammar::I64Mul::OPCODE:
-            next = std::make_shared<I64Mul>();
+            next = std::pmr::make_shared<I64Mul>(arena);
             break;
         case grammar::I64DivideSigned::OPCODE:
-            next = std::make_shared<I64DivideSigned>();
+            next = std::pmr::make_shared<I64DivideSigned>(arena);
             break;
         case grammar::I64DivideUnsigned::OPCODE:
-            next = std::make_shared<I64DivideUnsigned>();
+            next = std::pmr::make_shared<I64DivideUnsigned>(arena);
             break;
         case grammar::I64RemainderSigned::OPCODE:
-            next = std::make_shared<I64RemainderSigned>();
+            next = std::pmr::make_shared<I64RemainderSigned>(arena);
             break;
         case grammar::I64RemainderUnsigned::OPCODE:
-            next = std::make_shared<I64RemainderUnsigned>();
+            next = std::pmr::make_shared<I64RemainderUnsigned>(arena);
             break;
         case grammar::I64And::OPCODE:
-            next = std::make_shared<I64And>();
+            next = std::pmr::make_shared<I64And>(arena);
             break;
         case grammar::I64Or::OPCODE:
-            next = std::make_shared<I64Or>();
+            next = std::pmr::make_shared<I64Or>(arena);
             break;
         case grammar::I64Xor::OPCODE:
-            next = std::make_shared<I64Xor>();
+            next = std::pmr::make_shared<I64Xor>(arena);
             break;
         case grammar::I64ShiftLeft::OPCODE:
-            next = std::make_shared<I64ShiftLeft>();
+            next = std::pmr::make_shared<I64ShiftLeft>(arena);
             break;
         case grammar::I64ShiftRightSigned::OPCODE:
-            next = std::make_shared<I64ShiftRightSigned>();
+            next = std::pmr::make_shared<I64ShiftRightSigned>(arena);
             break;
         case grammar::I64ShiftRightUnsigned::OPCODE:
-            next = std::make_shared<I64ShiftRightUnsigned>();
+            next = std::pmr::make_shared<I64ShiftRightUnsigned>(arena);
             break;
         case grammar::I64RotateLeft::OPCODE:
-            next = std::make_shared<I64RotateLeft>();
+            next = std::pmr::make_shared<I64RotateLeft>(arena);
             break;
         case grammar::I64RotateRight::OPCODE:
-            next = std::make_shared<I64RotateRight>();
+            next = std::pmr::make_shared<I64RotateRight>(arena);
             break;
         case grammar::F32Mul::OPCODE:
-            next = std::make_shared<F32Mul>();
+            next = std::pmr::make_shared<F32Mul>(arena);
             break;
         case grammar::F32Div::OPCODE:
-            next = std::make_shared<F32Div>();
+            next = std::pmr::make_shared<F32Div>(arena);
             break;
         case grammar::F64Neg::OPCODE:
-            next = std::make_shared<F64Neg>(inst->as<grammar::F64Neg>());
+            next = std::pmr::make_shared<F64Neg>(arena,
+                                                 inst->as<grammar::F64Neg>());
             break;
         case grammar::F64Add::OPCODE:
-            next = std::make_shared<F64Add>(inst->as<grammar::F64Add>());
+            next = std::pmr::make_shared<F64Add>(arena,
+                                                 inst->as<grammar::F64Add>());
             break;
         case grammar::F64Sub::OPCODE:
-            next = std::make_shared<F64Sub>(inst->as<grammar::F64Sub>());
+            next = std::pmr::make_shared<F64Sub>(arena,
+                                                 inst->as<grammar::F64Sub>());
             break;
         case grammar::F64Mul::OPCODE:
-            next = std::make_shared<F64Mul>();
+            next = std::pmr::make_shared<F64Mul>(arena);
             break;
         case grammar::F64Div::OPCODE:
-            next = std::make_shared<F64Div>();
+            next = std::pmr::make_shared<F64Div>(arena);
             break;
         case grammar::F64CopySign::OPCODE:
-            next = std::make_shared<F64CopySign>();
+            next = std::pmr::make_shared<F64CopySign>(arena);
             break;
         case grammar::I32WrapI64::OPCODE:
-            next = std::make_shared<I32WrapI64>();
+            next = std::pmr::make_shared<I32WrapI64>(arena);
             break;
         case grammar::I64ExtendI32Signed::OPCODE:
-            next = std::make_shared<I64ExtendI32Signed>();
+            next = std::pmr::make_shared<I64ExtendI32Signed>(arena);
             break;
         case grammar::I64ExtendI32Unsigned::OPCODE:
-            next = std::make_shared<I64ExtendI32Unsigned>();
+            next = std::pmr::make_shared<I64ExtendI32Unsigned>(arena);
             break;
         case grammar::F32ConvertI32Signed::OPCODE:
-            next = std::make_shared<F32ConvertI32Signed>();
+            next = std::pmr::make_shared<F32ConvertI32Signed>(arena);
             break;
         case grammar::F32ConvertI32Unsigned::OPCODE:
-            next = std::make_shared<F32ConvertI32Unsigned>();
+            next = std::pmr::make_shared<F32ConvertI32Unsigned>(arena);
             break;
         case grammar::F32DemoteF64::OPCODE:
-            next = std::make_shared<F32DemoteF64>();
+            next = std::pmr::make_shared<F32DemoteF64>(arena);
             break;
         case grammar::F64ConvertI32Signed::OPCODE:
-            next = std::make_shared<F64ConvertI32Signed>();
+            next = std::pmr::make_shared<F64ConvertI32Signed>(arena);
             break;
         case grammar::F64ConvertI32Unsigned::OPCODE:
-            next = std::make_shared<F64ConvertI32Unsigned>();
+            next = std::pmr::make_shared<F64ConvertI32Unsigned>(arena);
             break;
         case grammar::F64ConvertI64Signed::OPCODE:
-            next = std::make_shared<F64ConvertI64Signed>();
+            next = std::pmr::make_shared<F64ConvertI64Signed>(arena);
             break;
         case grammar::F64ConvertI64Unsigned::OPCODE:
-            next = std::make_shared<F64ConvertI64Unsigned>();
+            next = std::pmr::make_shared<F64ConvertI64Unsigned>(arena);
             break;
         case grammar::F64PromoteF32::OPCODE:
-            next = std::make_shared<F64PromoteF32>();
+            next = std::pmr::make_shared<F64PromoteF32>(arena);
             break;
         case grammar::I32ReinterpretF32::OPCODE:
-            next = std::make_shared<I32ReinterpretF32>();
+            next = std::pmr::make_shared<I32ReinterpretF32>(arena);
             break;
         case grammar::I64ReinterpretF64::OPCODE:
-            next = std::make_shared<I64ReinterpretF64>();
+            next = std::pmr::make_shared<I64ReinterpretF64>(arena);
             break;
         case grammar::F32ReinterpretI32::OPCODE:
-            next = std::make_shared<F32ReinterpretI32>();
+            next = std::pmr::make_shared<F32ReinterpretI32>(arena);
             break;
         case grammar::F64ReinterpretI64::OPCODE:
-            next = std::make_shared<F64ReinterpretI64>();
+            next = std::pmr::make_shared<F64ReinterpretI64>(arena);
             break;
         case grammar::I32Extend8Signed::OPCODE:
-            next = std::make_shared<I32Extend8Signed>();
+            next = std::pmr::make_shared<I32Extend8Signed>(arena);
             break;
         case grammar::I32Extend16Signed::OPCODE:
-            next = std::make_shared<I32Extend16Signed>();
+            next = std::pmr::make_shared<I32Extend16Signed>(arena);
             break;
         case grammar::I64Extend8Signed::OPCODE:
-            next = std::make_shared<I64Extend8Signed>();
+            next = std::pmr::make_shared<I64Extend8Signed>(arena);
             break;
         case grammar::I64Extend16Signed::OPCODE:
-            next = std::make_shared<I64Extend16Signed>();
+            next = std::pmr::make_shared<I64Extend16Signed>(arena);
             break;
         case grammar::I64Extend32Signed::OPCODE:
-            next = std::make_shared<I64Extend32Signed>();
+            next = std::pmr::make_shared<I64Extend32Signed>(arena);
             break;
         // Memory Instructions
         case grammar::I32Load::OPCODE:
-            next = std::make_shared<I32Load>(inst->as<grammar::I32Load>());
+            next = std::pmr::make_shared<I32Load>(arena,
+                                                  inst->as<grammar::I32Load>());
             break;
         case grammar::I64Load::OPCODE:
-            next = std::make_shared<I64Load>(inst->as<grammar::I64Load>());
+            next = std::pmr::make_shared<I64Load>(arena,
+                                                  inst->as<grammar::I64Load>());
             break;
         case grammar::F32Load::OPCODE:
-            next = std::make_shared<F32Load>(inst->as<grammar::F32Load>());
+            next = std::pmr::make_shared<F32Load>(arena,
+                                                  inst->as<grammar::F32Load>());
             break;
         case grammar::F64Load::OPCODE:
-            next = std::make_shared<F64Load>(inst->as<grammar::F64Load>());
+            next = std::pmr::make_shared<F64Load>(arena,
+                                                  inst->as<grammar::F64Load>());
             break;
         case grammar::I32Load8Signed::OPCODE:
-            next = std::make_shared<I32Load8Signed>(
-                inst->as<grammar::I32Load8Signed>());
+            next = std::pmr::make_shared<I32Load8Signed>(
+                arena, inst->as<grammar::I32Load8Signed>());
             break;
         case grammar::I32Load8Unsigned::OPCODE:
-            next = std::make_shared<I32Load8Unsigned>(
-                inst->as<grammar::I32Load8Unsigned>());
+            next = std::pmr::make_shared<I32Load8Unsigned>(
+                arena, inst->as<grammar::I32Load8Unsigned>());
             break;
         case grammar::I32Load16Signed::OPCODE:
-            next = std::make_shared<I32Load16Signed>(
-                inst->as<grammar::I32Load16Signed>());
+            next = std::pmr::make_shared<I32Load16Signed>(
+                arena, inst->as<grammar::I32Load16Signed>());
             break;
         case grammar::I32Load16Unsigned::OPCODE:
-            next = std::make_shared<I32Load16Unsigned>(
-                inst->as<grammar::I32Load16Unsigned>());
+            next = std::pmr::make_shared<I32Load16Unsigned>(
+                arena, inst->as<grammar::I32Load16Unsigned>());
             break;
         case grammar::I64Load8Signed::OPCODE:
-            next = std::make_shared<I64Load8Signed>(
-                inst->as<grammar::I64Load8Signed>());
+            next = std::pmr::make_shared<I64Load8Signed>(
+                arena, inst->as<grammar::I64Load8Signed>());
             break;
         case grammar::I64Load8Unsigned::OPCODE:
-            next = std::make_shared<I64Load8Unsigned>(
-                inst->as<grammar::I64Load8Unsigned>());
+            next = std::pmr::make_shared<I64Load8Unsigned>(
+                arena, inst->as<grammar::I64Load8Unsigned>());
             break;
         case grammar::I64Load16Signed::OPCODE:
-            next = std::make_shared<I64Load16Signed>(
-                inst->as<grammar::I64Load16Signed>());
+            next = std::pmr::make_shared<I64Load16Signed>(
+                arena, inst->as<grammar::I64Load16Signed>());
             break;
         case grammar::I64Load16Unsigned::OPCODE:
-            next = std::make_shared<I64Load16Unsigned>(
-                inst->as<grammar::I64Load16Unsigned>());
+            next = std::pmr::make_shared<I64Load16Unsigned>(
+                arena, inst->as<grammar::I64Load16Unsigned>());
             break;
         case grammar::I64Load32Signed::OPCODE:
-            next = std::make_shared<I64Load32Signed>(
-                inst->as<grammar::I64Load32Signed>());
+            next = std::pmr::make_shared<I64Load32Signed>(
+                arena, inst->as<grammar::I64Load32Signed>());
             break;
         case grammar::I64Load32Unsigned::OPCODE:
-            next = std::make_shared<I64Load32Unsigned>(
-                inst->as<grammar::I64Load32Unsigned>());
+            next = std::pmr::make_shared<I64Load32Unsigned>(
+                arena, inst->as<grammar::I64Load32Unsigned>());
             break;
         case grammar::I32Store::OPCODE:
-            next = std::make_shared<I32Store>(inst->as<grammar::I32Store>());
+            next = std::pmr::make_shared<I32Store>(
+                arena, inst->as<grammar::I32Store>());
             break;
         case grammar::I64Store::OPCODE:
-            next = std::make_shared<I64Store>(inst->as<grammar::I64Store>());
+            next = std::pmr::make_shared<I64Store>(
+                arena, inst->as<grammar::I64Store>());
             break;
         case grammar::F32Store::OPCODE:
-            next = std::make_shared<F32Store>(inst->as<grammar::F32Store>());
+            next = std::pmr::make_shared<F32Store>(
+                arena, inst->as<grammar::F32Store>());
             break;
         case grammar::F64Store::OPCODE:
-            next = std::make_shared<F64Store>(inst->as<grammar::F64Store>());
+            next = std::pmr::make_shared<F64Store>(
+                arena, inst->as<grammar::F64Store>());
             break;
         case grammar::I32Store8::OPCODE:
-            next = std::make_shared<I32Store8>(inst->as<grammar::I32Store8>());
+            next = std::pmr::make_shared<I32Store8>(
+                arena, inst->as<grammar::I32Store8>());
             break;
         case grammar::I32Store16::OPCODE:
-            next =
-                std::make_shared<I32Store16>(inst->as<grammar::I32Store16>());
+            next = std::pmr::make_shared<I32Store16>(
+                arena, inst->as<grammar::I32Store16>());
             break;
         case grammar::I64Store8::OPCODE:
-            next = std::make_shared<I64Store8>(inst->as<grammar::I64Store8>());
+            next = std::pmr::make_shared<I64Store8>(
+                arena, inst->as<grammar::I64Store8>());
             break;
         case grammar::I64Store16::OPCODE:
-            next =
-                std::make_shared<I64Store16>(inst->as<grammar::I64Store16>());
+            next = std::pmr::make_shared<I64Store16>(
+                arena, inst->as<grammar::I64Store16>());
             break;
         case grammar::I64Store32::OPCODE:
-            next =
-                std::make_shared<I64Store32>(inst->as<grammar::I64Store32>());
+            next = std::pmr::make_shared<I64Store32>(
+                arena, inst->as<grammar::I64Store32>());
             break;
         case grammar::MemoryGrow::OPCODE:
-            next =
-                std::make_shared<MemoryGrow>(inst->as<grammar::MemoryGrow>());
+            next = std::pmr::make_shared<MemoryGrow>(
+                arena, inst->as<grammar::MemoryGrow>());
             break;
         case grammar::ExtendedIntstructionBase::OPCODE: {
             const grammar::ExtendedIntstructionBase& ext_inst =
@@ -497,31 +534,31 @@ OperationBase::create(const std::vector<grammar::Instruction>& instructions,
 
             switch (ext_opcode) {
             case grammar::I32TruncateSaturateF64Signed::EXT_OPCODE:
-                next = std::make_shared<I32TruncateSaturateF64Signed>(
-                    inst->as<grammar::I32TruncateSaturateF64Signed>());
+                next = std::pmr::make_shared<I32TruncateSaturateF64Signed>(
+                    arena, inst->as<grammar::I32TruncateSaturateF64Signed>());
                 break;
             case grammar::I32TruncateSaturateF64Unsigned::EXT_OPCODE:
-                next = std::make_shared<I32TruncateSaturateF64Unsigned>(
-                    inst->as<grammar::I32TruncateSaturateF64Unsigned>());
+                next = std::pmr::make_shared<I32TruncateSaturateF64Unsigned>(
+                    arena, inst->as<grammar::I32TruncateSaturateF64Unsigned>());
                 break;
             case grammar::I64TruncateSaturateF64Signed::EXT_OPCODE:
-                next = std::make_shared<I64TruncateSaturateF64Signed>(
-                    inst->as<grammar::I64TruncateSaturateF64Signed>());
+                next = std::pmr::make_shared<I64TruncateSaturateF64Signed>(
+                    arena, inst->as<grammar::I64TruncateSaturateF64Signed>());
                 break;
             case grammar::MemoryInit::EXT_OPCODE:
-                next = std::make_shared<MemoryInit>(
-                    inst->as<grammar::MemoryInit>());
+                next = std::pmr::make_shared<MemoryInit>(
+                    arena, inst->as<grammar::MemoryInit>());
                 break;
             case grammar::DataDrop::EXT_OPCODE:
-                next =
-                    std::make_shared<DataDrop>(inst->as<grammar::DataDrop>());
+                next = std::pmr::make_shared<DataDrop>(
+                    arena, inst->as<grammar::DataDrop>());
                 break;
             case grammar::MemoryCopy::EXT_OPCODE:
-                next = std::make_shared<MemoryCopy>();
+                next = std::pmr::make_shared<MemoryCopy>(arena);
                 break;
             case grammar::MemoryFill::EXT_OPCODE:
-                next = std::make_shared<MemoryFill>(
-                    inst->as<grammar::MemoryFill>());
+                next = std::pmr::make_shared<MemoryFill>(
+                    arena, inst->as<grammar::MemoryFill>());
                 break;
             default:
                 fmt::println("unknown extended opcode 0xFC 0x{:02X}",
@@ -538,40 +575,40 @@ OperationBase::create(const std::vector<grammar::Instruction>& instructions,
 
             switch (atomic_opcode) {
             case grammar::AtomicNotify::ATOMIC_OPCODE:
-                next = std::make_shared<AtomicNotify>(
-                    inst->as<grammar::AtomicNotify>());
+                next = std::pmr::make_shared<AtomicNotify>(
+                    arena, inst->as<grammar::AtomicNotify>());
                 break;
             case grammar::AtomicWait32::ATOMIC_OPCODE:
-                next = std::make_shared<AtomicWait32>(
-                    inst->as<grammar::AtomicWait32>());
+                next = std::pmr::make_shared<AtomicWait32>(
+                    arena, inst->as<grammar::AtomicWait32>());
                 break;
             case grammar::AtomicLoad::ATOMIC_OPCODE:
-                next = std::make_shared<AtomicLoad>(
-                    inst->as<grammar::AtomicLoad>());
+                next = std::pmr::make_shared<AtomicLoad>(
+                    arena, inst->as<grammar::AtomicLoad>());
                 break;
             case grammar::AtomicLoad8Unsigned::ATOMIC_OPCODE:
-                next = std::make_shared<AtomicLoad8Unsigned>(
-                    inst->as<grammar::AtomicLoad8Unsigned>());
+                next = std::pmr::make_shared<AtomicLoad8Unsigned>(
+                    arena, inst->as<grammar::AtomicLoad8Unsigned>());
                 break;
             case grammar::AtomicStore::ATOMIC_OPCODE:
-                next = std::make_shared<AtomicStore>(
-                    inst->as<grammar::AtomicStore>());
+                next = std::pmr::make_shared<AtomicStore>(
+                    arena, inst->as<grammar::AtomicStore>());
                 break;
             case grammar::AtomicStore8::ATOMIC_OPCODE:
-                next = std::make_shared<AtomicStore8>(
-                    inst->as<grammar::AtomicStore8>());
+                next = std::pmr::make_shared<AtomicStore8>(
+                    arena, inst->as<grammar::AtomicStore8>());
                 break;
             case grammar::AtomicAdd::ATOMIC_OPCODE:
-                next =
-                    std::make_shared<AtomicAdd>(inst->as<grammar::AtomicAdd>());
+                next = std::pmr::make_shared<AtomicAdd>(
+                    arena, inst->as<grammar::AtomicAdd>());
                 break;
             case grammar::AtomicExchange8Unsigned::ATOMIC_OPCODE:
-                next = std::make_shared<AtomicExchange8Unsigned>(
-                    inst->as<grammar::AtomicExchange8Unsigned>());
+                next = std::pmr::make_shared<AtomicExchange8Unsigned>(
+                    arena, inst->as<grammar::AtomicExchange8Unsigned>());
                 break;
             case grammar::AtomicCompareExchange::ATOMIC_OPCODE:
-                next = std::make_shared<AtomicCompareExchange>(
-                    inst->as<grammar::AtomicCompareExchange>());
+                next = std::pmr::make_shared<AtomicCompareExchange>(
+                    arena, inst->as<grammar::AtomicCompareExchange>());
                 break;
             default:
                 fmt::println("unknown atomic opcode 0xFE 0x{:02X}",
@@ -656,8 +693,9 @@ Continuation Unreachable::action(Instance& instance) {
 
 Block::Block(const grammar::Block& block,
              const std::vector<FunctionType>& func_types,
-             std::vector<Operation>& targets) {
-    next_ = std::make_shared<Label>(addr_);
+             std::vector<Operation>& targets,
+             std::pmr::polymorphic_allocator<std::byte>& arena) {
+    next_ = std::pmr::make_shared<Label>(arena, addr_);
 
     targets.insert(targets.begin(), next_);
 
@@ -665,7 +703,8 @@ Block::Block(const grammar::Block& block,
         block.getInstruction();
 
     Builder builder;
-    builder.addNext(OperationBase::create(instructions, func_types, targets));
+    builder.addNext(
+        OperationBase::create(instructions, func_types, targets, arena));
     builder.addNext(next_);
     body_ = builder.build();
 
@@ -678,11 +717,12 @@ Continuation Block::action(Instance& instance) {
 
 Loop::Loop(const grammar::Loop& loop,
            const std::vector<FunctionType>& func_types,
-           std::vector<Operation>& labels)
+           std::vector<Operation>& labels,
+           std::pmr::polymorphic_allocator<std::byte>& arena)
     : TaggedOperation<Loop>(loop.getAddress()) {
-    next_ = std::make_shared<Label>(addr_);
+    next_ = std::pmr::make_shared<Label>(arena, addr_);
 
-    Operation start = std::make_shared<Label>(addr_);
+    Operation start = std::pmr::make_shared<Label>(arena, addr_);
     labels.insert(labels.begin(), start);
 
     const std::vector<grammar::Instruction>& instructions =
@@ -690,7 +730,8 @@ Loop::Loop(const grammar::Loop& loop,
 
     Builder builder;
     builder.addNext(start);
-    builder.addNext(OperationBase::create(instructions, func_types, labels));
+    builder.addNext(
+        OperationBase::create(instructions, func_types, labels, arena));
     builder.addNext(next_);
     body_ = builder.build();
 
@@ -703,15 +744,16 @@ Continuation Loop::action(Instance& instance) {
 
 IfThen::IfThen(const grammar::IfElse& if_else,
                const std::vector<FunctionType>& func_types,
-               std::vector<Operation>& labels)
+               std::vector<Operation>& labels,
+               std::pmr::polymorphic_allocator<std::byte>& arena)
     : TaggedOperation<IfThen>(if_else.getAddress()) {
-    next_ = std::make_shared<Label>(addr_);
+    next_ = std::pmr::make_shared<Label>(arena, addr_);
 
     labels.insert(labels.begin(), next_);
 
     Builder builder;
     builder.addNext(OperationBase::create(
-        if_else.getThenExpr().getInstructions(), func_types, labels));
+        if_else.getThenExpr().getInstructions(), func_types, labels, arena));
     builder.addNext(next_);
     then_ = builder.build();
 
@@ -725,20 +767,21 @@ Continuation IfThen::action(Instance& instance) {
 
 IfElse::IfElse(const grammar::IfElse& if_else,
                const std::vector<FunctionType>& func_types,
-               std::vector<Operation>& labels)
+               std::vector<Operation>& labels,
+               std::pmr::polymorphic_allocator<std::byte>& arena)
     : TaggedOperation<IfElse>(if_else.getAddress()) {
-    next_ = std::make_shared<Label>(addr_);
+    next_ = std::pmr::make_shared<Label>(arena, addr_);
 
     labels.insert(labels.begin(), next_);
 
     Builder builder;
     builder.addNext(OperationBase::create(
-        if_else.getThenExpr().getInstructions(), func_types, labels));
+        if_else.getThenExpr().getInstructions(), func_types, labels, arena));
     builder.addNext(next_);
     then_ = builder.build();
 
     builder.addNext(OperationBase::create(
-        if_else.getElseExpr().getInstructions(), func_types, labels));
+        if_else.getElseExpr().getInstructions(), func_types, labels, arena));
     builder.addNext(next_);
     else_ = builder.build();
 
@@ -784,8 +827,13 @@ Continuation BranchTable::action(Instance& instance) {
     return target.get();
 }
 
-Call::Call(const grammar::Call& call)
-    : Call(call.getFuncIdx(), call.getAddress()) {}
+Call::Call(const grammar::Call& call,
+           std::pmr::polymorphic_allocator<std::byte>& arena)
+    : TaggedOperation<Call>(call.getAddress()), func_idx_(call.getFuncIdx()) {
+    next_ = std::pmr::make_shared<Epilogue>(arena, call.getFuncIdx(),
+                                            call.getAddress());
+}
+
 Call::Call(uint32_t func_idx, size_t addr)
     : TaggedOperation<Call>(addr), func_idx_(func_idx) {
     next_ = std::make_shared<Epilogue>(func_idx, addr);

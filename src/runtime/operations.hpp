@@ -63,7 +63,8 @@ public:
     static Operation
     create(const std::vector<grammar::Instruction>& instructions,
            const std::vector<FunctionType>& func_types,
-           std::vector<Operation>& targets);
+           std::vector<Operation>& targets,
+           std::pmr::polymorphic_allocator<std::byte>& arena);
 
     virtual Continuation action(Instance&) { return next_.get(); }
     virtual Expected<Continuation> eval(Context&) const {
@@ -175,7 +176,8 @@ class Block : public TaggedOperation<Block> {
 public:
     Block(const grammar::Block& block,
           const std::vector<FunctionType>& func_types,
-          std::vector<Operation>& branch_targets);
+          std::vector<Operation>& branch_targets,
+          std::pmr::polymorphic_allocator<std::byte>& arena);
 
     Continuation action(Instance& instance) override;
 
@@ -186,7 +188,8 @@ private:
 class Loop : public TaggedOperation<Loop> {
 public:
     Loop(const grammar::Loop& loop, const std::vector<FunctionType>& func_types,
-         std::vector<Operation>& branch_targets);
+         std::vector<Operation>& branch_targets,
+         std::pmr::polymorphic_allocator<std::byte>& arena);
 
     Continuation action(Instance& instance) override;
 
@@ -201,7 +204,8 @@ public:
 
     IfThen(const grammar::IfElse& if_else,
            const std::vector<FunctionType>& func_types,
-           std::vector<Operation>& branch_targets);
+           std::vector<Operation>& branch_targets,
+           std::pmr::polymorphic_allocator<std::byte>& arena);
 
     Continuation action(Instance& instance) override;
 
@@ -215,7 +219,8 @@ public:
 
     IfElse(const grammar::IfElse& if_else,
            const std::vector<FunctionType>& func_types,
-           std::vector<Operation>& branch_targets);
+           std::vector<Operation>& branch_targets,
+           std::pmr::polymorphic_allocator<std::byte>& arena);
 
     Continuation action(Instance& instance) override;
 
@@ -261,7 +266,8 @@ private:
 
 class Call : public TaggedOperation<Call> {
 public:
-    Call(const grammar::Call& call);
+    Call(const grammar::Call& call,
+         std::pmr::polymorphic_allocator<std::byte>& arena);
     Call(uint32_t func_idx, size_t addr);
 
     Continuation action(Instance& instance) override;

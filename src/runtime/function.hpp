@@ -18,7 +18,8 @@ public:
 
     static Function create(const FunctionType& type,
                            const std::vector<FunctionType>& types,
-                           const grammar::Function& func);
+                           const grammar::Function& func,
+                           std::pmr::polymorphic_allocator<std::byte>& arena);
 
     // () -> ()
     static Function createExternal(std::function<void(Instance&)>);

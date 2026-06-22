@@ -22,7 +22,9 @@ using hw::mem::Memory;
 
 class GlobalInstances {
 public:
-    static Expected<GlobalInstances> create(const grammar::Module& module);
+    static Expected<GlobalInstances>
+    create(const grammar::Module& module,
+           std::pmr::polymorphic_allocator<std::byte>& arena);
 
     inline Value getGlobal(uint32_t idx) const { return globals_[idx]; }
     inline Value setGlobal(uint32_t idx, Value value) {
@@ -128,6 +130,8 @@ public:
     const DebugInfoInstance& getDebugInfo() const { return *debug_info_; }
 
 private:
+    std::shared_ptr<std::pmr::monotonic_buffer_resource> mbr_;
+
     std::vector<Function> funcs_;
     std::vector<uint32_t> indirect_funcs_;
 
@@ -139,22 +143,29 @@ private:
     GlobalState(std::vector<Function>&& funcs,
                 std::vector<uint32_t>&& indirect_funcs, Memory&& memory,
                 const GlobalInstances& globals, const DataInstances& segments,
-                const DebugInfoInstance&& debug_info)
-        : funcs_(std::move(funcs)), indirect_funcs_(std::move(indirect_funcs)),
+                const DebugInfoInstance&& debug_info,
+                std::shared_ptr<std::pmr::monotonic_buffer_resource>&& mbr)
+        : mbr_(std::move(mbr)), funcs_(std::move(funcs)),
+          indirect_funcs_(std::move(indirect_funcs)),
           memory_(std::move(memory)), globals_(globals), segments_(segments),
           debug_info_(std::make_shared<DebugInfoInstance>(debug_info)) {}
 
     static Expected<std::vector<Function>>
     createFunctions(const grammar::Module& module,
-                    const std::unordered_map<std::string, Function>& imports);
+                    const std::unordered_map<std::string, Function>& imports,
+                    std::pmr::polymorphic_allocator<std::byte>& arena);
 
     static Expected<std::vector<uint32_t>>
-    createIndirectFunctions(const grammar::Module& module);
+    createIndirectFunctions(const grammar::Module& module,
+                            std::pmr::polymorphic_allocator<std::byte>& arena);
 
-    static Expected<Memory> createMemory(const grammar::Module& module);
+    static Expected<Memory>
+    createMemory(const grammar::Module& module,
+                 std::pmr::polymorphic_allocator<std::byte>& arena);
 
     static Expected<int32_t>
-    evaluateExpressionI32(const grammar::Expression& expression);
+    evaluateExpressionI32(const grammar::Expression& expression,
+                          std::pmr::polymorphic_allocator<std::byte>& arena);
 };
 
 } // namespace runtime

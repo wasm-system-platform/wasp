@@ -11,7 +11,8 @@ namespace runtime {
 /********************/
 
 Expected<GlobalInstances>
-GlobalInstances::create(const grammar::Module& module) {
+GlobalInstances::create(const grammar::Module& module,
+                        std::pmr::polymorphic_allocator<std::byte>& arena) {
     std::vector<Value> globals;
 
     const grammar::GlobalSection& global_section = module.getGlobalSection();
@@ -20,8 +21,8 @@ GlobalInstances::create(const grammar::Module& module) {
 
         Context dummy_context(0);
         std::vector<FunctionType> dummy_types;
-        const Operation op = OperationBase::create(global.getInstructions(),
-                                                   dummy_types, containers);
+        const Operation op = OperationBase::create(
+            global.getInstructions(), dummy_types, containers, arena);
 
         Expected<Continuation> continuation_exp = op->eval(dummy_context);
         if (!continuation_exp)
@@ -63,21 +64,28 @@ Expected<DataInstances> DataInstances::create(const grammar::Module& module) {
 Expected<GlobalState>
 GlobalState::create(const grammar::Module& module,
                     const std::unordered_map<std::string, Function>& imports) {
+    /* Arena for all objects, which are alive during the global states lifetime.
+     */
+    std::shared_ptr<std::pmr::monotonic_buffer_resource> mbr =
+        std::make_unique<std::pmr::monotonic_buffer_resource>();
+    std::pmr::polymorphic_allocator arena(mbr.get());
+
     Expected<std::vector<Function>> funcs_exp =
-        createFunctions(module, imports);
+        createFunctions(module, imports, arena);
     if (!funcs_exp)
         return Unexpected(PROPAGATE(funcs_exp));
 
     Expected<std::vector<uint32_t>> indirect_funcs_exp =
-        createIndirectFunctions(module);
+        createIndirectFunctions(module, arena);
     if (!indirect_funcs_exp)
         return Unexpected(PROPAGATE(indirect_funcs_exp));
 
-    Expected<Memory> mem_exp = createMemory(module);
+    Expected<Memory> mem_exp = createMemory(module, arena);
     if (!mem_exp)
         return Unexpected(PROPAGATE(mem_exp));
 
-    Expected<GlobalInstances> global_exp = GlobalInstances::create(module);
+    Expected<GlobalInstances> global_exp =
+        GlobalInstances::create(module, arena);
     if (!global_exp)
         return Unexpected(PROPAGATE(global_exp));
 
@@ -89,7 +97,7 @@ GlobalState::create(const grammar::Module& module,
 
     return GlobalState(std::move(*funcs_exp), std::move(*indirect_funcs_exp),
                        std::move(*mem_exp), *global_exp, *datas_exp,
-                       std::move(debug_info));
+                       std::move(debug_info), std::move(mbr));
 }
 
 /**************/
@@ -159,7 +167,8 @@ DebugInfoInstance::DebugInfoInstance(
 
 Expected<std::vector<Function>> GlobalState::createFunctions(
     const grammar::Module& module,
-    const std::unordered_map<std::string, Function>& imports) {
+    const std::unordered_map<std::string, Function>& imports,
+    std::pmr::polymorphic_allocator<std::byte>& arena) {
     const grammar::TypeSection& type_section = module.getTypeSection();
     const grammar::ImportSection& import_section = module.getImportSection();
     const grammar::FunctionSection& func_section = module.getFunctionSection();
@@ -209,15 +218,17 @@ Expected<std::vector<Function>> GlobalState::createFunctions(
         if (!type_exp)
             return Unexpected(PROPAGATE(type_exp));
 
-        funcs.push_back(Function::create(*type_exp, func_types, functions[i]));
+        funcs.push_back(
+            Function::create(*type_exp, func_types, functions[i], arena));
     }
 
     // printStats();
     return funcs;
 }
 
-Expected<std::vector<uint32_t>>
-GlobalState::createIndirectFunctions(const grammar::Module& module) {
+Expected<std::vector<uint32_t>> GlobalState::createIndirectFunctions(
+    const grammar::Module& module,
+    std::pmr::polymorphic_allocator<std::byte>& arena) {
     const grammar::ElemenSection& element_section = module.getElementSection();
 
     const std::vector<grammar::ElementSegment>& segments =
@@ -230,7 +241,8 @@ GlobalState::createIndirectFunctions(const grammar::Module& module) {
 
     const grammar::ElementSegment& segment = segments[0];
 
-    Expected<int32_t> offset_exp = evaluateExpressionI32(segment.getOffset());
+    Expected<int32_t> offset_exp =
+        evaluateExpressionI32(segment.getOffset(), arena);
     if (!offset_exp.has_value())
         return Unexpected(PROPAGATE(offset_exp));
     uint32_t offset = static_cast<uint32_t>(*offset_exp);
@@ -243,7 +255,9 @@ GlobalState::createIndirectFunctions(const grammar::Module& module) {
     return indirect_funcs;
 }
 
-Expected<Memory> GlobalState::createMemory(const grammar::Module& module) {
+Expected<Memory>
+GlobalState::createMemory(const grammar::Module& module,
+                          std::pmr::polymorphic_allocator<std::byte>& arena) {
     const grammar::ImportSection& import_section = module.getImportSection();
     const grammar::DataSection& data_section = module.getDataSection();
     const std::vector<grammar::MemoryImport> mem_imports =
@@ -285,7 +299,7 @@ Expected<Memory> GlobalState::createMemory(const grammar::Module& module) {
         Context dummy_context(0);
         std::vector<FunctionType> dummy_types;
         const Operation offset_op = OperationBase::create(
-            offset_expr.getInstructions(), dummy_types, targets);
+            offset_expr.getInstructions(), dummy_types, targets, arena);
 
         Expected<Continuation> continuation_exp =
             offset_op->eval(dummy_context);
@@ -310,12 +324,13 @@ Expected<Memory> GlobalState::createMemory(const grammar::Module& module) {
     return memory;
 }
 
-Expected<int32_t>
-GlobalState::evaluateExpressionI32(const grammar::Expression& expression) {
+Expected<int32_t> GlobalState::evaluateExpressionI32(
+    const grammar::Expression& expression,
+    std::pmr::polymorphic_allocator<std::byte>& arena) {
     std::vector<FunctionType> dummy_types;
     std::vector<Operation> targets;
     Operation operation = OperationBase::create(expression.getInstructions(),
-                                                dummy_types, targets);
+                                                dummy_types, targets, arena);
 
     Context dummy_context(0);
     Expected<Continuation> continuation_exp = operation->eval(dummy_context);

@@ -34,7 +34,7 @@ int main(int argc, char** argv) {
     }
 
     // plugin disk
-    /*if (args.count("rootfs") != 0) {
+    if (args.count("rootfs") != 0) {
         auto disk_exp = Disk::create(args["rootfs"].as<std::string>());
         if (!disk_exp) {
             std::cout << disk_exp.error().toString() << std::endl;
@@ -42,23 +42,12 @@ int main(int argc, char** argv) {
         }
 
         runtime::DeviceManager::instance().plugIn(*disk_exp);
-    } */
+    }
 
     // plugin keyboard
     runtime::DeviceManager::instance().plugIn(
         std::make_shared<dev::Terminal>());
     runtime::DeviceManager::instance().plugIn(std::make_shared<Timer>());
-
-    auto ts_0 = std::chrono::steady_clock::now();
-    for (int i = 0; i < 10; i++) {
-        auto result = runtime::Kernel::create(args["kernel"].as<std::string>());
-    }
-    auto ts_1 = std::chrono::steady_clock::now();
-    auto time_ns =
-        std::chrono::duration_cast<std::chrono::nanoseconds>(ts_1 - ts_0)
-            .count();
-
-    std::cout << "[perf] parsing: " << time_ns / 1'000'000.0 << " ms\n";
 
     auto kernel_exp = runtime::Kernel::create(args["kernel"].as<std::string>());
     if (!kernel_exp) {
