@@ -146,8 +146,7 @@ Expected<Imports> Kernel::createImports() {
         Memory& memory = instance.getGlobalState().getMemory();
         std::vector<uint8_t> buffer(len);
 
-        if (!memory.load(buffer_offset, buffer) ||
-            !memory.store(nwritten_offset, len)) {
+        if (!memory.load(buffer_offset, buffer)) {
             return static_cast<int32_t>(Errno::BAD_ADDRESS);
         }
 
@@ -479,12 +478,12 @@ Expected<void> Kernel::setupInterruptController() {
     const Export& interrupt_handler = it->second;
 
     size_t interrupt_handler_sig =
-        std::hash<FunctionType>()(FunctionType::ConsumerI32());
+        std::hash<FunctionType>()(FunctionType::ConsumerI32x2());
     if (interrupt_handler.signature != interrupt_handler_sig)
         return Unexpected(
             ERROR(fmt::format("interrupt handler has a wrong signature; "
                               "expected signature '{}' but found '{}'",
-                              FunctionType::ConsumerI32().toString(),
+                              FunctionType::ConsumerI32x2().toString(),
                               interrupt_handler.func_type.toString())));
 
     controller_ =
@@ -554,6 +553,8 @@ void Kernel::run(OperationBase& entry) {
             continuation =
                 active_instance_->getActiveContext().getEpilogues().pop().get();
     }
+
+    fmt::println("shutting down...");
 
     // reset program
     active_instance_->getActiveContext().setRunState(Context::RunState::rdy);

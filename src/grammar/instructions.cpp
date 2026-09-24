@@ -287,6 +287,8 @@ InstructionBase::parse(ByteCursor& in, size_t code_start,
         return arena.new_object<I64CountLeadingZeros>();
     case I64CountTrailingZeros::OPCODE:
         return arena.new_object<I64CountTrailingZeros>();
+    case I64PopCount::OPCODE:
+        return arena.new_object<I64PopCount>();
     case I64Add::OPCODE:
         return arena.new_object<I64Add>();
     case I64Sub::OPCODE:

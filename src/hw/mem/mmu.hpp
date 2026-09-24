@@ -13,16 +13,19 @@
 
 namespace hw::mem {
 
-static constexpr uint32_t WPAGE_SIZE = 1 << 16;
-static constexpr uint32_t WPAGE_MASK = UINT16_MAX;
 static constexpr uint32_t WPAGE_WIDTH = 16;
+static constexpr uint32_t WPAGE_SIZE = 1 << WPAGE_WIDTH;
+static constexpr uint32_t WPAGE_MASK = WPAGE_SIZE - 1;
 static constexpr uint32_t VIRT_MEMORY = 0x8000'0000;
 
 enum AccessType : uint8_t { READ = 'r', WRITE = 'w' };
 enum ProtectionFlags : uint8_t {
-    READABLE = 1 << 0,
-    WRITABLE = 1 << 1,
+    WRITABLE = 1 << 0,
 };
+
+static inline constexpr uint32_t offsetToNextPage(uint32_t addr) {
+    return WPAGE_SIZE - (addr & WPAGE_MASK);
+}
 
 class MemoryManagementUnit;
 
@@ -110,6 +113,12 @@ public:
     }
 
     template <ContiguousBuffer T> bool load(uint32_t virt_addr, T& dst_buffer) {
+        uint32_t _;
+        return load(virt_addr, dst_buffer, _);
+    }
+
+    template <ContiguousBuffer T>
+    bool load(uint32_t virt_addr, T& dst_buffer, uint32_t& faulting_addr) {
         uint8_t* dst_ptr = dst_buffer.data();
         uint32_t remaining = static_cast<uint32_t>(dst_buffer.size());
         uint32_t curr_addr = virt_addr;
@@ -117,9 +126,10 @@ public:
         while (remaining > 0) {
             uint32_t offset;
             if (!tables_[active_idx_].translate(curr_addr, offset,
-                                                AccessType::READ))
+                                                AccessType::READ)) {
+                faulting_addr = curr_addr;
                 return false;
-
+            }
             uint32_t page_offset = curr_addr & WPAGE_MASK;
             uint32_t chunk_size = std::min(remaining, WPAGE_SIZE - page_offset);
 
@@ -177,6 +187,13 @@ public:
 
     template <ContiguousBuffer T>
     bool store(uint32_t virt_addr, const T& src_buffer) {
+        uint32_t _;
+        return store(virt_addr, src_buffer, _);
+    }
+
+    template <ContiguousBuffer T>
+    bool store(uint32_t virt_addr, const T& src_buffer,
+               uint32_t& faulting_addr) {
         const uint8_t* src_ptr = src_buffer.data();
         uint32_t remaining = static_cast<uint32_t>(src_buffer.size());
         uint32_t curr_addr = virt_addr;
@@ -184,8 +201,10 @@ public:
         while (remaining > 0) {
             uint32_t offset;
             if (!tables_[active_idx_].translate(curr_addr, offset,
-                                                AccessType::WRITE))
+                                                AccessType::WRITE)) {
+                faulting_addr = curr_addr;
                 return false;
+            }
 
             uint32_t page_offset = curr_addr & WPAGE_MASK;
             uint32_t chunk_size = std::min(remaining, WPAGE_SIZE - page_offset);

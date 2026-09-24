@@ -29,6 +29,7 @@ private:
         write = DEVICE_CMD_OFFSET + 3,
         tellp = DEVICE_CMD_OFFSET + 4,
         seekp = DEVICE_CMD_OFFSET + 5,
+        flush = DEVICE_CMD_OFFSET + 6,
     };
 
     enum class Result : int32_t {
@@ -56,9 +57,11 @@ private:
     void seekg(std::span<uint8_t> buffer);
 
     // output
-    void write(const void* src, uint32_t count);
+    void write(Instance& instance, std::span<uint8_t> buffer);
     void tellp(uint32_t* offset);
     void seekp(Instance& instance, std::span<uint8_t> buffer);
+
+    void flush(Instance& instance, std::span<uint8_t> buffer);
 
     std::fstream disk_;
 };

@@ -121,9 +121,6 @@ bool PageTable::translate(uint32_t virt_addr, uint32_t& offset,
         return false;
 
     const Mapping& mapping = it->second;
-    if (access_type == READ && !(mapping.prot & READABLE))
-        return false;
-
     if (access_type == WRITE && !(mapping.prot & WRITABLE))
         return false;
 
@@ -135,6 +132,17 @@ runtime::Continuation MemoryManagementUnit::fault(runtime::Instance& instance,
                                                   uint32_t addr,
                                                   bool is_write) {
     runtime::Context& ctxt = instance.getActiveContext();
+    if (addr == 0xfffffff7) {
+        const runtime::Operation* epilogues = ctxt.getEpilogues().data();
+        for (size_t i = ctxt.getEpilogues().size() - 1; i > 0; i--) {
+            const runtime::Operation& epilogue = epilogues[i];
+            if (epilogue == nullptr)
+                break;
+            fmt::println("  {}: at {}", i,
+                         epilogue->getFormattedAddress(instance));
+        }
+    }
+
     ctxt.pushI32(static_cast<int32_t>(addr));
     ctxt.pushI32(is_write);
     return page_fault_handler_.get();

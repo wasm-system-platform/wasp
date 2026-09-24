@@ -153,7 +153,8 @@ std::string DebugInfoInstance::getFormattedLocation(size_t addr) const {
 
     if (addr >= it->start_addr && addr < it->end_addr) {
         const std::string& file = src_files_[it->src_file_idx];
-        return fmt::format("{}:{}", file, it->line);
+        return fmt::format("{}:{} <0x{:06x}>", file, it->line,
+                           addr + code_start_);
     }
 
     return unknown_loc;

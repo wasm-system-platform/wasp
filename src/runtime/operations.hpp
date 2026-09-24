@@ -743,6 +743,11 @@ public:
     Continuation action(Instance& instance) override;
 };
 
+class I64PopCount : public TaggedOperation<I64PopCount> {
+public:
+    Continuation action(Instance& instance) override;
+};
+
 class I64Add : public TaggedOperation<I64Add> {
 public:
     Continuation action(Instance& instance) override;

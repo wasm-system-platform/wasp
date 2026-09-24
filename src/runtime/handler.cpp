@@ -25,6 +25,13 @@ Continuation Interrupt::action(Instance& instance) {
         Function interrupt_handler =
             kernel.getGlobalState().getFunction(handler_idx_);
 
+        uint32_t pid = -1;
+        uint32_t port =
+            static_cast<uint32_t>(instance_ctx.getStack().pop().i32);
+
+        instance_ctx.pushI32(pid);
+        instance_ctx.pushI32(static_cast<int32_t>(port));
+
         instance_ctx.getEpilogues().push(epilogue);
 
         return interrupt_handler.enterFrame(instance_ctx);
@@ -33,11 +40,13 @@ Continuation Interrupt::action(Instance& instance) {
         Function interrupt_handler =
             kernel.getGlobalState().getFunction(handler_idx_);
 
+        uint32_t pid = instance.as<Process>().getId();
         uint32_t port =
             static_cast<uint32_t>(instance_ctx.getStack().pop().i32);
 
         Context& kernel_ctx = kernel.getActiveContext();
-        kernel_ctx.pushI32(static_cast<int32_t>(port));
+        kernel_ctx.pushI32(pid);
+        kernel_ctx.pushI32(port);
         kernel_ctx.getEpilogues().push(epilogue);
 
         kernel.switchBack();
@@ -213,6 +222,7 @@ Continuation Signal::action(Instance& instance) {
     Errno result = proc_mgr.getProcess(pid, proc);
     if (result != Errno::success) {
         kernel_ctxt.pushI32(std::to_underlying(result));
+        fmt::println("wrong pid");
         return nullptr;
     }
 
@@ -224,6 +234,7 @@ Continuation Signal::action(Instance& instance) {
     if (handler_idx >= indirections.size() ||
         indirections[handler_idx] >= functions.size()) {
         kernel_ctxt.pushI32(std::to_underlying(Errno::invalid));
+        fmt::println("wrong handler addr");
         return nullptr;
     }
 
@@ -231,6 +242,7 @@ Continuation Signal::action(Instance& instance) {
     Function& func = functions[indirections[handler_idx]];
     if (func.getSignature() != FunctionType::ConsumerI32().getSignature()) {
         kernel_ctxt.pushI32(std::to_underlying(Errno::invalid));
+        fmt::println("wrong signature");
         return nullptr;
     }
 

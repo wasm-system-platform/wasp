@@ -96,7 +96,7 @@ Errno ProcessManager::resumeProcess(uint32_t pid, Kernel& kernel,
 
 Errno ProcessManager::getProcess(uint32_t pid,
                                  std::shared_ptr<Process>& proc_out) {
-    if (pid <= processes_.size() || !processes_[pid])
+    if (pid >= processes_.size())
         return Errno::invalid;
 
     proc_out = processes_[pid];
@@ -125,8 +125,9 @@ Errno ProcessManager::readMemory(uint32_t pid, uint32_t kbuffer_offset,
 
         if (offset < VIRT_MEMORY) {
             if (!proc_memory.load(offset, tbuffer[i])) {
-                fmt::println("Invalid process memory access: addr=0x{:08X}",
-                             offset);
+                fmt::println("Invalid process memory access: addr=0x{:08X} "
+                             "size=0x{:08X}",
+                             offset, proc_memory.size());
                 return Errno::BAD_ADDRESS;
             }
         } else {

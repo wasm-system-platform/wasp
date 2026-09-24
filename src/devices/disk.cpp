@@ -27,6 +27,15 @@ void Disk::io(Instance& instance, int32_t cmd, std::span<uint8_t> buffer) {
     case std::to_underlying(Command::seekg):
         seekg(buffer);
         break;
+    case std::to_underlying(Command::write):
+        write(instance, buffer);
+        break;
+    case std::to_underlying(Command::seekp):
+        seekp(instance, buffer);
+        break;
+    case std::to_underlying(Command::flush):
+        flush(instance, buffer);
+        break;
     default:
         fmt::println("unknown cmd: {}", cmd);
         Result* result = reinterpret_cast<Result*>(buffer.data());
@@ -78,6 +87,80 @@ void Disk::seekg(std::span<uint8_t> buffer) {
         return;
     }
 
+    std::streampos old_pos = disk_.tellg();
+
+    SeekCommand* cmd = reinterpret_cast<SeekCommand*>(buffer.data());
+    switch (cmd->whence) {
+    case SeekWhence::set:
+        disk_.seekg(cmd->pos, std::ios_base::beg);
+        break;
+    case SeekWhence::cur:
+        disk_.seekg(cmd->pos, std::ios_base::cur);
+        break;
+    case SeekWhence::end:
+        disk_.seekg(cmd->pos, std::ios_base::end);
+        break;
+    default:
+        cmd->result = Result::invalid_arguments;
+        return;
+    }
+
+    if (!disk_) {
+        disk_.clear();
+        disk_.seekg(old_pos);
+        cmd->result = Result::disk_error;
+        return;
+    }
+
+    cmd->new_pos = static_cast<uint64_t>(disk_.tellg());
+    cmd->result = Result::success;
+    return;
+}
+
+void Disk::write(Instance& instance, std::span<uint8_t> buffer) {
+    struct WriteCommand {
+        Result result;
+        uint32_t src;
+        uint32_t count;
+    } __attribute__((packed));
+
+    if (buffer.size() < sizeof(WriteCommand)) {
+        Result* result = reinterpret_cast<Result*>(buffer.data());
+        *result = Result::invalid_arguments;
+        return;
+    }
+
+    WriteCommand* cmd = reinterpret_cast<WriteCommand*>(buffer.data());
+
+    auto& memory = instance.getGlobalState().getMemory();
+    if (!memory.contains(cmd->src, cmd->count)) {
+        cmd->result = Result::invalid_arguments;
+        return;
+    }
+
+    const char* src;
+    memory.ptr(cmd->src, &src);
+
+    std::streampos old_pos = disk_.tellp();
+    disk_.write(src, cmd->count);
+
+    if (!disk_) {
+        disk_.clear();
+        disk_.seekp(old_pos);
+        cmd->result = Result::disk_error;
+        return;
+    }
+
+    cmd->result = Result::success;
+};
+
+void Disk::seekp(Instance& instance, std::span<uint8_t> buffer) {
+    if (buffer.size() < sizeof(SeekCommand)) {
+        Result* result = reinterpret_cast<Result*>(buffer.data());
+        *result = Result::invalid_arguments;
+        return;
+    }
+
     std::streampos old_pos = disk_.tellp();
 
     SeekCommand* cmd = reinterpret_cast<SeekCommand*>(buffer.data());
@@ -106,4 +189,18 @@ void Disk::seekg(std::span<uint8_t> buffer) {
     cmd->new_pos = static_cast<uint64_t>(disk_.tellp());
     cmd->result = Result::success;
     return;
+}
+
+void Disk::flush(Instance& instance, std::span<uint8_t> buffer) {
+    Result* result = reinterpret_cast<Result*>(buffer.data());
+
+    disk_.flush();
+
+    if (!disk_) {
+        disk_.clear();
+        *result = Result::disk_error;
+        return;
+    }
+
+    *result = Result::success;
 }

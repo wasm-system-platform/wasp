@@ -982,6 +982,15 @@ public:
     std::string toString() const override { return "i64.ctz"; }
 };
 
+class I64PopCount : public InstructionBase {
+public:
+    static constexpr uint8_t OPCODE = 0x7B;
+
+    I64PopCount() : InstructionBase(OPCODE) {}
+
+    std::string toString() const override { return "i64.popcnt"; }
+};
+
 class I64Add : public InstructionBase {
 public:
     static constexpr uint8_t OPCODE = 0x7C;
