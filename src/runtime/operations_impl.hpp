@@ -156,7 +156,7 @@ inline Value I32Sub::impl(I32Sub& i32_sub, Instance& instance, Value lhs,
                   instance.getActiveContext().getEpilogues().size(),
                   instance.getGlobalState().getDebugInfo().getFormattedLocation(
                       i32_sub.addr_),
-                  lhs.i32, rhs.i32, out .32);
+                  lhs.i32, rhs.i32, out.32);
     return out;
 }
 

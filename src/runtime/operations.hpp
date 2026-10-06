@@ -28,8 +28,8 @@ template <std::size_t num> struct ValueTuple {
     template <std::size_t> using AlwaysValue = Value;
 
     template <std::size_t... I>
-    static auto
-        make(std::index_sequence<I...>) -> std::tuple<AlwaysValue<I>...>;
+    static auto make(std::index_sequence<I...>)
+        -> std::tuple<AlwaysValue<I>...>;
 
     using type = decltype(make(std::make_index_sequence<num>{}));
 };
@@ -380,7 +380,7 @@ public:
 
     LocalTee(const grammar::LocalTee& local_tee)
         : GenericOperation<LocalTee>(local_tee.getAddress()),
-          local_idx_(local_tee.getLocalIdx()){};
+          local_idx_(local_tee.getLocalIdx()) {};
 
 private:
     uint32_t local_idx_;
