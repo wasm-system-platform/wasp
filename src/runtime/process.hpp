@@ -24,7 +24,6 @@ public:
 
     const Operation& getEntry() { return entry_; }
 
-    const std::array<uint8_t, 32>& getKey() const { return key_; }
     std::unordered_set<Operation>& getEpilogueCache() {
         return epilogue_cache_;
     }
@@ -44,7 +43,6 @@ private:
 
     uint32_t id_;
     uint32_t execve_stack_ = 0;
-    std::array<uint8_t, 32> key_;
     std::unordered_set<Operation> epilogue_cache_;
 
     Operation entry_;

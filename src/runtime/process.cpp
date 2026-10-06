@@ -93,28 +93,14 @@ Expected<Imports> Process::createImports(Instance& instance) {
     std::function<int32_t(Instance & instance, int32_t, int32_t)>
         env_save_func = [](Instance& instance, uint32_t checkpoint_offset,
                            uint32_t checkpoint_len) -> int32_t {
-        Memory& memory = instance.getGlobalState().getMemory();
-        if (!memory.contains(checkpoint_offset, checkpoint_len))
-            return static_cast<int32_t>(Errno::invalid);
-
-        uint8_t* checkpoint_ptr;
-        memory.ptr(checkpoint_offset, &checkpoint_ptr);
-        std::span<uint8_t> checkpoint(checkpoint_ptr, checkpoint_len);
-
-        return static_cast<int32_t>(checkpoint::create(instance, checkpoint));
+        return static_cast<int32_t>(
+            checkpoint::save(instance, checkpoint_offset, checkpoint_len));
     };
     std::function<int32_t(Instance & instance, int32_t, int32_t)>
         env_restore_func = [](Instance& instance, uint32_t checkpoint_offset,
                               uint32_t checkpoint_len) -> int32_t {
-        Memory& memory = instance.getGlobalState().getMemory();
-        if (!memory.contains(checkpoint_offset, checkpoint_len))
-            return static_cast<int32_t>(Errno::invalid);
-
-        const uint8_t* checkpoint_ptr;
-        memory.ptr(checkpoint_offset, &checkpoint_ptr);
-        std::span<const uint8_t> checkpoint(checkpoint_ptr, checkpoint_len);
-
-        return static_cast<int32_t>(checkpoint::restore(instance, checkpoint));
+        return static_cast<int32_t>(
+            checkpoint::restore(instance, checkpoint_offset, checkpoint_len));
     };
 
     Function env_save = Function::createExternal(env_save_func);

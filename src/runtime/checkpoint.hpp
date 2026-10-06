@@ -8,9 +8,11 @@ namespace runtime {
 
 namespace checkpoint {
 
-Errno create(Instance& instance, std::span<uint8_t> save_out);
+Errno save(Instance& instance, uint32_t checkpoint_offset,
+           uint32_t checkpoint_len);
 
-Errno restore(Instance& instance, std::span<const uint8_t> save);
+Errno restore(Instance& instance, uint32_t checkpoint_offset,
+              uint32_t checkpoint_len);
 
 } // namespace checkpoint
 

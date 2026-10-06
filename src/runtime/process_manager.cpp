@@ -124,19 +124,11 @@ Errno ProcessManager::readMemory(uint32_t pid, uint32_t kbuffer_offset,
         uint32_t offset = pbuffer_offset + i;
 
         if (offset < VIRT_MEMORY) {
-            if (!proc_memory.load(offset, tbuffer[i])) {
-                fmt::println("Invalid process memory access: addr=0x{:08X} "
-                             "size=0x{:08X}",
-                             offset, proc_memory.size());
+            if (!proc_memory.load(offset, tbuffer[i]))
                 return Errno::BAD_ADDRESS;
-            }
         } else {
-            if (!mmu.load(offset, tbuffer[i])) {
-                fmt::println(
-                    "Invalid process memory access: addr=0x{:08X} count={}",
-                    offset, count);
+            if (!mmu.load(offset, tbuffer[i]))
                 return Errno::BAD_ADDRESS;
-            }
         }
     }
 
