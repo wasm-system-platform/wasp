@@ -109,10 +109,13 @@ public:
 private:
     class Epilogue : public Handler::Epilogue {
     public:
-        Epilogue(Instance& suspended_instance, Signal&)
-            : Handler::Epilogue(suspended_instance) {}
+        Epilogue(Instance& suspended_instance, Function& func)
+            : Handler::Epilogue(suspended_instance), func_(func) {}
 
         Continuation action(Instance& instance) override;
+
+    private:
+        Function& func_;
     };
 };
 

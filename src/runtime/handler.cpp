@@ -247,7 +247,7 @@ Continuation Signal::action(Instance& instance) {
     }
 
     /* Allocate epilogue. */
-    auto epilogue = std::make_shared<Epilogue>(instance, *this);
+    auto epilogue = std::make_shared<Epilogue>(instance, func);
 
     /* Prepare process state. */
     Context& proc_ctxt = proc->getActiveContext();
@@ -259,7 +259,9 @@ Continuation Signal::action(Instance& instance) {
     return func.enterFrame(proc_ctxt);
 }
 
-Continuation Signal::Epilogue::action(Instance&) {
+Continuation Signal::Epilogue::action(Instance& instance) {
+    func_.leaveFrame(instance.getActiveContext());
+
     Kernel& kernel = suspended_instance_.as<Kernel>();
     kernel.getActiveContext().getStack().push(
         std::to_underlying(Errno::success));
