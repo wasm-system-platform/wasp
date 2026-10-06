@@ -24,17 +24,14 @@ void Disk::io(Instance& instance, int32_t cmd, std::span<uint8_t> buffer) {
     case std::to_underlying(Command::read):
         read(instance, buffer);
         break;
-    case std::to_underlying(Command::seekg):
-        seekg(buffer);
-        break;
     case std::to_underlying(Command::write):
         write(instance, buffer);
         break;
-    case std::to_underlying(Command::seekp):
-        seekp(instance, buffer);
-        break;
     case std::to_underlying(Command::flush):
         flush(instance, buffer);
+        break;
+    case std::to_underlying(Command::get_size):
+        getSize(instance, buffer);
         break;
     default:
         fmt::println("unknown cmd: {}", cmd);
@@ -48,6 +45,7 @@ void Disk::read(Instance& instance, std::span<uint8_t> buffer) {
         Result result;
         uint32_t dest;
         uint32_t count;
+        uint64_t offset;
     } __attribute__((packed));
 
     if (buffer.size() < sizeof(ReadCommand)) {
@@ -67,54 +65,16 @@ void Disk::read(Instance& instance, std::span<uint8_t> buffer) {
     char* dest;
     memory.ptr(cmd->dest, &dest);
 
-    std::streampos old_pos = disk_.tellg();
+    disk_.clear();
+
+    disk_.seekg(cmd->offset, std::ios_base::beg);
+    if (!disk_) {
+        cmd->result = Result::disk_error;
+        return;
+    }
+
     disk_.read(dest, cmd->count);
-
-    if (!disk_) {
-        disk_.clear();
-        disk_.seekg(old_pos);
-        cmd->result = Result::disk_error;
-        return;
-    }
-
-    cmd->result = Result::success;
-}
-
-void Disk::seekg(std::span<uint8_t> buffer) {
-    if (buffer.size() < sizeof(SeekCommand)) {
-        Result* result = reinterpret_cast<Result*>(buffer.data());
-        *result = Result::invalid_arguments;
-        return;
-    }
-
-    std::streampos old_pos = disk_.tellg();
-
-    SeekCommand* cmd = reinterpret_cast<SeekCommand*>(buffer.data());
-    switch (cmd->whence) {
-    case SeekWhence::set:
-        disk_.seekg(cmd->pos, std::ios_base::beg);
-        break;
-    case SeekWhence::cur:
-        disk_.seekg(cmd->pos, std::ios_base::cur);
-        break;
-    case SeekWhence::end:
-        disk_.seekg(cmd->pos, std::ios_base::end);
-        break;
-    default:
-        cmd->result = Result::invalid_arguments;
-        return;
-    }
-
-    if (!disk_) {
-        disk_.clear();
-        disk_.seekg(old_pos);
-        cmd->result = Result::disk_error;
-        return;
-    }
-
-    cmd->new_pos = static_cast<uint64_t>(disk_.tellg());
-    cmd->result = Result::success;
-    return;
+    cmd->result = disk_ ? Result::success : Result::disk_error;
 }
 
 void Disk::write(Instance& instance, std::span<uint8_t> buffer) {
@@ -122,6 +82,7 @@ void Disk::write(Instance& instance, std::span<uint8_t> buffer) {
         Result result;
         uint32_t src;
         uint32_t count;
+        uint64_t offset;
     } __attribute__((packed));
 
     if (buffer.size() < sizeof(WriteCommand)) {
@@ -141,66 +102,50 @@ void Disk::write(Instance& instance, std::span<uint8_t> buffer) {
     const char* src;
     memory.ptr(cmd->src, &src);
 
-    std::streampos old_pos = disk_.tellp();
-    disk_.write(src, cmd->count);
+    disk_.clear();
 
+    disk_.seekp(cmd->offset, std::ios_base::beg);
     if (!disk_) {
-        disk_.clear();
-        disk_.seekp(old_pos);
         cmd->result = Result::disk_error;
         return;
     }
 
-    cmd->result = Result::success;
+    disk_.write(src, cmd->count);
+    cmd->result = disk_ ? Result::success : Result::disk_error;
 };
 
-void Disk::seekp(Instance& instance, std::span<uint8_t> buffer) {
-    if (buffer.size() < sizeof(SeekCommand)) {
+void Disk::flush(Instance& instance, std::span<uint8_t> buffer) {
+    Result* result = reinterpret_cast<Result*>(buffer.data());
+    *result = disk_ ? Result::success : Result::disk_error;
+}
+
+void Disk::getSize(Instance& instance, std::span<uint8_t> buffer) {
+    struct GetSizeCommand {
+        Result result;
+        uint64_t size;
+    } __attribute__((packed));
+
+    if (buffer.size() < sizeof(GetSizeCommand)) {
         Result* result = reinterpret_cast<Result*>(buffer.data());
         *result = Result::invalid_arguments;
         return;
     }
 
-    std::streampos old_pos = disk_.tellp();
+    GetSizeCommand* cmd = reinterpret_cast<GetSizeCommand*>(buffer.data());
 
-    SeekCommand* cmd = reinterpret_cast<SeekCommand*>(buffer.data());
-    switch (cmd->whence) {
-    case SeekWhence::set:
-        disk_.seekp(cmd->pos, std::ios_base::beg);
-        break;
-    case SeekWhence::cur:
-        disk_.seekp(cmd->pos, std::ios_base::cur);
-        break;
-    case SeekWhence::end:
-        disk_.seekp(cmd->pos, std::ios_base::end);
-        break;
-    default:
-        cmd->result = Result::invalid_arguments;
-        return;
+    disk_.clear();
+    disk_.seekg(0, std::ios_base::end);
+
+    if (disk_) {
+        const auto position = disk_.tellg();
+
+        if (position != std::fstream::pos_type(-1)) {
+            const auto size = static_cast<std::streamoff>(position);
+
+            if (size >= 0) {
+                cmd->size = static_cast<uint64_t>(size);
+                cmd->result = Result::success;
+            }
+        }
     }
-
-    if (!disk_) {
-        disk_.clear();
-        disk_.seekp(old_pos);
-        cmd->result = Result::disk_error;
-        return;
-    }
-
-    cmd->new_pos = static_cast<uint64_t>(disk_.tellp());
-    cmd->result = Result::success;
-    return;
-}
-
-void Disk::flush(Instance& instance, std::span<uint8_t> buffer) {
-    Result* result = reinterpret_cast<Result*>(buffer.data());
-
-    disk_.flush();
-
-    if (!disk_) {
-        disk_.clear();
-        *result = Result::disk_error;
-        return;
-    }
-
-    *result = Result::success;
 }
