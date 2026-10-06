@@ -58,7 +58,7 @@ Errno ContextManager::cloneContext(uint32_t id, uint32_t& clone_id_out) {
     Context& ctx = *contexts_[id];
 
     clone_id_out = allocateContextId();
-    contexts_[clone_id_out] = std::make_shared<Context>(ctx, id);
+    contexts_[clone_id_out] = std::make_shared<Context>(ctx, clone_id_out);
 
     return Errno::success;
 }
