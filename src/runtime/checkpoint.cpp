@@ -1,10 +1,10 @@
 #include <atomic>
 
-#include <openssl/evp.h>
-
 #include "runtime/instance.hpp"
 #include "runtime/kernel.hpp"
 #include "runtime/process.hpp"
+
+#include <tomcrypt.h>
 
 namespace runtime {
 
@@ -181,57 +181,36 @@ Errno encrypt(const std::vector<uint8_t>& plaintext,
               const std::array<uint8_t, 12>& nonce,
               std::array<uint8_t, 16>& hash_out,
               std::span<uint8_t> confidential_out) {
+    assert(!plaintext.empty());
     assert(confidential_out.size() >= plaintext.size());
-    assert(plaintext.size() <= INT_MAX);
 
     hash_out.fill(0);
 
-    EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
-    if (ctx == nullptr)
-        return Errno::no_memory;
-
-    if (EVP_EncryptInit_ex(ctx, EVP_chacha20_poly1305(), nullptr, nullptr,
-                           nullptr) != 1) {
-        EVP_CIPHER_CTX_free(ctx);
+    chacha20poly1305_state ctx;
+    int result = chacha20poly1305_init(&ctx, key.data(),
+                                       static_cast<unsigned long>(key.size()));
+    if (result != CRYPT_OK)
         return Errno::io;
-    }
 
-    if (EVP_EncryptInit_ex(ctx, nullptr, nullptr, key.data(), nonce.data()) !=
-        1) {
-        EVP_CIPHER_CTX_free(ctx);
+    result = chacha20poly1305_setiv(&ctx, nonce.data(),
+                                    static_cast<unsigned long>(nonce.size()));
+    if (result != CRYPT_OK)
         return Errno::io;
-    }
 
-    int len = 0;
-
-    if (EVP_EncryptUpdate(ctx, confidential_out.data(), &len, plaintext.data(),
-                          static_cast<int>(plaintext.size())) != 1) {
-        EVP_CIPHER_CTX_free(ctx);
+    result = chacha20poly1305_encrypt(
+        &ctx, plaintext.data(), static_cast<unsigned long>(plaintext.size()),
+        confidential_out.data());
+    if (result != CRYPT_OK)
         return Errno::io;
-    }
 
-    int ciphertext_len = len;
-
-    if (EVP_EncryptFinal_ex(ctx, confidential_out.data() + ciphertext_len,
-                            &len) != 1) {
-        EVP_CIPHER_CTX_free(ctx);
+    unsigned long tag_len = static_cast<unsigned long>(hash_out.size());
+    result = chacha20poly1305_done(&ctx, hash_out.data(), &tag_len);
+    if (result != CRYPT_OK)
         return Errno::io;
-    }
 
-    ciphertext_len += len;
-    if (ciphertext_len != static_cast<int>(plaintext.size())) {
-        EVP_CIPHER_CTX_free(ctx);
+    if (tag_len != hash_out.size())
         return Errno::io;
-    }
 
-    if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_AEAD_GET_TAG,
-                            static_cast<int>(hash_out.size()),
-                            hash_out.data()) != 1) {
-        EVP_CIPHER_CTX_free(ctx);
-        return Errno::io;
-    }
-
-    EVP_CIPHER_CTX_free(ctx);
     return Errno::success;
 }
 
@@ -242,59 +221,39 @@ Errno decrypt(std::span<const uint8_t> confidential,
               std::vector<uint8_t>& plaintext_out) {
     assert(!confidential.empty());
 
-    if (confidential.size() > static_cast<size_t>(INT_MAX))
+    if (confidential.size() > std::numeric_limits<unsigned long>::max())
         return Errno::overflow;
-
-    EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
-    if (ctx == nullptr)
-        return Errno::no_memory;
 
     std::vector<uint8_t> plaintext(confidential.size());
 
-    if (EVP_DecryptInit_ex(ctx, EVP_chacha20_poly1305(), nullptr, nullptr,
-                           nullptr) != 1) {
-        EVP_CIPHER_CTX_free(ctx);
+    chacha20poly1305_state ctx;
+    int result = chacha20poly1305_init(&ctx, key.data(),
+                                       static_cast<unsigned long>(key.size()));
+    if (result != CRYPT_OK)
         return Errno::io;
-    }
 
-    if (EVP_DecryptInit_ex(ctx, nullptr, nullptr, key.data(), nonce.data()) !=
-        1) {
-        EVP_CIPHER_CTX_free(ctx);
+    result = chacha20poly1305_setiv(&ctx, nonce.data(),
+                                    static_cast<unsigned long>(nonce.size()));
+    if (result != CRYPT_OK)
         return Errno::io;
-    }
 
-    int len = 0;
-
-    if (EVP_DecryptUpdate(ctx, plaintext.data(), &len, confidential.data(),
-                          static_cast<int>(confidential.size())) != 1) {
-        EVP_CIPHER_CTX_free(ctx);
+    result = chacha20poly1305_decrypt(
+        &ctx, confidential.data(),
+        static_cast<unsigned long>(confidential.size()), plaintext.data());
+    if (result != CRYPT_OK)
         return Errno::io;
-    }
 
-    int plaintext_len = len;
+    std::array<uint8_t, 16> calculated_tag{};
+    unsigned long tag_len = static_cast<unsigned long>(calculated_tag.size());
+    result = chacha20poly1305_done(&ctx, calculated_tag.data(), &tag_len);
 
-    if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_AEAD_SET_TAG,
-                            static_cast<int>(hash.size()),
-                            const_cast<uint8_t*>(hash.data())) != 1) {
-        EVP_CIPHER_CTX_free(ctx);
+    if (result != CRYPT_OK || tag_len != calculated_tag.size())
         return Errno::io;
-    }
 
-    if (EVP_DecryptFinal_ex(ctx, plaintext.data() + plaintext_len, &len) != 1) {
-        EVP_CIPHER_CTX_free(ctx);
+    if (mem_neq(calculated_tag.data(), hash.data(), hash.size()) != 0)
         return Errno::access;
-    }
 
-    plaintext_len += len;
-    if (plaintext_len != static_cast<int>(confidential.size())) {
-        EVP_CIPHER_CTX_free(ctx);
-        return Errno::io;
-    }
-
-    plaintext.resize(static_cast<size_t>(plaintext_len));
     plaintext_out = std::move(plaintext);
-
-    EVP_CIPHER_CTX_free(ctx);
     return Errno::success;
 }
 

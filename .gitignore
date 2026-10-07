@@ -4,3 +4,4 @@
 # Meson
 /subprojects/*
 !/subprojects/*.wrap
+!/subprojects/libtomcrypt

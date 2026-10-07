@@ -1,0 +1,5 @@
+subdir('ccm')
+subdir('chachapoly')
+subdir('eax')
+subdir('gcm')
+subdir('ocb')

@@ -45,7 +45,7 @@ sp_lib = static_library(
     sources: sp_sources,
     dependencies: [
         fmt_dep,
-        dependency('libcrypto', default_options: ['default_library=static', 'build_cli=false'])
+        dependency('libtomcrypt')
     ],
     include_directories: include_directories('src/')
 )
