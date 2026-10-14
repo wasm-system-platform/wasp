@@ -89,15 +89,30 @@ public:
     std::string getFormattedAddress(Instance& instance) const;
 
 protected:
-    class Builder {
+    class CollectorBase {
     public:
-        Operation build();
+        CollectorBase(const std::vector<grammar::Instruction>& instructions)
+            : instructions_(instructions) {}
 
-        void addNext(Operation next);
+        virtual ~CollectorBase() = default;
+
+        virtual Operation finish() { return do_finish(); }
+
+        virtual void add(Operation next);
+
+        const std::vector<grammar::Instruction>& getInstructions() {
+            return instructions_;
+        }
+
+    protected:
+        Operation do_finish();
 
     private:
+        const std::vector<grammar::Instruction>& instructions_;
         Operations operations_;
     };
+
+    using Collector = std::unique_ptr<CollectorBase>;
 
     OperationBase() = default;
     OperationBase(size_t addr) : addr_(addr) {}
@@ -106,6 +121,13 @@ protected:
 
     Operation next_;
     size_t addr_ = UINT32_MAX;
+
+private:
+    static Operation
+    do_create(const grammar::Instruction& inst,
+              const std::vector<FunctionType>& func_types,
+              std::vector<Operation>& targets,
+              std::pmr::polymorphic_allocator<std::byte>& arena);
 };
 
 template <typename Derived> class TaggedOperation : public OperationBase {
@@ -181,7 +203,27 @@ public:
 
     Continuation action(Instance& instance) override;
 
+    static OperationBase::Collector
+    collect(const grammar::Block& inst, std::vector<Operation>& targets,
+            std::pmr::polymorphic_allocator<std::byte>& arena);
+
+protected:
+    Block() {}
+
 private:
+    class Collector : public CollectorBase {
+    public:
+        Collector(const std::vector<grammar::Instruction>& instructions,
+                  std::shared_ptr<Block> block, std::vector<Operation>& targets)
+            : CollectorBase(instructions), block_(block), targets_(targets) {}
+
+        Operation finish() override;
+
+    private:
+        std::shared_ptr<Block> block_;
+        std::vector<Operation>& targets_;
+    };
+
     Operation body_;
 };
 

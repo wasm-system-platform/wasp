@@ -1,11 +1,14 @@
 #include <cassert>
 #include <fmt/format.h>
 #include <fmt/ranges.h>
+#include <stack>
 
 #include "grammar/instructions.hpp"
 #include "grammar/values.hpp"
 
 namespace grammar {
+
+class Collector {};
 
 /**************/
 /* Expression */
@@ -53,23 +56,54 @@ std::string Expression::toString() const {
 Expected<Instruction>
 InstructionBase::parse(ByteCursor& in, size_t code_start,
                        std::pmr::polymorphic_allocator<std::byte>& arena) {
-    size_t addr =
-        (code_start == UINT32_MAX) ? code_start : in.offset() - code_start;
+    std::vector<Collector> collectors;
 
-    uint8_t opcode = in.byte();
+    while (true) {
+        size_t addr =
+            (code_start == UINT32_MAX) ? code_start : in.offset() - code_start;
 
+        uint8_t opcode = in.byte();
+
+        Expected<Instruction> instr_exp;
+        if (opcode == End::OPCODE) {
+            if (collectors.empty()) {
+                instr_exp = arena.new_object<End>();
+            } else {
+                instr_exp = collectors.back()->finish();
+                collectors.pop_back();
+            }
+        } else if (opcode == Block::OPCODE) {
+            Expected<Collector> collector_exp = Block::parse(in, arena);
+            if (!collector_exp)
+                return Unexpected(PROPAGATE(collector_exp));
+
+            collectors.push_back(std::move(*collector_exp));
+            continue;
+        } else {
+            instr_exp = do_parse(in, opcode, addr, code_start, arena);
+        }
+
+        if (!instr_exp)
+            return Unexpected(PROPAGATE(instr_exp));
+
+        if (collectors.empty())
+            return instr_exp;
+
+        assert(*instr_exp != nullptr);
+        collectors.back()->add(*instr_exp);
+    }
+}
+
+Expected<Instruction>
+InstructionBase::do_parse(ByteCursor& in, uint8_t opcode, size_t addr,
+                          size_t code_start,
+                          std::pmr::polymorphic_allocator<std::byte>& arena) {
     switch (opcode) {
     case Unreachable::OPCODE: {
         return arena.new_object<Unreachable>(addr);
     }
     case Nop::OPCODE: {
         return arena.new_object<Nop>();
-    }
-    case Block::OPCODE: {
-        Expected<Block> block_exp = Block::parse(in, code_start, arena);
-        if (!block_exp)
-            return Unexpected(PROPAGATE(block_exp));
-        return arena.new_object<Block>(*block_exp);
     }
     case Loop::OPCODE: {
         Expected<Loop> loop_exp = Loop::parse(in, addr, code_start, arena);
@@ -531,7 +565,7 @@ InstructionBase::parse(ByteCursor& in, size_t code_start,
     default:
         return Unexpected(ERROR(fmt::format("unknown opcode: {:02X}", opcode)));
     }
-}
+};
 
 Expected<Instruction> ExtendedIntstructionBase::parse(
     ByteCursor& in, size_t addr,
@@ -600,29 +634,25 @@ std::string BlockType::toString() const {
     return val_type_opt_.has_value() ? val_type_opt_->toString() : "";
 }
 
-Expected<Block>
-Block::parse(ByteCursor& in, size_t code_start,
+Expected<InstructionBase::Collector>
+Block::parse(ByteCursor& in,
              std::pmr::polymorphic_allocator<std::byte>& arena) {
     Expected<BlockType> block_type_exp = BlockType::parse(in);
     if (!block_type_exp)
         return Unexpected(PROPAGATE(block_type_exp));
 
-    std::vector<Instruction> instructions;
+    return std::make_unique<Collector>(std::move(*block_type_exp), arena);
+}
 
-    while (true) {
-        Expected<Instruction> inst_exp =
-            InstructionBase::parse(in, code_start, arena);
-        if (!inst_exp)
-            return Unexpected(PROPAGATE(inst_exp));
-        const Instruction& inst = *inst_exp;
+Expected<Instruction> Block::Collector::finish() {
+    class Builder : public Block {
+    public:
+        Builder(BlockType&& block_type, std::vector<Instruction>&& instructions)
+            : Block(std::move(block_type), std::move(instructions)) {}
+    };
 
-        if (inst->is<End>())
-            break;
-
-        instructions.push_back(inst);
-    }
-
-    return Block(*block_type_exp, std::move(instructions));
+    return arena_.new_object<Builder>(std::move(block_type_),
+                                      std::move(instructions_));
 }
 
 std::string Block::toString() const {

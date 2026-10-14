@@ -1,5 +1,6 @@
 #pragma once
 
+#include <memory>
 #include <optional>
 #include <vector>
 
@@ -45,6 +46,17 @@ private:
 
 class InstructionBase {
 public:
+    class CollectorBase {
+    public:
+        virtual ~CollectorBase() = default;
+
+        virtual void add(Instruction instruction) = 0;
+
+        virtual Expected<Instruction> finish() = 0;
+    };
+
+    using Collector = std::unique_ptr<CollectorBase>;
+
     static Expected<Instruction>
     parse(ByteCursor& in, size_t code_start,
           std::pmr::polymorphic_allocator<std::byte>& arena);
@@ -70,6 +82,10 @@ protected:
         : opcode_(opcode), addr_(addr) {}
 
 private:
+    static Expected<Instruction>
+    do_parse(ByteCursor& in, uint8_t opcode, size_t addr, size_t code_start,
+             std::pmr::polymorphic_allocator<std::byte>& arena);
+
     uint8_t opcode_;
     size_t addr_;
 };
@@ -137,11 +153,28 @@ private:
 
 class Block : public InstructionBase {
 public:
+    class Collector : public InstructionBase::CollectorBase {
+    public:
+        Collector(BlockType&& block_type,
+                  std::pmr::polymorphic_allocator<std::byte>& arena)
+            : block_type_(std::move(block_type)), arena_(arena) {}
+
+        void add(Instruction instruction) override {
+            instructions_.push_back(instruction);
+        }
+
+        Expected<Instruction> finish() override;
+
+    private:
+        BlockType block_type_;
+        std::vector<Instruction> instructions_;
+        std::pmr::polymorphic_allocator<std::byte>& arena_;
+    };
+
     static constexpr uint8_t OPCODE = 0x02;
 
-    static Expected<Block>
-    parse(ByteCursor& in, size_t code_start,
-          std::pmr::polymorphic_allocator<std::byte>& arena);
+    static Expected<InstructionBase::Collector>
+    parse(ByteCursor& in, std::pmr::polymorphic_allocator<std::byte>& arena);
 
     const std::vector<Instruction>& getInstruction() const {
         return instructions_;
@@ -150,12 +183,12 @@ public:
     std::string toString() const override;
 
 private:
+    Block(BlockType&& block_type, std::vector<Instruction>&& instructions)
+        : InstructionBase(OPCODE), block_type_(std::move(block_type)),
+          instructions_(std::move(instructions)) {}
+
     BlockType block_type_;
     std::vector<Instruction> instructions_;
-
-    Block(const BlockType& block_type, std::vector<Instruction>&& instructions)
-        : InstructionBase(OPCODE), block_type_(block_type),
-          instructions_(std::move(instructions)) {}
 };
 
 class Loop : public InstructionBase {
