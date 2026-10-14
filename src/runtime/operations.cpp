@@ -667,7 +667,7 @@ void OperationBase::CollectorBase::add(Operation next) {
     for (auto it = next; it; it = it->next_) {
         operations_.push_back(it);
 
-        while (operations_.size() >= 2) {
+        /* while (operations_.size() >= 2) {
             auto& first = operations_[operations_.size() - 2];
             auto& second = operations_[operations_.size() - 1];
 
@@ -678,7 +678,7 @@ void OperationBase::CollectorBase::add(Operation next) {
 
             operations_.pop_back();
             operations_.back() = merged;
-        }
+        } */
     }
 }
 

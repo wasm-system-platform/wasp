@@ -232,7 +232,9 @@ Expected<Imports> Kernel::createImports() {
             proc_manager.createProcess(instance, program_bytes, *pid_ptr));
     };
     std::function<void(Instance&, int32_t)> process_unload_func =
-        [](Instance&, uint32_t) -> void {};
+        [](Instance&, uint32_t) -> void {
+            fmt::println("implement me!");
+        };
     std::function<int32_t(Instance&, int32_t, int32_t)> process_run_func =
         [](Instance& instance, uint32_t pid, uint32_t execve_stack) -> int32_t {
         ProcessManager& proc_mgr = *instance.as<Kernel>().proccess_manager_;

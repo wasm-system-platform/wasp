@@ -5,6 +5,7 @@
 #include <span>
 #include <vector>
 
+#include "fmt/base.h"
 #include "hw/mem/memory_traits.hpp"
 
 namespace hw {
@@ -48,6 +49,8 @@ public:
 
     void grow(uint32_t delta) {
         size_t new_size = data_.size() + (delta << 16);
+        size_t new_cap = std::bit_ceil(new_size);
+        data_.reserve(new_cap);
         data_.resize(new_size);
     }
 

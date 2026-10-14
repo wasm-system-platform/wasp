@@ -4,6 +4,7 @@
 #include <span>
 
 #include "file_memory.hpp"
+#include "fmt/base.h"
 #include "vector_memory.hpp"
 
 namespace hw::mem {
