@@ -2,6 +2,7 @@
 
 #include "runtime/context_manager.hpp"
 #include "runtime/kernel.hpp"
+#include "runtime/operations/operations_control.hpp"
 
 namespace runtime {
 

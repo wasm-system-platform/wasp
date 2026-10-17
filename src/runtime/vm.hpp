@@ -8,7 +8,7 @@
 #include "hw/mem/memory.hpp"
 #include "runtime/context.hpp"
 #include "runtime/function.hpp"
-#include "runtime/operations.hpp"
+#include "runtime/operations/operations.hpp"
 
 namespace runtime {
 

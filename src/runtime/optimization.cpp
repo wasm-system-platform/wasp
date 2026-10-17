@@ -2,7 +2,9 @@
 #include <map>
 
 #include "runtime/instance.hpp"
-#include "runtime/operations_impl.hpp"
+#include "runtime/operations/operations_control_impl.hpp"
+#include "runtime/operations/operations_numeric_impl.hpp"
+#include "runtime/operations/operations_variable_impl.hpp"
 #include "runtime/optimization.hpp"
 #include "util/hash.hpp"
 

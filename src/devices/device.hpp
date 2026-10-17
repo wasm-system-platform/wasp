@@ -3,7 +3,7 @@
 #include <memory>
 #include <span>
 
-#include "runtime/operations.hpp"
+#include "runtime/operations/operations.hpp"
 
 using runtime::Instance;
 

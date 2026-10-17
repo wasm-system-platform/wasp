@@ -5,7 +5,7 @@
 #include "host/arch.hpp"
 #include "runtime/context.hpp"
 #include "runtime/handler.hpp"
-#include "runtime/operations.hpp"
+#include "runtime/operations/operations.hpp"
 
 namespace runtime {
 

@@ -8,7 +8,7 @@
 
 #include "runtime/handler.hpp"
 #include "runtime/instance.hpp"
-#include "runtime/operations.hpp"
+#include "runtime/operations/operations.hpp"
 #include "util/errno.hpp"
 
 namespace hw::mem {

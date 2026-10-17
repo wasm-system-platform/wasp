@@ -3,7 +3,7 @@
 #include <vector>
 
 #include "runtime/context.hpp"
-#include "runtime/operations.hpp"
+#include "runtime/operations/operations.hpp"
 
 namespace runtime {
 
