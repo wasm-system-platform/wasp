@@ -103,6 +103,17 @@ Errno ProcessManager::getProcess(uint32_t pid,
     return Errno::success;
 }
 
+Errno ProcessManager::destroyProcess(uint32_t pid) {
+    if (pid >= processes_.size())
+        return Errno::invalid;
+
+    if (!processes_[pid])
+        return Errno::invalid;
+
+    processes_[pid] = nullptr;
+    return Errno::success;
+}
+
 Errno ProcessManager::readMemory(uint32_t pid, uint32_t kbuffer_offset,
                                  uint32_t pbuffer_offset, uint32_t count) {
     std::shared_lock lock(mutex_);

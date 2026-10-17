@@ -198,6 +198,12 @@ Expected<Imports> Kernel::createImports() {
         memory.store(cid_out_offset, cid);
         return static_cast<int32_t>(Errno::success);
     };
+    std::function<int32_t(Instance&, int32_t)>
+        context_destroy_func = [](Instance& instance, uint32_t cid) -> int32_t {
+            /* ContextManager& mgr = ContextManager::instance();
+            return std::to_underlying(mgr.destroyContext(cid)); */
+            return static_cast<int32_t>(Errno::success);
+    };
     std::function<int32_t(Instance&, int32_t)> context_switch_func =
         [](Instance& instance, uint32_t next_id) -> int32_t {
         ContextManager& mgr = ContextManager::instance();
@@ -206,6 +212,7 @@ Expected<Imports> Kernel::createImports() {
 
     Function context_get = Function::createExternal(context_get_func);
     Function context_create = Function::createExternal(context_create_func);
+    Function context_destroy = Function::createExternal(context_destroy_func);
     Function context_switch = Function::createExternal(context_switch_func);
 
     // Process
@@ -231,9 +238,10 @@ Expected<Imports> Kernel::createImports() {
         return static_cast<int32_t>(
             proc_manager.createProcess(instance, program_bytes, *pid_ptr));
     };
-    std::function<void(Instance&, int32_t)> process_unload_func =
-        [](Instance&, uint32_t) -> void {
-            fmt::println("implement me!");
+    std::function<int32_t(Instance&, int32_t)> process_destroy_func =
+        [](Instance& instance, uint32_t pid) -> int32_t {
+            ProcessManager& proc_mgr = *instance.as<Kernel>().proccess_manager_;
+            return std::to_underlying(proc_mgr.destroyProcess(pid));
         };
     std::function<int32_t(Instance&, int32_t, int32_t)> process_run_func =
         [](Instance& instance, uint32_t pid, uint32_t execve_stack) -> int32_t {
@@ -299,7 +307,7 @@ Expected<Imports> Kernel::createImports() {
     };
 
     Function process_load = Function::createExternal(process_load_func);
-    Function process_unload = Function::createExternal(process_unload_func);
+    Function process_destroy = Function::createExternal(process_destroy_func);
     Function process_run = Function::createExternal(process_run_func);
     Function process_terminate =
         Function::createExternal(process_terminate_func);
@@ -417,9 +425,10 @@ Expected<Imports> Kernel::createImports() {
         {"debug.log", debug_log},
         {"context.get", context_get},
         {"context.create", context_create},
+        {"context.destroy", context_destroy},
         {"context.switch", context_switch},
         {"process.load", process_load},
-        {"process.unload", process_unload},
+        {"process.destroy", process_destroy},
         {"process.run", process_run},
         {"process.terminate", process_terminate},
         {"process.clone", process_clone},

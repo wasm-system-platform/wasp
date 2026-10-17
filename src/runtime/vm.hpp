@@ -98,11 +98,11 @@ public:
     Memory& getMemory() { return memory_; }
 
     inline std::vector<std::vector<uint8_t>>& getData() {
-        return segments_.getSegments();
+        return segments_->getSegments();
     }
 
     inline void dropSegment(uint32_t segment_idx) {
-        segments_.getSegments()[segment_idx].clear();
+        segments_->getSegments()[segment_idx].clear();
     }
 
     inline Value getGlobal(uint32_t idx) const {
@@ -112,19 +112,19 @@ public:
         globals_.setGlobal(idx, val);
     }
 
-    inline std::vector<Function>& getFunctions() { return funcs_; }
+    inline std::vector<Function>& getFunctions() { return *funcs_; }
     inline std::vector<uint32_t>& getIndirections() { return indirect_funcs_; }
 
-    inline Function& getFunction(uint32_t idx) { return funcs_[idx]; }
+    inline Function& getFunction(uint32_t idx) { return (*funcs_)[idx]; }
     bool hasFunctionIndirect(uint32_t idx) {
         if (idx >= indirect_funcs_.size() ||
-            indirect_funcs_[idx] >= funcs_.size())
+            indirect_funcs_[idx] >= funcs_->size())
             return false;
 
         return true;
     }
     Function& getFunctionIndirect(uint32_t idx) {
-        return funcs_[indirect_funcs_[idx]];
+        return (*funcs_)[indirect_funcs_[idx]];
     }
 
     const DebugInfoInstance& getDebugInfo() const { return *debug_info_; }
@@ -132,22 +132,22 @@ public:
 private:
     std::shared_ptr<std::pmr::monotonic_buffer_resource> mbr_;
 
-    std::vector<Function> funcs_;
+    std::shared_ptr<std::vector<Function>> funcs_;
     std::vector<uint32_t> indirect_funcs_;
 
     hw::mem::Memory memory_;
     GlobalInstances globals_;
-    DataInstances segments_;
+    std::shared_ptr<DataInstances> segments_;
     std::shared_ptr<DebugInfoInstance> debug_info_;
 
-    GlobalState(std::vector<Function>&& funcs,
+    GlobalState(std::shared_ptr<std::vector<Function>>&& funcs,
                 std::vector<uint32_t>&& indirect_funcs, Memory&& memory,
-                const GlobalInstances& globals, const DataInstances& segments,
+                const GlobalInstances& globals, std::shared_ptr<DataInstances>&& segments,
                 const DebugInfoInstance&& debug_info,
                 std::shared_ptr<std::pmr::monotonic_buffer_resource>&& mbr)
         : mbr_(std::move(mbr)), funcs_(std::move(funcs)),
           indirect_funcs_(std::move(indirect_funcs)),
-          memory_(std::move(memory)), globals_(globals), segments_(segments),
+          memory_(std::move(memory)), globals_(globals), segments_(std::move(segments)),
           debug_info_(std::make_shared<DebugInfoInstance>(debug_info)) {}
 
     static Expected<std::vector<Function>>

@@ -74,6 +74,7 @@ GlobalState::create(const grammar::Module& module,
         createFunctions(module, imports, arena);
     if (!funcs_exp)
         return Unexpected(PROPAGATE(funcs_exp));
+    std::shared_ptr<std::vector<Function>> funcs = std::make_shared<std::vector<Function>>(std::move(*funcs_exp));
 
     Expected<std::vector<uint32_t>> indirect_funcs_exp =
         createIndirectFunctions(module, arena);
@@ -89,14 +90,16 @@ GlobalState::create(const grammar::Module& module,
     if (!global_exp)
         return Unexpected(PROPAGATE(global_exp));
 
-    Expected<DataInstances> datas_exp = DataInstances::create(module);
-    if (!datas_exp)
-        return Unexpected(PROPAGATE(datas_exp));
+    Expected<DataInstances> segments_exp = DataInstances::create(module);
+    if (!segments_exp)
+        return Unexpected(PROPAGATE(segments_exp));
+    std::shared_ptr<DataInstances> segments = std::make_shared<DataInstances>(std::move(*segments_exp));
+
 
     DebugInfoInstance debug_info = DebugInfoInstance::create(module);
 
-    return GlobalState(std::move(*funcs_exp), std::move(*indirect_funcs_exp),
-                       std::move(*mem_exp), *global_exp, *datas_exp,
+    return GlobalState(std::move(funcs), std::move(*indirect_funcs_exp),
+                       std::move(*mem_exp), *global_exp, std::move(segments),
                        std::move(debug_info), std::move(mbr));
 }
 

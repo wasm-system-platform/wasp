@@ -20,6 +20,7 @@ public:
     Errno cloneProcess(uint32_t pid, uint32_t& clone_pid);
     Errno resumeProcess(uint32_t pid, Kernel& kernel, int32_t retval);
     Errno getProcess(uint32_t pid, std::shared_ptr<Process>& proc_out);
+    Errno destroyProcess(uint32_t pid);
 
     Errno readMemory(uint32_t pid, uint32_t kbuf, uint32_t pbuf,
                      uint32_t count);
