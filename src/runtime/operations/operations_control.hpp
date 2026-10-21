@@ -21,8 +21,9 @@ public:
 
 class Label : public TaggedOperation<Label> {
 public:
-    Label(size_t addr) : TaggedOperation<Label>(addr) {
-        next_ = std::make_shared<Nop>(addr);
+    Label(size_t addr, std::pmr::polymorphic_allocator<std::byte>& arena)
+        : TaggedOperation<Label>(addr) {
+        next_ = arena_new<Nop>(arena, addr);
     }
 
     Continuation action(Instance& instance) override {
@@ -32,15 +33,10 @@ public:
 
 class Block : public TaggedOperation<Block> {
 public:
-    Block(const grammar::Block& block,
-          const std::vector<FunctionType>& func_types,
-          std::vector<Operation>& branch_targets,
-          std::pmr::polymorphic_allocator<std::byte>& arena);
-
     Continuation action(Instance& instance) override;
 
     static OperationBase::Collector
-    collect(const grammar::Block& inst, std::vector<Operation>& targets,
+    collect(const grammar::Block& inst, Operations& targets,
             std::pmr::polymorphic_allocator<std::byte>& arena);
 
 protected:
@@ -50,14 +46,14 @@ private:
     class Collector : public CollectorBase {
     public:
         Collector(const std::vector<grammar::Instruction>& instructions,
-                  std::shared_ptr<Block> block, std::vector<Operation>& targets)
+                  Operation block, Operations& targets)
             : CollectorBase(instructions), block_(block), targets_(targets) {}
 
         Operation finish() override;
 
     private:
-        std::shared_ptr<Block> block_;
-        std::vector<Operation>& targets_;
+        Operation block_;
+        Operations& targets_;
     };
 
     Operation body_;
@@ -66,7 +62,7 @@ private:
 class Loop : public TaggedOperation<Loop> {
 public:
     Loop(const grammar::Loop& loop, const std::vector<FunctionType>& func_types,
-         std::vector<Operation>& branch_targets,
+         Operations& targets,
          std::pmr::polymorphic_allocator<std::byte>& arena);
 
     Continuation action(Instance& instance) override;
@@ -78,11 +74,10 @@ private:
 class IfThen : public TaggedOperation<IfThen> {
 public:
     static Continuation impl(IfThen& if_then, Instance& instance,
-                             Continuation next, Value cond);
+                             Operation next, Value cond);
 
     IfThen(const grammar::IfElse& if_else,
-           const std::vector<FunctionType>& func_types,
-           std::vector<Operation>& branch_targets,
+           const std::vector<FunctionType>& func_types, Operations& targets,
            std::pmr::polymorphic_allocator<std::byte>& arena);
 
     Continuation action(Instance& instance) override;
@@ -96,8 +91,7 @@ public:
     static Continuation impl(IfElse& if_else, Instance& instance, Value cond);
 
     IfElse(const grammar::IfElse& if_else,
-           const std::vector<FunctionType>& func_types,
-           std::vector<Operation>& branch_targets,
+           const std::vector<FunctionType>& func_types, Operations& targets,
            std::pmr::polymorphic_allocator<std::byte>& arena);
 
     Continuation action(Instance& instance) override;
@@ -109,7 +103,7 @@ private:
 
 class Branch : public TaggedOperation<Branch> {
 public:
-    Branch(const grammar::Branch& branch, std::vector<Operation>& targets);
+    Branch(const grammar::Branch& branch, Operations& targets);
 
     Continuation action(Instance& instance) override;
 
@@ -122,7 +116,7 @@ public:
     static Continuation impl(BranchIf& br_if, Instance& instance,
                              Continuation next, Value cond);
 
-    BranchIf(const grammar::BranchIf& br_if, std::vector<Operation>& targets);
+    BranchIf(const grammar::BranchIf& br_if, Operations& targets);
 
     Continuation action(Instance& instance) override;
 
@@ -132,20 +126,18 @@ private:
 
 class BranchTable : public TaggedOperation<BranchTable> {
 public:
-    BranchTable(const grammar::BranchTable& br_table,
-                std::vector<Operation>& targets);
+    BranchTable(const grammar::BranchTable& br_table, Operations& targets);
 
     Continuation action(Instance& instance) override;
 
 private:
     std::vector<uint32_t> label_indices_;
-    std::vector<Operation> containers_;
+    Operations targets_;
 };
 
 class Call : public TaggedOperation<Call> {
 public:
-    Call(const grammar::Call& call,
-         std::pmr::polymorphic_allocator<std::byte>& arena);
+    Call(const grammar::Call& call);
     Call(uint32_t func_idx, size_t addr);
 
     Continuation action(Instance& instance) override;
@@ -162,6 +154,7 @@ private:
     };
 
     uint32_t func_idx_;
+    Epilogue epilogue_;
 };
 
 class CallIndirect : public TaggedOperation<CallIndirect> {
@@ -187,10 +180,10 @@ private:
 
     size_t signature_;
 
-    std::vector<Operation> epilogues_;
+    std::vector<std::unique_ptr<Epilogue>> epilogues_;
     std::stack<size_t> free_list_;
 
-    const Operation& createEpilogue(Function& func);
+    Continuation createEpilogue(Function& func);
     void destroyEpilogue(size_t idx);
 };
 
@@ -199,4 +192,4 @@ public:
     Continuation action(Instance& instance) override;
 };
 
-}
+} // namespace runtime

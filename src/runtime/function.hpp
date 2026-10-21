@@ -13,8 +13,16 @@ class Function {
 public:
     static constexpr uint32_t NULL_IDX = UINT32_MAX;
 
-    Function(Operation&& body, size_t num_params, std::vector<Value>&& locals,
+    Function(Operation entry, size_t num_params, std::vector<Value>&& locals,
              size_t signature, std::string formatted_type = "");
+
+    Function(std::unique_ptr<OperationBase>&& body, size_t num_params,
+             std::vector<Value>&& locals, size_t signature,
+             std::string formatted_type = "")
+        : Function(body.get(), num_params, std::move(locals), signature,
+                   formatted_type) {
+        body_ = std::move(body);
+    }
 
     static Function create(const FunctionType& type,
                            const std::vector<FunctionType>& types,
@@ -54,7 +62,7 @@ public:
         }
         context.pushLocals(locals_);
 
-        return body_.get();
+        return entry_;
     }
 
     inline void leaveFrame(Context& context) {
@@ -79,7 +87,9 @@ private:
         std::function<void(Instance& instance)> func_;
     };
 
-    Operation body_;
+    Operation entry_;
+    std::unique_ptr<OperationBase> body_;
+
     size_t num_params_;
     std::vector<Value> locals_;
     size_t signature_;

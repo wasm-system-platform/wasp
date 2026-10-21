@@ -134,7 +134,7 @@ runtime::Continuation MemoryManagementUnit::fault(runtime::Instance& instance,
     runtime::Context& ctxt = instance.getActiveContext();
     ctxt.pushI32(static_cast<int32_t>(addr));
     ctxt.pushI32(is_write);
-    return page_fault_handler_.get();
+    return page_fault_.get();
 }
 
 } // namespace hw::mem

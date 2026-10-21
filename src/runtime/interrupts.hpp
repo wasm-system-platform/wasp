@@ -15,7 +15,7 @@ class InterruptController {
 public:
     InterruptController(uint32_t interrupt_handler_idx)
         : interrupt_handler_(
-              std::make_shared<Interrupt>(*this, interrupt_handler_idx)) {}
+              std::make_unique<Interrupt>(*this, interrupt_handler_idx)) {}
 
     bool getInterruptsEnabled() { return interrupts_enabled_; }
     bool enableInterrupts() {
@@ -95,7 +95,7 @@ private:
     std::unique_ptr<Buffer> interrupts_ = std::make_unique<Buffer>();
 
     bool interrupts_enabled_ = false;
-    Operation interrupt_handler_;
+    std::unique_ptr<Interrupt> interrupt_handler_;
 };
 
 } // namespace runtime

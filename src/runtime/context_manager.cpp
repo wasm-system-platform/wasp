@@ -23,8 +23,8 @@ Errno ContextManager::createTrampoline(Kernel& kernel, uint32_t entry_func_idx,
                                        int32_t param1, uint32_t& out_id) {
     static const size_t entry_signature =
         std::hash<FunctionType>()(FunctionType::ConsumerI32());
-    static const std::shared_ptr<CallIndirect> entry =
-        std::make_shared<CallIndirect>(entry_signature);
+    static const std::unique_ptr<CallIndirect> trampoline =
+        std::make_unique<CallIndirect>(entry_signature);
 
     if (!kernel.functionExists(entry_func_idx, entry_signature)) {
         fmt::println("oof");
@@ -38,7 +38,7 @@ Errno ContextManager::createTrampoline(Kernel& kernel, uint32_t entry_func_idx,
     ctxt.pushI32(static_cast<int32_t>(entry_func_idx));
 
     ctxt.getEpilogues().push(nullptr);
-    ctxt.getEpilogues().push(entry);
+    ctxt.getEpilogues().push(trampoline.get());
     ctxt.setRunState(Context::RunState::suspended);
 
     return Errno::success;

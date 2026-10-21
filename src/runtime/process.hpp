@@ -22,7 +22,7 @@ public:
 
     Errno clone(uint32_t new_id, std::shared_ptr<Process>& proc_out);
 
-    const Operation& getEntry() { return entry_; }
+    Continuation getEntry() { return entry_.get(); }
 
     std::unordered_set<Operation>& getEpilogueCache() {
         return epilogue_cache_;
@@ -45,7 +45,7 @@ private:
     uint32_t execve_stack_ = 0;
     std::unordered_set<Operation> epilogue_cache_;
 
-    Operation entry_;
+    std::unique_ptr<OperationBase> entry_;
 
     static Expected<Imports> createImports(Instance& instance);
 

@@ -1,8 +1,8 @@
 #include "runtime/checkpoint.hpp"
 #include "runtime/context_manager.hpp"
 #include "runtime/kernel.hpp"
-#include "util/memory_stream.hpp"
 #include "runtime/operations/operations_control.hpp"
+#include "util/memory_stream.hpp"
 
 namespace runtime {
 
@@ -22,7 +22,7 @@ Process::create(std::span<const uint8_t>& program_bytes, Instance& instance,
 
     // create global state (functions, memories, debug info, ...)
     Expected<GlobalState> global_state_exp =
-        GlobalState::create(*module_exp, *imports_exp);
+        GlobalState::create(*module_exp, std::move(*imports_exp));
     if (!global_state_exp)
         return Unexpected(PROPAGATE(global_state_exp));
 
@@ -74,9 +74,9 @@ Expected<Imports> Process::createImports(Instance& instance) {
     }
 
     Export& sys_call_handler = it->second;
+    Imports imports;
 
-    std::shared_ptr<SysCall> sys_call_op =
-        std::make_shared<SysCall>(sys_call_handler.func_idx);
+    auto sys_call_op = std::make_unique<SysCall>(sys_call_handler.func_idx);
 
     Function sys_call(std::move(sys_call_op), 7,
                       {int32_t(0), int32_t(0), int32_t(0), int32_t(0),
@@ -90,6 +90,9 @@ Expected<Imports> Process::createImports(Instance& instance) {
 
     Function sys_execve_stack = Function::createExternal(sys_execve_stack_func);
 
+    imports.emplace("sys.call", std::move(sys_call));
+    imports.emplace("sys.execve_stack", std::move(sys_execve_stack));
+
     // save/restore
     std::function<int32_t(Instance & instance, int32_t, int32_t)>
         env_save_func = [](Instance& instance, uint32_t checkpoint_offset,
@@ -100,6 +103,7 @@ Expected<Imports> Process::createImports(Instance& instance) {
     std::function<int32_t(Instance & instance, int32_t, int32_t)>
         env_restore_func = [](Instance& instance, uint32_t checkpoint_offset,
                               uint32_t checkpoint_len) -> int32_t {
+        fmt::println("restore");
         return static_cast<int32_t>(
             checkpoint::restore(instance, checkpoint_offset, checkpoint_len));
     };
@@ -107,12 +111,10 @@ Expected<Imports> Process::createImports(Instance& instance) {
     Function env_save = Function::createExternal(env_save_func);
     Function env_restore = Function::createExternal(env_restore_func);
 
-    return Imports{
-        {"sys.call", sys_call},
-        {"sys.execve_stack", sys_execve_stack},
-        {"env.save", env_save},
-        {"env.restore", env_restore},
-    };
+    imports.emplace("env.save", std::move(env_save));
+    imports.emplace("env.restore", std::move(env_restore));
+
+    return imports;
 }
 
 Expected<void> Process::validateExports() {
@@ -122,7 +124,7 @@ Expected<void> Process::validateExports() {
         size_t start_sig = FunctionType::Empty().getSignature();
 
         if (start_sig == start.signature) {
-            entry_ = std::make_shared<Call>(start.func_idx, UINT32_MAX);
+            entry_ = std::make_unique<Call>(start.func_idx, UINT32_MAX);
         } else {
             return Unexpected(
                 ERROR(fmt::format("warning: _start has a wrong signature; "

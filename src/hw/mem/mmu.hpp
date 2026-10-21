@@ -53,9 +53,8 @@ class MemoryManagementUnit {
 public:
     MemoryManagementUnit(hw::mem::Memory& memory,
                          uint32_t page_fault_handler_idx)
-        : memory_(memory),
-          page_fault_handler_(
-              std::make_shared<runtime::PageFault>(page_fault_handler_idx)) {}
+        : memory_(memory), page_fault_(std::make_unique<runtime::PageFault>(
+                               page_fault_handler_idx)) {}
 
     /* Table management */
     size_t activeTable() const { return active_idx_; }
@@ -263,7 +262,7 @@ private:
 
     uint32_t active_idx_ = 0;
 
-    runtime::Operation page_fault_handler_;
+    std::unique_ptr<runtime::PageFault> page_fault_;
 };
 
 } // namespace hw::mem

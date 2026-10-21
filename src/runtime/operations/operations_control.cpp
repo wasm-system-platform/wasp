@@ -1,5 +1,5 @@
-#include "runtime/instance.hpp"
 #include "runtime/operations/operations_control.hpp"
+#include "runtime/instance.hpp"
 #include "runtime/operations/operations_control_impl.hpp"
 
 namespace runtime {
@@ -16,19 +16,46 @@ Continuation Unreachable::action(Instance& instance) {
     return trap(instance, "unreachable instruction reached", addr_);
 }
 
-Block::Block(const grammar::Block& block,
-             const std::vector<FunctionType>& func_types,
-             std::vector<Operation>& targets,
-             std::pmr::polymorphic_allocator<std::byte>& arena) {
-    fmt::println("oof");
-    next_ = std::pmr::make_shared<Label>(arena, addr_);
+Continuation Block::action(Instance& instance) {
+    return body_->action(instance);
+}
 
-    targets.insert(targets.begin(), next_);
+OperationBase::Collector
+Block::collect(const grammar::Block& inst, Operations& targets,
+               std::pmr::polymorphic_allocator<std::byte>& arena) {
+    class Builder : public Block {
+    public:
+        Builder() {}
+    };
+
+    auto block = arena_new<Builder>(arena);
+    block->next_ = arena_new<Label>(arena, block->addr_, arena);
+    targets.insert(targets.begin(), block->next_);
+
+    return std::make_unique<Collector>(inst.getInstruction(), block, targets);
+}
+
+Operation Block::Collector::finish() {
+    add(block_->as<Block>().next_);
+    block_->as<Block>().body_ = do_finish();
+    targets_.erase(targets_.begin());
+    return block_;
+}
+
+Loop::Loop(const grammar::Loop& loop,
+           const std::vector<FunctionType>& func_types, Operations& targets,
+           std::pmr::polymorphic_allocator<std::byte>& arena)
+    : TaggedOperation<Loop>(loop.getAddress()) {
+    next_ = arena_new<Label>(arena, addr_, arena);
+
+    Operation start = arena_new<Label>(arena, addr_, arena);
+    targets.insert(targets.begin(), start);
 
     const std::vector<grammar::Instruction>& instructions =
-        block.getInstruction();
+        loop.getInstruction();
 
-    CollectorBase collector(instructions);
+    CollectorBase collector({});
+    collector.add(start);
     collector.add(
         OperationBase::create(instructions, func_types, targets, arena));
     collector.add(next_);
@@ -37,106 +64,55 @@ Block::Block(const grammar::Block& block,
     targets.erase(targets.begin());
 }
 
-Continuation Block::action(Instance& instance) {
-    return body_->action(instance);
-}
-
-OperationBase::Collector
-Block::collect(const grammar::Block& inst, std::vector<Operation>& targets,
-               std::pmr::polymorphic_allocator<std::byte>& arena) {
-    class Builder : public Block {
-    public:
-        Builder() {}
-    };
-
-    auto block = std::pmr::make_shared<Builder>(arena);
-    block->next_ = std::pmr::make_shared<Label>(arena, block->addr_);
-    targets.insert(targets.begin(), block->next_);
-
-    return std::make_unique<Collector>(inst.getInstruction(), block, targets);
-}
-
-Operation Block::Collector::finish() {
-    add(block_->next_);
-    block_->body_ = do_finish();
-    targets_.erase(targets_.begin());
-    return block_;
-}
-
-Loop::Loop(const grammar::Loop& loop,
-           const std::vector<FunctionType>& func_types,
-           std::vector<Operation>& labels,
-           std::pmr::polymorphic_allocator<std::byte>& arena)
-    : TaggedOperation<Loop>(loop.getAddress()) {
-    next_ = std::pmr::make_shared<Label>(arena, addr_);
-
-    Operation start = std::pmr::make_shared<Label>(arena, addr_);
-    labels.insert(labels.begin(), start);
-
-    const std::vector<grammar::Instruction>& instructions =
-        loop.getInstruction();
-
-    CollectorBase collector({});
-    collector.add(start);
-    collector.add(
-        OperationBase::create(instructions, func_types, labels, arena));
-    collector.add(next_);
-    body_ = collector.finish();
-
-    labels.erase(labels.begin());
-}
-
 Continuation Loop::action(Instance& instance) {
     return body_->action(instance);
 }
 
 IfThen::IfThen(const grammar::IfElse& if_else,
-               const std::vector<FunctionType>& func_types,
-               std::vector<Operation>& labels,
+               const std::vector<FunctionType>& func_types, Operations& targets,
                std::pmr::polymorphic_allocator<std::byte>& arena)
     : TaggedOperation<IfThen>(if_else.getAddress()) {
-    next_ = std::pmr::make_shared<Label>(arena, addr_);
+    next_ = arena_new<Label>(arena, addr_, arena);
 
-    labels.insert(labels.begin(), next_);
+    targets.insert(targets.begin(), next_);
 
     const std::vector<grammar::Instruction>& instructions =
         if_else.getThenExpr().getInstructions();
 
     CollectorBase collector({});
     collector.add(
-        OperationBase::create(instructions, func_types, labels, arena));
+        OperationBase::create(instructions, func_types, targets, arena));
     collector.add(next_);
     then_ = collector.finish();
 
-    labels.erase(labels.begin());
+    targets.erase(targets.begin());
 }
 
 Continuation IfThen::action(Instance& instance) {
     int32_t cond = instance.getActiveContext().pop().i32;
-    return impl(*this, instance, next_.get(), cond);
+    return impl(*this, instance, next_, cond);
 }
 
 IfElse::IfElse(const grammar::IfElse& if_else,
-               const std::vector<FunctionType>& func_types,
-               std::vector<Operation>& labels,
+               const std::vector<FunctionType>& func_types, Operations& targets,
                std::pmr::polymorphic_allocator<std::byte>& arena)
     : TaggedOperation<IfElse>(if_else.getAddress()) {
-    next_ = std::pmr::make_shared<Label>(arena, addr_);
+    next_ = arena_new<Label>(arena, addr_, arena);
 
-    labels.insert(labels.begin(), next_);
+    targets.insert(targets.begin(), next_);
 
     CollectorBase collector({});
     collector.add(OperationBase::create(if_else.getThenExpr().getInstructions(),
-                                        func_types, labels, arena));
+                                        func_types, targets, arena));
     collector.add(next_);
     then_ = collector.finish();
 
     collector.add(OperationBase::create(if_else.getElseExpr().getInstructions(),
-                                        func_types, labels, arena));
+                                        func_types, targets, arena));
     collector.add(next_);
     else_ = collector.finish();
 
-    labels.erase(labels.begin());
+    targets.erase(targets.begin());
 }
 
 Continuation IfElse::action(Instance& instance) {
@@ -144,27 +120,26 @@ Continuation IfElse::action(Instance& instance) {
     return impl(*this, instance, cond);
 }
 
-Branch::Branch(const grammar::Branch& branch, std::vector<Operation>& targets)
+Branch::Branch(const grammar::Branch& branch, Operations& targets)
     : target_(targets[branch.getLabelIdx()]) {}
 
 Continuation Branch::action(Instance&) {
     TRACE_VERBOSE("br --> {}", (void*)target_.get());
-    return target_.get();
+    return target_;
 }
 
-BranchIf::BranchIf(const grammar::BranchIf& br_if,
-                   std::vector<Operation>& targets)
+BranchIf::BranchIf(const grammar::BranchIf& br_if, Operations& targets)
     : TaggedOperation<BranchIf>(br_if.getAddress()),
       target_(targets[br_if.getLabelIdx()]) {}
 
 Continuation BranchIf::action(Instance& instance) {
     Value cond = instance.getActiveContext().pop();
-    return BranchIf::impl(*this, instance, next_.get(), cond);
+    return BranchIf::impl(*this, instance, next_, cond);
 }
 
 BranchTable::BranchTable(const grammar::BranchTable& br_table,
-                         std::vector<Operation>& containers)
-    : label_indices_(br_table.getLabelIndices()), containers_(containers) {}
+                         Operations& containers)
+    : label_indices_(br_table.getLabelIndices()), targets_(containers) {}
 
 Continuation BranchTable::action(Instance& instance) {
     uint32_t idx = static_cast<uint32_t>(instance.getActiveContext().pop().i32);
@@ -172,22 +147,18 @@ Continuation BranchTable::action(Instance& instance) {
         idx = static_cast<uint32_t>(label_indices_.size()) - 1;
 
     uint32_t label_idx = label_indices_[idx];
-    Operation target = containers_[label_idx];
+    Continuation target = targets_[label_idx];
 
     TRACE_VERBOSE("br_table {} --> {}", label_idx, (void*)target.get());
-    return target.get();
+    return target;
 }
 
-Call::Call(const grammar::Call& call,
-           std::pmr::polymorphic_allocator<std::byte>& arena)
-    : TaggedOperation<Call>(call.getAddress()), func_idx_(call.getFuncIdx()) {
-    next_ = std::pmr::make_shared<Epilogue>(arena, call.getFuncIdx(),
-                                            call.getAddress());
-}
-
+Call::Call(const grammar::Call& call)
+    : Call(call.getFuncIdx(), call.getAddress()) {}
 Call::Call(uint32_t func_idx, size_t addr)
-    : TaggedOperation<Call>(addr), func_idx_(func_idx) {
-    next_ = std::make_shared<Epilogue>(func_idx, addr);
+    : TaggedOperation<Call>(addr), func_idx_(func_idx),
+      epilogue_(func_idx, addr) {
+    next_ = &epilogue_;
 }
 
 Continuation Call::action(Instance& instance) {
@@ -213,7 +184,7 @@ Continuation Call::Epilogue::action(Instance& instance) {
 
     Function& func = instance.getGlobalState().getFunction(func_idx_);
     func.leaveFrame(instance.getActiveContext());
-    return next_.get();
+    return next_;
 }
 
 CallIndirect::CallIndirect(const grammar::CallIndirect& call_indirect,
@@ -258,7 +229,7 @@ Continuation CallIndirect::action(Instance& instance) {
                                 element_idx),
                     addr_);
 
-    Operation epilogue = createEpilogue(func);
+    Continuation epilogue = createEpilogue(func);
     instance.getActiveContext().getEpilogues().push(epilogue);
 
     TRACE("[{:3}] {}: call_indirect: (element_idx={}) -> ()",
@@ -269,19 +240,19 @@ Continuation CallIndirect::action(Instance& instance) {
     return func.enterFrame(context);
 }
 
-const Operation& CallIndirect::createEpilogue(Function& func) {
+Continuation CallIndirect::createEpilogue(Function& func) {
     size_t idx;
 
     if (free_list_.empty()) {
         idx = epilogues_.size();
-        epilogues_.push_back(std::make_shared<Epilogue>(idx, func, *this));
+        epilogues_.push_back(std::make_unique<Epilogue>(idx, func, *this));
     } else {
         idx = free_list_.top();
         free_list_.pop();
-        epilogues_[idx] = std::make_shared<Epilogue>(idx, func, *this);
+        epilogues_[idx] = std::make_unique<Epilogue>(idx, func, *this);
     }
 
-    return epilogues_[idx];
+    return epilogues_[idx].get();
 }
 
 void CallIndirect::destroyEpilogue(size_t idx) {
@@ -299,7 +270,7 @@ Continuation CallIndirect::Epilogue::action(Instance& instance) {
 
     func_.leaveFrame(instance.getActiveContext());
     parent_.destroyEpilogue(idx_);
-    return parent_.next_.get();
+    return parent_.next_;
 }
 
 Continuation Return::action(Instance&) {
@@ -307,4 +278,4 @@ Continuation Return::action(Instance&) {
     return nullptr;
 }
 
-}
+} // namespace runtime

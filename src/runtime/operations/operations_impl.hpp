@@ -46,7 +46,7 @@ Continuation GenericOperation<Derived>::action(Instance& instance) {
         }
     }
 
-    return this->next_.get();
+    return this->next_;
 }
 
-}
+} // namespace runtime

@@ -42,7 +42,7 @@ Kernel::create(const std::string& kernel_path) {
 
     // create global state (functions, memories, debug info, ...)
     Expected<GlobalState> global_state_exp =
-        GlobalState::create(*module_exp, *imports_exp);
+        GlobalState::create(*module_exp, std::move(*imports_exp));
     if (!global_state_exp)
         return Unexpected(PROPAGATE(global_state_exp));
 
@@ -98,6 +98,8 @@ bool Kernel::functionExists(uint32_t idx, size_t signature) {
 }
 
 Expected<Imports> Kernel::createImports() {
+    Imports imports;
+
     // Interrupts
     std::function<int32_t(Instance & instance)> interrupts_enable_func =
         [](Instance& instance) -> int32_t {
@@ -123,6 +125,11 @@ Expected<Imports> Kernel::createImports() {
     Function interrupts_enabled =
         Function::createExternal(interrupts_enabled_func);
     Function interrupt_idle = Function::createExternal(interrupt_idle_func);
+
+    imports.emplace("interrupt.enable", std::move(interrupts_enable));
+    imports.emplace("interrupt.disable", std::move(interrupts_disable));
+    imports.emplace("interrupt.is_enabled", std::move(interrupts_enabled));
+    imports.emplace("interrupt.idle", std::move(interrupt_idle));
 
     // Terminal
     std::function<void(Instance&, int32_t, int32_t)> terminal_write_func =
@@ -157,6 +164,8 @@ Expected<Imports> Kernel::createImports() {
 
     Function console_out = Function::createExternal(console_out_func);
 
+    imports.emplace("console.out", std::move(console_out));
+
     // Debug
     std::function<void(Instance&, int32_t, int32_t, int32_t)> debug_log_func =
         [](Instance& instance, uint32_t buffer_offset, uint32_t len,
@@ -171,6 +180,8 @@ Expected<Imports> Kernel::createImports() {
     };
 
     Function debug_log = Function::createExternal(debug_log_func);
+
+    imports.emplace("debug.log", std::move(debug_log));
 
     // Context
     std::function<int32_t(Instance&)> context_get_func =
@@ -198,11 +209,11 @@ Expected<Imports> Kernel::createImports() {
         memory.store(cid_out_offset, cid);
         return static_cast<int32_t>(Errno::success);
     };
-    std::function<int32_t(Instance&, int32_t)>
-        context_destroy_func = [](Instance& instance, uint32_t cid) -> int32_t {
-            /* ContextManager& mgr = ContextManager::instance();
-            return std::to_underlying(mgr.destroyContext(cid)); */
-            return static_cast<int32_t>(Errno::success);
+    std::function<int32_t(Instance&, int32_t)> context_destroy_func =
+        [](Instance& instance, uint32_t cid) -> int32_t {
+        /* ContextManager& mgr = ContextManager::instance();
+        return std::to_underlying(mgr.destroyContext(cid)); */
+        return static_cast<int32_t>(Errno::success);
     };
     std::function<int32_t(Instance&, int32_t)> context_switch_func =
         [](Instance& instance, uint32_t next_id) -> int32_t {
@@ -214,6 +225,11 @@ Expected<Imports> Kernel::createImports() {
     Function context_create = Function::createExternal(context_create_func);
     Function context_destroy = Function::createExternal(context_destroy_func);
     Function context_switch = Function::createExternal(context_switch_func);
+
+    imports.emplace("context.get", std::move(context_get));
+    imports.emplace("context.create", std::move(context_create));
+    imports.emplace("context.destroy", std::move(context_destroy));
+    imports.emplace("context.switch", std::move(context_switch));
 
     // Process
     std::function<int32_t(Instance&, int32_t, int32_t, int32_t)>
@@ -240,9 +256,9 @@ Expected<Imports> Kernel::createImports() {
     };
     std::function<int32_t(Instance&, int32_t)> process_destroy_func =
         [](Instance& instance, uint32_t pid) -> int32_t {
-            ProcessManager& proc_mgr = *instance.as<Kernel>().proccess_manager_;
-            return std::to_underlying(proc_mgr.destroyProcess(pid));
-        };
+        ProcessManager& proc_mgr = *instance.as<Kernel>().proccess_manager_;
+        return std::to_underlying(proc_mgr.destroyProcess(pid));
+    };
     std::function<int32_t(Instance&, int32_t, int32_t)> process_run_func =
         [](Instance& instance, uint32_t pid, uint32_t execve_stack) -> int32_t {
         ProcessManager& proc_mgr = *instance.as<Kernel>().proccess_manager_;
@@ -320,8 +336,20 @@ Expected<Imports> Kernel::createImports() {
     Function process_write_memory =
         Function::createExternal(process_write_memory_func);
     Function process_signal(
-        std::make_shared<Signal>(), 3, {int32_t(0), int32_t(0), int32_t(0)},
+        std::make_unique<Signal>(), 3, {int32_t(0), int32_t(0), int32_t(0)},
         FunctionType::I32Producer_I32_I32_I32().getSignature());
+
+    imports.emplace("process.load", std::move(process_load));
+    imports.emplace("process.destroy", std::move(process_destroy));
+    imports.emplace("process.run", std::move(process_run));
+    imports.emplace("process.terminate", std::move(process_terminate));
+    imports.emplace("process.clone", std::move(process_clone));
+    imports.emplace("process.resume", std::move(process_resume));
+    imports.emplace("process.read_memory", std::move(process_read_memory));
+    imports.emplace("process.read_memory_cstring",
+                    std::move(process_read_memory_cstring));
+    imports.emplace("process.write_memory", std::move(process_write_memory));
+    imports.emplace("process.signal", std::move(process_signal));
 
     // MMU
     std::function<int32_t(Instance&)> mmu_active_table_func =
@@ -397,6 +425,14 @@ Expected<Imports> Kernel::createImports() {
     Function mmu_unmap_page = Function::createExternal(mmu_unmap_page_func);
     Function mmu_get_page = Function::createExternal(mmu_get_page_func);
 
+    imports.emplace("mmu.active_table", std::move(mmu_active_table));
+    imports.emplace("mmu.create_table", std::move(mmu_create_table));
+    imports.emplace("mmu.destroy_table", std::move(mmu_destroy_table));
+    imports.emplace("mmu.switch_table", std::move(mmu_switch_table));
+    imports.emplace("mmu.map_page", std::move(mmu_map_page));
+    imports.emplace("mmu.unmap_page", std::move(mmu_unmap_page));
+    imports.emplace("mmu.get_page", std::move(mmu_get_page));
+
     // Device
     std::function<int32_t(Instance&, int32_t, int32_t, int32_t, int32_t)>
         device_io_func = [](Instance& instance, uint32_t port, int32_t cmd,
@@ -416,36 +452,9 @@ Expected<Imports> Kernel::createImports() {
 
     Function device_io = Function::createExternal(device_io_func);
 
-    return Imports{
-        {"interrupt.enable", interrupts_enable},
-        {"interrupt.disable", interrupts_disable},
-        {"interrupt.is_enabled", interrupts_enabled},
-        {"interrupt.idle", interrupt_idle},
-        {"console.out", console_out},
-        {"debug.log", debug_log},
-        {"context.get", context_get},
-        {"context.create", context_create},
-        {"context.destroy", context_destroy},
-        {"context.switch", context_switch},
-        {"process.load", process_load},
-        {"process.destroy", process_destroy},
-        {"process.run", process_run},
-        {"process.terminate", process_terminate},
-        {"process.clone", process_clone},
-        {"process.resume", process_resume},
-        {"process.read_memory", process_read_memory},
-        {"process.read_memory_cstring", process_read_memory_cstring},
-        {"process.write_memory", process_write_memory},
-        {"process.signal", process_signal},
-        {"mmu.active_table", mmu_active_table},
-        {"mmu.create_table", mmu_create_table},
-        {"mmu.destroy_table", mmu_destroy_table},
-        {"mmu.switch_table", mmu_switch_table},
-        {"mmu.map_page", mmu_map_page},
-        {"mmu.unmap_page", mmu_unmap_page},
-        {"mmu.get_page", mmu_get_page},
-        {"device.io", device_io},
-    };
+    imports.emplace("device.io", std::move(device_io));
+
+    return imports;
 }
 
 Expected<void> Kernel::validateExports() {
@@ -549,7 +558,9 @@ void Kernel::run(OperationBase& entry) {
 
     Continuation continuation = entry.action(*this);
     while (continuation) {
-        continuation = continuation->action(*active_instance_);
+        // TODO: remove cast
+        continuation =
+            (const_cast<Operation>(continuation))->action(*active_instance_);
 
         // check irq
         if (!continuation && controller_->getInterruptsEnabled())
@@ -562,7 +573,7 @@ void Kernel::run(OperationBase& entry) {
         // check for epilogues
         if (!continuation)
             continuation =
-                active_instance_->getActiveContext().getEpilogues().pop().get();
+                active_instance_->getActiveContext().getEpilogues().pop();
     }
 
     fmt::println("shutting down...");

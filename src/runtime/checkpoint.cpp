@@ -72,22 +72,12 @@ std::vector<uint8_t> encode(Instance& instance) {
 
     /* Encode control flow epilogues. */
     Epilogues& epilogues = ctxt.getEpilogues();
+    size_t num_epilogues = epilogues.size();
 
-    const Operation* ep = ctxt.getEpilogues().data();
-    for (size_t i = ctxt.getEpilogues().size() - 1; i > 0; i--) {
-        const Operation& epilogue = ep[i];
-        if (epilogue == nullptr)
-            break;
-    }
-
-    size_t epilogues_size = epilogues.size();
-    auto& cache = instance.as<Process>().getEpilogueCache();
-
-    encoder.push(epilogues_size);
-    for (size_t i = 0; i < epilogues_size; i++) {
-        const Operation& op = epilogues.data()[i];
-        cache.insert(op);
-        encoder.push(op.get());
+    encoder.push(num_epilogues);
+    for (size_t i = 0; i < num_epilogues; i++) {
+        Continuation op = epilogues.data()[i];
+        encoder.push(op);
     }
 
     return std::move(encoder).takeData();
@@ -155,24 +145,12 @@ void decode(Instance& instance, const std::vector<uint8_t>& encoded) {
 
     /* Decode control flow epilogues. */
     Epilogues& epilogues = ctxt.getEpilogues();
-
     auto num_epilogues = decoder.read<size_t>();
 
     epilogues.clear();
     for (size_t i = 0; i < num_epilogues; i++) {
         Continuation continuation = decoder.read<Continuation>();
-
-        if (continuation)
-            epilogues.push(continuation->shared_from_this());
-        else
-            epilogues.push(nullptr);
-    }
-
-    const Operation* ep = ctxt.getEpilogues().data();
-    for (size_t i = ctxt.getEpilogues().size() - 1; i > 0; i--) {
-        const Operation& epilogue = ep[i];
-        if (epilogue == nullptr)
-            break;
+        epilogues.push(continuation);
     }
 }
 

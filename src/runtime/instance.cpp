@@ -8,8 +8,9 @@ namespace runtime {
 
 Expected<std::shared_ptr<Instance>>
 Instance::create(const grammar::Module& module,
-                 const std::unordered_map<std::string, Function>& imports) {
-    Expected<GlobalState> store_exp = GlobalState::create(module, imports);
+                 std::unordered_map<std::string, Function>&& imports) {
+    Expected<GlobalState> store_exp =
+        GlobalState::create(module, std::move(imports));
     if (!store_exp)
         return Unexpected(PROPAGATE(store_exp));
 
@@ -166,11 +167,12 @@ void Instance::run(OperationBase& entry) {
 
     Continuation continuation = entry.action(*this);
     while (continuation) {
-        continuation = continuation->action(*this);
+        // TODO: remove casts
+        continuation = (const_cast<Operation>(continuation))->action(*this);
 
         // check for epilogues
         if (!continuation)
-            continuation = active_context_->getEpilogues().pop().get();
+            continuation = active_context_->getEpilogues().pop();
     }
 
     assert(active_context_->getEpilogues().size() == 0);

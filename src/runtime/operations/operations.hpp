@@ -50,9 +50,10 @@ class GlobalState;
 class Function;
 
 class OperationBase;
-using Operation = std::shared_ptr<OperationBase>;
+using Operation = OperationBase*;
 using Operations = std::vector<Operation>;
-using Continuation = OperationBase*;
+using Continuation = const OperationBase*;
+using Continuations = std::vector<Continuation>;
 
 class OperationBase : public std::enable_shared_from_this<OperationBase> {
 public:
@@ -62,11 +63,10 @@ public:
 
     static Operation
     create(const std::vector<grammar::Instruction>& instructions,
-           const std::vector<FunctionType>& func_types,
-           std::vector<Operation>& targets,
+           const std::vector<FunctionType>& func_types, Operations& targets,
            std::pmr::polymorphic_allocator<std::byte>& arena);
 
-    virtual Continuation action(Instance&) { return next_.get(); }
+    virtual Continuation action(Instance&) { return next_; }
     virtual Expected<Continuation> eval(Context&) const {
         return Unexpected(ERROR("evaluate called on non constant expression"));
     }
@@ -119,14 +119,13 @@ protected:
 
     Continuation trap(Instance& instance, std::string msg, size_t addr) const;
 
-    Operation next_;
-    size_t addr_ = UINT32_MAX;
+    Operation next_ = nullptr;
+    uint32_t addr_ = UINT32_MAX;
 
 private:
     static Operation
     do_create(const grammar::Instruction& inst,
-              const std::vector<FunctionType>& func_types,
-              std::vector<Operation>& targets,
+              const std::vector<FunctionType>& func_types, Operations& targets,
               std::pmr::polymorphic_allocator<std::byte>& arena);
 };
 
@@ -499,9 +498,10 @@ public:
     Continuation action(Instance& instance) override;
 
 private:
+    Continuation idle() const;
+
     uint32_t offset_;
     uint32_t align_;
-    Operation idle_;
 };
 
 class AtomicLoad : public OperationBase {
@@ -581,6 +581,21 @@ private:
     uint32_t offset_;
     uint32_t align_;
 };
+
+template <typename T, typename... Args>
+T* arena_new(std::pmr::polymorphic_allocator<std::byte>& arena,
+             Args&&... args) {
+    T* ptr = arena.allocate_object<T>();
+
+    try {
+        std::construct_at(ptr, std::forward<Args>(args)...);
+    } catch (...) {
+        arena.deallocate_object(ptr);
+        throw;
+    }
+
+    return ptr;
+}
 
 } // namespace runtime
 

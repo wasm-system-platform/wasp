@@ -17,11 +17,26 @@ public:
     ProcessManager& getProcessManager() { return *proccess_manager_; }
 
     void switchToInstance(Instance& instance) { active_instance_ = &instance; }
-    void switchBack() { active_instance_ = this; }
+    // void switchBack() { active_instance_ = this; }
 
     Continuation callPageFaultHandler();
 
     bool functionExists(uint32_t idx, size_t signature);
+
+    void signal(Process& proc) {
+        active_instance_ = &proc;
+        getActiveContext().suspend(*this);
+    }
+
+    void suspend(Instance& instance) {
+        active_instance_ = this;
+        getActiveContext().suspend(instance);
+    }
+
+    Instance& resume() {
+        active_instance_ = &getActiveContext().resume();
+        return *active_instance_;
+    }
 
 protected:
     Kernel(GlobalState&& global_state, std::shared_ptr<Exports>& exports,
@@ -30,6 +45,7 @@ protected:
 
 private:
     Instance* active_instance_;
+    // std::stack<std::reference_wrapper<Instance>> suspended_instances_;
 
     std::shared_ptr<InterruptController> controller_;
     std::unique_ptr<MemoryManagementUnit> mmu_;

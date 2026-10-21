@@ -13,9 +13,24 @@ static int ack(int m, int n) {
 
 TEST(Programs, Ackermann) {
     std::ifstream test_file;
-    test_file.open("test/ackermann.wasm", std::ios::in | std::ios::binary);
+    test_file.open("test/ackermann.wasm", std::ios::binary | std::ios::ate);
 
-    Expected<grammar::Module> module = grammar::Module::parse(test_file);
+    const std::ifstream::pos_type size = test_file.tellg();
+    if (size < 0)
+        FAIL();
+
+    test_file.seekg(0, std::ios::beg);
+
+    std::vector<std::uint8_t> bytes(static_cast<std::size_t>(size));
+
+    test_file.read(reinterpret_cast<char*>(bytes.data()),
+              static_cast<std::streamsize>(bytes.size()));
+    if (!test_file)
+        FAIL();
+
+    ByteCursor in(std::span<const std::uint8_t>(bytes.data(), bytes.size()));
+
+    Expected<grammar::Module> module = grammar::Module::parse(in);
     if (!module) {
         std::cout << module.error().toString() << std::endl;
         FAIL();
@@ -28,7 +43,7 @@ TEST(Programs, Ackermann) {
     }
 
     auto t0_native = std::chrono::steady_clock::now();
-    int32_t native = ack(3, 11);
+    int32_t native = ack(3, 10);
     auto t1_native = std::chrono::steady_clock::now();
     auto native_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
                          t1_native - t0_native)

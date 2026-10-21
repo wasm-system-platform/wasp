@@ -3,7 +3,7 @@
 #include <cassert>
 #include <cstdint>
 
-#include "runtime/operations/operations.hpp"
+#include "runtime/operations/operations_control.hpp"
 
 namespace runtime {
 
@@ -101,22 +101,19 @@ private:
 
 class Epilogues {
 public:
-    void push(const Operation& epilogue) { data_[top_++] = epilogue; }
-    const Operation& pop() { return data_[--top_]; }
-    const Operation& peek() { return data_[top_ - 1]; }
-    void swap(const Operation& epilogue) { data_[top_ - 1] = epilogue; }
+    void push(Continuation epilogue) { data_[top_++] = epilogue; }
+    const Continuation& pop() { return data_[--top_]; }
+    const Continuation& peek() { return data_[top_ - 1]; }
+    void swap(Continuation& epilogue) { data_[top_ - 1] = epilogue; }
     void shrink(size_t new_size) { top_ = new_size; }
     size_t size() { return top_; }
-    const Operation* data() const { return data_.data(); }
+    const Continuation* data() const { return data_.data(); }
     void clear() { top_ = 0; }
 
 private:
     size_t top_ = 0;
-    std::array<Operation, UINT16_MAX> data_;
+    std::array<Continuation, UINT16_MAX> data_;
 };
-
-class OperationBase;
-using Continuation = OperationBase*;
 
 class Context {
 public:
@@ -167,6 +164,16 @@ public:
         return timeout_;
     }
 
+    void suspend(Instance& instance) {
+        suspended_instances_.push(instance);
+    }
+
+    Instance& resume() {
+        Instance& instance = suspended_instances_.top().get();
+        suspended_instances_.pop();
+        return instance;
+    }
+
 private:
     uint32_t id_;
 
@@ -174,6 +181,8 @@ private:
     Stack stack_;
     Epilogues epilogues_;
 
+    std::stack<std::reference_wrapper<Instance>> suspended_instances_;
+  
     RunState run_state_;
 
     uint32_t wait_addr_;

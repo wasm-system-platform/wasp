@@ -93,7 +93,7 @@ public:
     static GlobalState empty();
     static Expected<GlobalState>
     create(const grammar::Module& module,
-           const std::unordered_map<std::string, Function>& imports);
+           std::unordered_map<std::string, Function>&& imports);
 
     Memory& getMemory() { return memory_; }
 
@@ -142,17 +142,19 @@ private:
 
     GlobalState(std::shared_ptr<std::vector<Function>>&& funcs,
                 std::vector<uint32_t>&& indirect_funcs, Memory&& memory,
-                const GlobalInstances& globals, std::shared_ptr<DataInstances>&& segments,
+                const GlobalInstances& globals,
+                std::shared_ptr<DataInstances>&& segments,
                 const DebugInfoInstance&& debug_info,
                 std::shared_ptr<std::pmr::monotonic_buffer_resource>&& mbr)
         : mbr_(std::move(mbr)), funcs_(std::move(funcs)),
           indirect_funcs_(std::move(indirect_funcs)),
-          memory_(std::move(memory)), globals_(globals), segments_(std::move(segments)),
+          memory_(std::move(memory)), globals_(globals),
+          segments_(std::move(segments)),
           debug_info_(std::make_shared<DebugInfoInstance>(debug_info)) {}
 
     static Expected<std::vector<Function>>
     createFunctions(const grammar::Module& module,
-                    const std::unordered_map<std::string, Function>& imports,
+                    std::unordered_map<std::string, Function>&& imports,
                     std::pmr::polymorphic_allocator<std::byte>& arena);
 
     static Expected<std::vector<uint32_t>>

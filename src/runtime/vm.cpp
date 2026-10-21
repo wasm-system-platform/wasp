@@ -63,7 +63,7 @@ Expected<DataInstances> DataInstances::create(const grammar::Module& module) {
 
 Expected<GlobalState>
 GlobalState::create(const grammar::Module& module,
-                    const std::unordered_map<std::string, Function>& imports) {
+                    std::unordered_map<std::string, Function>&& imports) {
     /* Arena for all objects, which are alive during the global states lifetime.
      */
     std::shared_ptr<std::pmr::monotonic_buffer_resource> mbr =
@@ -71,10 +71,11 @@ GlobalState::create(const grammar::Module& module,
     std::pmr::polymorphic_allocator arena(mbr.get());
 
     Expected<std::vector<Function>> funcs_exp =
-        createFunctions(module, imports, arena);
+        createFunctions(module, std::move(imports), arena);
     if (!funcs_exp)
         return Unexpected(PROPAGATE(funcs_exp));
-    std::shared_ptr<std::vector<Function>> funcs = std::make_shared<std::vector<Function>>(std::move(*funcs_exp));
+    std::shared_ptr<std::vector<Function>> funcs =
+        std::make_shared<std::vector<Function>>(std::move(*funcs_exp));
 
     Expected<std::vector<uint32_t>> indirect_funcs_exp =
         createIndirectFunctions(module, arena);
@@ -93,8 +94,8 @@ GlobalState::create(const grammar::Module& module,
     Expected<DataInstances> segments_exp = DataInstances::create(module);
     if (!segments_exp)
         return Unexpected(PROPAGATE(segments_exp));
-    std::shared_ptr<DataInstances> segments = std::make_shared<DataInstances>(std::move(*segments_exp));
-
+    std::shared_ptr<DataInstances> segments =
+        std::make_shared<DataInstances>(std::move(*segments_exp));
 
     DebugInfoInstance debug_info = DebugInfoInstance::create(module);
 
@@ -171,7 +172,7 @@ DebugInfoInstance::DebugInfoInstance(
 
 Expected<std::vector<Function>> GlobalState::createFunctions(
     const grammar::Module& module,
-    const std::unordered_map<std::string, Function>& imports,
+    std::unordered_map<std::string, Function>&& imports,
     std::pmr::polymorphic_allocator<std::byte>& arena) {
     const grammar::TypeSection& type_section = module.getTypeSection();
     const grammar::ImportSection& import_section = module.getImportSection();
@@ -191,7 +192,7 @@ Expected<std::vector<Function>> GlobalState::createFunctions(
             return Unexpected(
                 ERROR(fmt::format("no function provided for {}", id)));
 
-        const Function& import = it->second;
+        Function& import = it->second;
 
         Expected<FunctionType> type_exp =
             type_section.getFunctionType(func.getTypeIdx());
@@ -204,7 +205,7 @@ Expected<std::vector<Function>> GlobalState::createFunctions(
                 func.getModule().value(), func.getName().value(),
                 type_exp->toString())));
 
-        funcs.push_back(import);
+        funcs.emplace_back(std::move(import));
     }
 
     const std::pmr::vector<uint32_t>& type_indices = func_section.getTypes();

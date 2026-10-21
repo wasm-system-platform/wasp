@@ -69,4 +69,4 @@ private:
     uint32_t global_idx_;
 };
 
-}
+} // namespace runtime

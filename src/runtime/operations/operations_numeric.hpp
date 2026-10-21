@@ -654,4 +654,4 @@ public:
               i64_trunc_sat_f64_s.getAddress()) {}
 };
 
-}
+} // namespace runtime

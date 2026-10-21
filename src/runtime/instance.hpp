@@ -24,7 +24,7 @@ public:
 
     static Expected<std::shared_ptr<Instance>>
     create(const grammar::Module& module,
-           const std::unordered_map<std::string, Function>& imports);
+           std::unordered_map<std::string, Function>&& imports);
 
     virtual ~Instance() = default;
 
@@ -67,9 +67,6 @@ protected:
              const grammar::Module& module);
 
 private:
-    GlobalState global_state_;
-    Context* active_context_ = nullptr;
-
     Expected<void> call(const std::string& name, const FunctionType& func_type);
 
     void invoke(uint32_t func_idx);
@@ -78,6 +75,9 @@ private:
     virtual void run(OperationBase& entry);
 
     virtual TypeId type() const { return nullptr; }
+
+    GlobalState global_state_;
+    Context* active_context_ = nullptr;
 
     friend class Process;
 };

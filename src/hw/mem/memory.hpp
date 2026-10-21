@@ -93,7 +93,9 @@ public:
         return num_old_pages;
     }
 
-    void updateLimit(uint16_t limit) { num_max_pages_ = std::max(num_max_pages_, limit); }
+    void updateLimit(uint16_t limit) {
+        num_max_pages_ = std::max(num_max_pages_, limit);
+    }
 
     size_t size() const { return num_curr_pages_ << 16; }
 
