@@ -255,33 +255,8 @@ namespace checkpoint {
 
 std::atomic<uint64_t> nonce_counter(0);
 
-static Errno saveUnbuffered(Instance& instance,
-                            std::span<uint8_t> checkpoint_out) {
-    if (checkpoint_out.size() < sizeof(Checkpoint))
-        return Errno::overflow;
-
-    Checkpoint* state = reinterpret_cast<Checkpoint*>(checkpoint_out.data());
-
-    std::vector<uint8_t> encoded_state = encode(instance);
-    state->confidential_size = static_cast<uint32_t>(encoded_state.size());
-
-    if (checkpoint_out.size() < (sizeof(Checkpoint) + encoded_state.size())) {
-        return Errno::overflow;
-    }
-
-    *reinterpret_cast<uint64_t*>(state->nonce.data()) =
-        nonce_counter.fetch_add(1);
-
-    const std::array<uint8_t, 32>& key = secret;
-    std::span<uint8_t> encrypted_state(
-        state->confidential, checkpoint_out.size() - sizeof(Checkpoint));
-
-    return encrypt(encoded_state, key, state->nonce, state->tag,
-                   encrypted_state);
-}
-
-static Errno saveBuffered(Instance& instance, uint32_t checkpoint_offset,
-                          uint32_t checkpoint_len) {
+Errno save(Instance& instance, uint32_t checkpoint_offset,
+           uint32_t checkpoint_len) {
     if (checkpoint_len < sizeof(Checkpoint))
         return Errno::overflow;
 
@@ -306,65 +281,35 @@ static Errno saveBuffered(Instance& instance, uint32_t checkpoint_offset,
     if (result != Errno::success)
         return result;
 
-    auto& mmu = instance.as<Process>().getKernel().getMMU();
-    if (!mmu.store(checkpoint_offset, checkpoint_buffer))
-        return Errno::access;
-
-    return Errno::success;
-}
-
-Errno save(Instance& instance, uint32_t checkpoint_offset,
-           uint32_t checkpoint_len) {
     if (checkpoint_offset < hw::mem::VIRT_MEMORY) {
         Memory& memory = instance.getGlobalState().getMemory();
-        if (!memory.contains(checkpoint_offset, checkpoint_len)) {
+        if (!memory.store(checkpoint_offset, checkpoint_buffer))
             return Errno::invalid;
-        }
-
-        uint8_t* checkpoint_ptr;
-        memory.ptr(checkpoint_offset, &checkpoint_ptr);
-        std::span<uint8_t> checkpoint(checkpoint_ptr, checkpoint_len);
-
-        return saveUnbuffered(instance, checkpoint);
+    } else {
+        auto& mmu = instance.as<Process>().getKernel().getMMU();
+        if (!mmu.store(checkpoint_offset, checkpoint_buffer))
+            return Errno::access;
     }
 
-    return saveBuffered(instance, checkpoint_offset, checkpoint_len);
-}
-
-static Errno restoreUnbuffered(Instance& instance,
-                               std::span<const uint8_t> checkpoint) {
-    if (checkpoint.size() < sizeof(Checkpoint))
-        return Errno::invalid;
-
-    const Checkpoint* state =
-        reinterpret_cast<const Checkpoint*>(checkpoint.data());
-    if (state->confidential_size == 0 ||
-        checkpoint.size() < sizeof(Checkpoint) + state->confidential_size)
-        return Errno::invalid;
-
-    std::span<const uint8_t> confidential(state->confidential,
-                                          state->confidential_size);
-    std::vector<uint8_t> encoded_state;
-
-    Errno result =
-        decrypt(confidential, secret, state->nonce, state->tag, encoded_state);
-    if (result != Errno::success)
-        return result;
-
-    decode(instance, encoded_state);
     return Errno::success;
 }
 
-static Errno restoreBuffered(Instance& instance, uint32_t checkpoint_offset,
-                             uint32_t checkpoint_len) {
+Errno restore(Instance& instance, uint32_t checkpoint_offset,
+              uint32_t checkpoint_len) {
     if (checkpoint_len < sizeof(Checkpoint))
         return Errno::invalid;
 
     std::vector<uint8_t> checkpoint_buffer(checkpoint_len);
 
-    auto& mmu = instance.as<Process>().getKernel().getMMU();
-    if (!mmu.load(checkpoint_offset, checkpoint_buffer))
-        return Errno::access;
+    if (checkpoint_offset < hw::mem::VIRT_MEMORY) {
+        Memory& memory = instance.getGlobalState().getMemory();
+        if (!memory.load(checkpoint_offset, checkpoint_buffer))
+            return Errno::invalid;
+    } else {
+        auto& mmu = instance.as<Process>().getKernel().getMMU();
+        if (!mmu.load(checkpoint_offset, checkpoint_buffer))
+            return Errno::access;
+    }
 
     const Checkpoint* state =
         reinterpret_cast<const Checkpoint*>(checkpoint_buffer.data());
@@ -384,24 +329,6 @@ static Errno restoreBuffered(Instance& instance, uint32_t checkpoint_offset,
 
     decode(instance, encoded_state);
     return Errno::success;
-}
-
-Errno restore(Instance& instance, uint32_t checkpoint_offset,
-              uint32_t checkpoint_len) {
-    if (checkpoint_offset < hw::mem::VIRT_MEMORY) {
-        Memory& memory = instance.getGlobalState().getMemory();
-        if (!memory.contains(checkpoint_offset, checkpoint_len)) {
-            return Errno::invalid;
-        }
-
-        const uint8_t* checkpoint_ptr;
-        memory.ptr(checkpoint_offset, &checkpoint_ptr);
-        std::span<const uint8_t> checkpoint(checkpoint_ptr, checkpoint_len);
-
-        return restoreUnbuffered(instance, checkpoint);
-    }
-
-    return restoreBuffered(instance, checkpoint_offset, checkpoint_len);
 }
 
 } // namespace checkpoint

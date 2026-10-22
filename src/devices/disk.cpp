@@ -62,19 +62,41 @@ void Disk::read(Instance& instance, std::span<uint8_t> buffer) {
         return;
     }
 
-    char* dest;
-    memory.ptr(cmd->dest, &dest);
-
     disk_.clear();
-
     disk_.seekg(cmd->offset, std::ios_base::beg);
+
     if (!disk_) {
         cmd->result = Result::disk_error;
         return;
     }
 
-    disk_.read(dest, cmd->count);
-    cmd->result = disk_ ? Result::success : Result::disk_error;
+    std::array<uint8_t, 4096> copy_buffer;
+
+    uint32_t remaining = cmd->count;
+    uint32_t dest = cmd->dest;
+
+    while (remaining > 0) {
+        const auto count = std::min<size_t>(remaining, copy_buffer.size());
+
+        disk_.read(reinterpret_cast<char*>(copy_buffer.data()),
+                   static_cast<std::streamsize>(count));
+
+        const size_t bytes_read = static_cast<size_t>(disk_.gcount());
+
+        if (bytes_read > 0) {
+            memory.store(dest, std::span(copy_buffer.data(), bytes_read));
+
+            dest += static_cast<uint32_t>(bytes_read);
+            remaining -= static_cast<uint32_t>(bytes_read);
+        }
+
+        if (bytes_read != count) {
+            cmd->result = Result::disk_error;
+            return;
+        }
+    }
+
+    cmd->result = Result::success;
 }
 
 void Disk::write(Instance& instance, std::span<uint8_t> buffer) {
@@ -99,19 +121,38 @@ void Disk::write(Instance& instance, std::span<uint8_t> buffer) {
         return;
     }
 
-    const char* src;
-    memory.ptr(cmd->src, &src);
-
     disk_.clear();
-
     disk_.seekp(cmd->offset, std::ios_base::beg);
+
     if (!disk_) {
         cmd->result = Result::disk_error;
         return;
     }
 
-    disk_.write(src, cmd->count);
-    cmd->result = disk_ ? Result::success : Result::disk_error;
+    std::array<uint8_t, 4096> copy_buffer;
+
+    uint32_t remaining = cmd->count;
+    uint32_t src = cmd->src;
+
+    while (remaining > 0) {
+        const auto count = std::min<size_t>(remaining, copy_buffer.size());
+
+        auto dest = std::span<uint8_t>(copy_buffer.data(), count);
+        memory.load(src, dest);
+
+        disk_.write(reinterpret_cast<const char*>(copy_buffer.data()),
+                    static_cast<std::streamsize>(count));
+
+        if (!disk_) {
+            cmd->result = Result::disk_error;
+            return;
+        }
+
+        src += static_cast<uint32_t>(count);
+        remaining -= static_cast<uint32_t>(count);
+    }
+
+    cmd->result = Result::success;
 };
 
 void Disk::flush(Instance& instance, std::span<uint8_t> buffer) {

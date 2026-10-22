@@ -237,13 +237,13 @@ Expected<Imports> Kernel::createImports() {
                                uint32_t program_size,
                                uint32_t pid_offset) -> int32_t {
         Memory& memory = instance.getGlobalState().getMemory();
-        if (!memory.contains(program_offset, program_size)) {
+        std::vector<uint8_t> program_buffer(program_size);
+
+        if (!memory.load(program_offset, program_buffer)) {
             return static_cast<int32_t>(Errno::BAD_ADDRESS);
         }
 
-        uint8_t* program_ptr;
-        memory.ptr(program_offset, &program_ptr);
-        std::span<const uint8_t> program_bytes(program_ptr, program_size);
+        std::span<const uint8_t> program_bytes(program_buffer);
 
         uint32_t* pid_ptr;
         if (!memory.ptr(pid_offset, &pid_ptr)) {

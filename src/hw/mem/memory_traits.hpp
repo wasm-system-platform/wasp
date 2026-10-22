@@ -1,8 +1,11 @@
 #pragma once
 
+#include <cstddef>
 #include <type_traits>
 
 namespace hw::mem {
+
+static constexpr size_t WASM_PAGE_SIZE = 65'536;
 
 template <typename T>
 concept Scalar = std::is_arithmetic_v<T>;

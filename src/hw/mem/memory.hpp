@@ -5,6 +5,7 @@
 
 #include "file_memory.hpp"
 #include "fmt/base.h"
+#include "page_memory.hpp"
 #include "vector_memory.hpp"
 
 namespace hw::mem {
@@ -112,7 +113,7 @@ using Memory = BasicMemory<VectorMemory>;
 using Memory = BasicMemory<FileMemory>;
 #else
 // auto
-using Memory = BasicMemory<VectorMemory>;
+using Memory = BasicMemory<PageMemory>;
 #endif
 
 } // namespace hw::mem
