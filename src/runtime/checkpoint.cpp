@@ -80,6 +80,12 @@ std::vector<uint8_t> encode(Instance& instance) {
         encoder.push(op);
     }
 
+    auto indirect_stack = ctxt.getInderectStack();
+    encoder.push(indirect_stack.size());
+    for (auto func_idx : indirect_stack) {
+        encoder.push(func_idx);
+    }
+
     return std::move(encoder).takeData();
 }
 
@@ -151,6 +157,14 @@ void decode(Instance& instance, const std::vector<uint8_t>& encoded) {
     for (size_t i = 0; i < num_epilogues; i++) {
         Continuation continuation = decoder.read<Continuation>();
         epilogues.push(continuation);
+    }
+
+    ctxt.clearIndirectCalls();
+
+    auto num_inderections = decoder.read<size_t>();
+    for (size_t i = 0; i < num_inderections; i++) {
+        uint32_t func_idx = decoder.read<uint32_t>();
+        ctxt.pushIndirectCall(func_idx);
     }
 }
 

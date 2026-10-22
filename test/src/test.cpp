@@ -24,7 +24,7 @@ TEST(Programs, Ackermann) {
     std::vector<std::uint8_t> bytes(static_cast<std::size_t>(size));
 
     test_file.read(reinterpret_cast<char*>(bytes.data()),
-              static_cast<std::streamsize>(bytes.size()));
+                   static_cast<std::streamsize>(bytes.size()));
     if (!test_file)
         FAIL();
 

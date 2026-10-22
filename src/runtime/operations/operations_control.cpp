@@ -190,11 +190,13 @@ Continuation Call::Epilogue::action(Instance& instance) {
 CallIndirect::CallIndirect(const grammar::CallIndirect& call_indirect,
                            const std::vector<FunctionType>& func_types)
     : TaggedOperation<CallIndirect>(call_indirect.getAddress()),
-      signature_(func_types[call_indirect.getTypeIdx()].getSignature()) {
+      signature_(func_types[call_indirect.getTypeIdx()].getSignature()),
+      epilogue_(*this) {
     assert(call_indirect.getTableIdx() == 0);
 }
 
-CallIndirect::CallIndirect(size_t signature) : signature_(signature) {}
+CallIndirect::CallIndirect(size_t signature)
+    : signature_(signature), epilogue_(*this) {}
 
 Continuation CallIndirect::action(Instance& instance) {
     Context& context = instance.getActiveContext();
@@ -219,7 +221,8 @@ Continuation CallIndirect::action(Instance& instance) {
                     addr_);
     }
 
-    Function& func = functions[indirections[element_idx]];
+    uint32_t func_idx = indirections[element_idx];
+    Function& func = functions[func_idx];
     if (signature_ != func.getSignature())
         return trap(instance,
                     fmt::format("call_indirect type mismatch: expected '{}' "
@@ -229,8 +232,10 @@ Continuation CallIndirect::action(Instance& instance) {
                                 element_idx),
                     addr_);
 
-    Continuation epilogue = createEpilogue(func);
-    instance.getActiveContext().getEpilogues().push(epilogue);
+    Context& ctxt = instance.getActiveContext();
+
+    ctxt.getEpilogues().push(&epilogue_);
+    ctxt.pushIndirectCall(func_idx);
 
     TRACE("[{:3}] {}: call_indirect: (element_idx={}) -> ()",
           instance.getActiveContext().getEpilogues().size(),
@@ -240,36 +245,17 @@ Continuation CallIndirect::action(Instance& instance) {
     return func.enterFrame(context);
 }
 
-Continuation CallIndirect::createEpilogue(Function& func) {
-    size_t idx;
-
-    if (free_list_.empty()) {
-        idx = epilogues_.size();
-        epilogues_.push_back(std::make_unique<Epilogue>(idx, func, *this));
-    } else {
-        idx = free_list_.top();
-        free_list_.pop();
-        epilogues_[idx] = std::make_unique<Epilogue>(idx, func, *this);
-    }
-
-    return epilogues_[idx].get();
-}
-
-void CallIndirect::destroyEpilogue(size_t idx) {
-    epilogues_[idx] = nullptr;
-    free_list_.push(idx);
-}
-
-CallIndirect::Epilogue::Epilogue(size_t idx, Function& func,
-                                 CallIndirect& parent)
-    : idx_(idx), func_(func), parent_(parent) {}
-
 Continuation CallIndirect::Epilogue::action(Instance& instance) {
     TRACE("[{:3}] {}: ret", instance.getActiveContext().getEpilogues().size(),
           instance.getGlobalState().getDebugInfo().getFormattedLocation(addr_));
 
-    func_.leaveFrame(instance.getActiveContext());
-    parent_.destroyEpilogue(idx_);
+    Context& ctxt = instance.getActiveContext();
+
+    std::vector<Function>& functions = instance.getGlobalState().getFunctions();
+    uint32_t func_idx = ctxt.popIndirectCall();
+    Function& func = functions[func_idx];
+
+    func.leaveFrame(instance.getActiveContext());
     return parent_.next_;
 }
 

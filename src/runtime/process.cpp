@@ -103,7 +103,6 @@ Expected<Imports> Process::createImports(Instance& instance) {
     std::function<int32_t(Instance & instance, int32_t, int32_t)>
         env_restore_func = [](Instance& instance, uint32_t checkpoint_offset,
                               uint32_t checkpoint_len) -> int32_t {
-        fmt::println("restore");
         return static_cast<int32_t>(
             checkpoint::restore(instance, checkpoint_offset, checkpoint_len));
     };

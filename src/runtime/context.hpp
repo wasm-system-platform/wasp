@@ -164,9 +164,7 @@ public:
         return timeout_;
     }
 
-    void suspend(Instance& instance) {
-        suspended_instances_.push(instance);
-    }
+    void suspend(Instance& instance) { suspended_instances_.push(instance); }
 
     Instance& resume() {
         Instance& instance = suspended_instances_.top().get();
@@ -174,15 +172,32 @@ public:
         return instance;
     }
 
+    void pushIndirectCall(uint32_t func_idx) {
+        indirect_stack_.push_back(func_idx);
+    }
+
+    uint32_t popIndirectCall() {
+        uint32_t idx = indirect_stack_.back();
+        indirect_stack_.pop_back();
+        return idx;
+    }
+
+    const std::vector<uint32_t>& getInderectStack() const {
+        return indirect_stack_;
+    }
+
+    void clearIndirectCalls() { indirect_stack_.clear(); }
+
 private:
     uint32_t id_;
 
     Locals locals_;
     Stack stack_;
     Epilogues epilogues_;
+    std::vector<uint32_t> indirect_stack_;
 
     std::stack<std::reference_wrapper<Instance>> suspended_instances_;
-  
+
     RunState run_state_;
 
     uint32_t wait_addr_;

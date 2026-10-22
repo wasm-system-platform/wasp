@@ -168,23 +168,15 @@ public:
 private:
     class Epilogue : public OperationBase {
     public:
-        Epilogue(size_t idx, Function& func, CallIndirect& parent);
+        Epilogue(CallIndirect& parent) : parent_(parent) {}
 
         Continuation action(Instance& instance) override;
 
-    private:
-        size_t idx_;
-        Function& func_;
         CallIndirect& parent_;
     };
 
     size_t signature_;
-
-    std::vector<std::unique_ptr<Epilogue>> epilogues_;
-    std::stack<size_t> free_list_;
-
-    Continuation createEpilogue(Function& func);
-    void destroyEpilogue(size_t idx);
+    Epilogue epilogue_;
 };
 
 class Return : public TaggedOperation<Return> {

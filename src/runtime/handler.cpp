@@ -12,7 +12,7 @@ namespace runtime {
 /*********************/
 
 Continuation Interrupt::action(Instance& instance) {
-    Context& instance_ctx = instance.getActiveContext();
+    Context& interrupt_ctx = instance.getActiveContext();
 
     Kernel& kernel = instance.is<Kernel>() ? instance.as<Kernel>()
                                            : instance.as<Process>().getKernel();
@@ -22,15 +22,16 @@ Continuation Interrupt::action(Instance& instance) {
         kernel.getGlobalState().getFunction(handler_idx_);
 
     uint32_t pid = instance.is<Kernel>() ? -1 : instance.as<Process>().getId();
-    ;
-    uint32_t port = static_cast<uint32_t>(instance_ctx.getStack().pop().i32);
+    uint32_t port = static_cast<uint32_t>(interrupt_ctx.getStack().pop().i32);
 
-    instance_ctx.pushI32(pid);
-    instance_ctx.pushI32(static_cast<int32_t>(port));
-    instance_ctx.getEpilogues().push(&epilogue_);
+    Context& kernel_ctx = kernel.getActiveContext();
+
+    kernel_ctx.pushI32(pid);
+    kernel_ctx.pushI32(static_cast<int32_t>(port));
+    kernel_ctx.getEpilogues().push(&epilogue_);
 
     controller_.disableInterrupts();
-    return interrupt_handler.enterFrame(instance_ctx);
+    return interrupt_handler.enterFrame(kernel_ctx);
 }
 
 Continuation Interrupt::Epilogue::action(Instance& instance) {
@@ -109,12 +110,15 @@ Continuation PageFault::action(Instance& instance) {
     int32_t access_type = instance_ctx.pop().i32;
     int32_t faulting_address = instance_ctx.pop().i32;
 
+    uint32_t pid =
+        instance.is<Kernel>() ? UINT32_MAX : instance.as<Process>().getId();
+
     Kernel& kernel = instance.is<Kernel>() ? instance.as<Kernel>()
                                            : instance.as<Process>().getKernel();
     kernel.suspend(instance);
 
     Context& kernel_ctx = kernel.getActiveContext();
-    kernel_ctx.pushI32(static_cast<int32_t>(instance.as<Process>().getId()));
+    kernel_ctx.pushI32(pid);
     kernel_ctx.pushI32(faulting_address);
     kernel_ctx.pushI32(access_type);
     kernel_ctx.getEpilogues().push(&epilogue_);
