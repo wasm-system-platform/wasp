@@ -15,6 +15,13 @@ inline Value LocalGet::impl(LocalGet& local_get, Instance& instance) {
     return out;
 }
 
+template <uint32_t Idx>
+inline Value LocalGetConst<Idx>::impl(LocalGetConst<Idx>& local_get,
+                                      Instance& instance) {
+    Value out = instance.getActiveContext().getLocal(Idx);
+    return out;
+}
+
 inline void LocalSet::impl(LocalSet& local_set, Instance& instance, Value in) {
     instance.getActiveContext().setLocal(local_set.local_idx_, in);
     TRACE_VERBOSE("[{:3}] {}: local.set {}: (i32={}, i64={}) -> ()",

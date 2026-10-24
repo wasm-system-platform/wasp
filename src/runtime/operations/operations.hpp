@@ -55,7 +55,7 @@ using Operations = std::vector<Operation>;
 using Continuation = const OperationBase*;
 using Continuations = std::vector<Continuation>;
 
-class OperationBase : public std::enable_shared_from_this<OperationBase> {
+class OperationBase {
 public:
     using TypeId = const void*;
 

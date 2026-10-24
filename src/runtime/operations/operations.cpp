@@ -121,9 +121,21 @@ OperationBase::do_create(const grammar::Instruction& inst,
         return arena_new<Select>(arena);
         break;
     // Variable Instruction
-    case grammar::LocalGet::OPCODE:
-        return arena_new<LocalGet>(arena, inst->as<grammar::LocalGet>());
-        break;
+    case grammar::LocalGet::OPCODE: {
+        auto local_get = inst->as<grammar::LocalGet>();
+        switch (local_get.getLocalIdx()) {
+        case 0:
+            return arena_new<LocalGetConst<0>>(arena, local_get);
+        case 1:
+            return arena_new<LocalGetConst<1>>(arena, local_get);
+        case 2:
+            return arena_new<LocalGetConst<2>>(arena, local_get);
+        case 3:
+            return arena_new<LocalGetConst<3>>(arena, local_get);
+        default:
+            return arena_new<LocalGet>(arena, local_get);
+        }
+    }
     case grammar::LocalSet::OPCODE:
         return arena_new<LocalSet>(arena, inst->as<grammar::LocalSet>());
         break;

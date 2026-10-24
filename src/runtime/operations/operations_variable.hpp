@@ -19,6 +19,18 @@ private:
     uint32_t local_idx_;
 };
 
+template <uint32_t Idx>
+class LocalGetConst : public GenericOperation<LocalGetConst<Idx>> {
+public:
+    using InType = Values<0>;
+    using OutType = Values<1>;
+
+    static OutType impl(LocalGetConst&, Instance& instance);
+
+    LocalGetConst(const grammar::LocalGet& op)
+        : GenericOperation<LocalGetConst<Idx>>(op.getAddress()) {}
+};
+
 class LocalSet : public GenericOperation<LocalSet> {
 public:
     using InType = Values<1>;
