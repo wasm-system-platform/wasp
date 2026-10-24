@@ -19,7 +19,7 @@ public:
     void setAddress(size_t addr) { addr_ = addr; }
 };
 
-class Label : public TaggedOperation<Label> {
+/* class Label : public TaggedOperation<Label> {
 public:
     Label(size_t addr, std::pmr::polymorphic_allocator<std::byte>& arena)
         : TaggedOperation<Label>(addr) {
@@ -29,7 +29,7 @@ public:
     Continuation action(Instance& instance) override {
         return next_->action(instance);
     }
-};
+}; */
 
 class Block : public TaggedOperation<Block> {
 public:

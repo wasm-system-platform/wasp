@@ -29,7 +29,7 @@ Block::collect(const grammar::Block& inst, Operations& targets,
     };
 
     auto block = arena_new<Builder>(arena);
-    block->next_ = arena_new<Label>(arena, block->addr_, arena);
+    block->next_ = arena_new<Nop>(arena, block->addr_);
     targets.insert(targets.begin(), block->next_);
 
     return std::make_unique<Collector>(inst.getInstruction(), block, targets);
@@ -46,9 +46,9 @@ Loop::Loop(const grammar::Loop& loop,
            const std::vector<FunctionType>& func_types, Operations& targets,
            std::pmr::polymorphic_allocator<std::byte>& arena)
     : TaggedOperation<Loop>(loop.getAddress()) {
-    next_ = arena_new<Label>(arena, addr_, arena);
+    next_ = arena_new<Nop>(arena, addr_);
 
-    Operation start = arena_new<Label>(arena, addr_, arena);
+    Operation start = arena_new<Nop>(arena, addr_);
     targets.insert(targets.begin(), start);
 
     const std::vector<grammar::Instruction>& instructions =
@@ -72,7 +72,7 @@ IfThen::IfThen(const grammar::IfElse& if_else,
                const std::vector<FunctionType>& func_types, Operations& targets,
                std::pmr::polymorphic_allocator<std::byte>& arena)
     : TaggedOperation<IfThen>(if_else.getAddress()) {
-    next_ = arena_new<Label>(arena, addr_, arena);
+    next_ = arena_new<Nop>(arena, addr_);
 
     targets.insert(targets.begin(), next_);
 
@@ -97,7 +97,7 @@ IfElse::IfElse(const grammar::IfElse& if_else,
                const std::vector<FunctionType>& func_types, Operations& targets,
                std::pmr::polymorphic_allocator<std::byte>& arena)
     : TaggedOperation<IfElse>(if_else.getAddress()) {
-    next_ = arena_new<Label>(arena, addr_, arena);
+    next_ = arena_new<Nop>(arena, addr_);
 
     targets.insert(targets.begin(), next_);
 
