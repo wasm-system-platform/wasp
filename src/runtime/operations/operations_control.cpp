@@ -120,12 +120,13 @@ Continuation IfElse::action(Instance& instance) {
     return impl(*this, instance, cond);
 }
 
-Branch::Branch(const grammar::Branch& branch, Operations& targets)
-    : target_(targets[branch.getLabelIdx()]) {}
+Branch::Branch(const grammar::Branch& branch, Operations& targets) {
+        next_ = targets[branch.getLabelIdx()];
+    }
 
 Continuation Branch::action(Instance&) {
-    TRACE_VERBOSE("br --> {}", (void*)target_.get());
-    return target_;
+    TRACE_VERBOSE("br --> {}", (void*)next_.get());
+    return next_;
 }
 
 BranchIf::BranchIf(const grammar::BranchIf& br_if, Operations& targets)

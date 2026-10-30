@@ -4,6 +4,8 @@
 #include "runtime/context.hpp"
 #include "runtime/instance.hpp"
 #include "runtime/kernel.hpp"
+#include "runtime/operations/operations_complex.hpp"
+#include "runtime/operations/operations_complex_impl.hpp"
 #include "runtime/operations/operations_control.hpp"
 #include "runtime/operations/operations_numeric.hpp"
 #include "runtime/operations/operations_numeric_impl.hpp"
@@ -32,6 +34,39 @@ OperationBase::create(const std::vector<grammar::Instruction>& instructions,
         bool entered_block = false;
 
         for (; i < instructions.size(); i++) {
+            if (instructions.size() - i >= 4) {
+                const std::array<grammar::Instruction, 4> inst4 = {
+                    instructions[i],
+                    instructions[i + 1],
+                    instructions[i + 2],
+                    instructions[i + 3],
+                };
+
+                /*
+                Operation next = do_create4(inst4, func_types, targets, arena);
+                if (next) {
+                    collector->add(next);
+                    i += 3;
+                    continue;
+                }
+                    */
+            } else if (instructions.size() - i >= 3) {
+                const std::array<grammar::Instruction, 3> inst3 = {
+                    instructions[i],
+                    instructions[i + 1],
+                    instructions[i + 2],
+                };
+
+                /*
+                Operation next = do_create3(inst3, func_types, targets, arena);
+                if (next) {
+                    collector->add(next);
+                    i += 2;
+                    continue;
+                }
+                    */
+            }
+
             const auto& inst = instructions[i];
 
             if (inst->is<grammar::Block>()) {
@@ -123,7 +158,7 @@ OperationBase::do_create(const grammar::Instruction& inst,
     // Variable Instruction
     case grammar::LocalGet::OPCODE: {
         auto local_get = inst->as<grammar::LocalGet>();
-        switch (local_get.getLocalIdx()) {
+        switch (local_get.getIndex()) {
         case 0:
             return arena_new<LocalGetConst<0>>(arena, local_get);
         case 1:
@@ -149,9 +184,17 @@ OperationBase::do_create(const grammar::Instruction& inst,
         return arena_new<GlobalSet>(arena, inst->as<grammar::GlobalSet>());
         break;
     // Numeric Instructions
-    case grammar::I32Const::OPCODE:
-        return arena_new<I32Const>(arena, inst->as<grammar::I32Const>());
-        break;
+    case grammar::I32Const::OPCODE: {
+        auto& i32_const = inst->as<grammar::I32Const>();
+        switch (i32_const.getVal()) {
+        case 0:
+            return arena_new<I32ConstFixed<0>>(arena, i32_const);
+        case 1:
+            return arena_new<I32ConstFixed<1>>(arena, i32_const);
+        default:
+            return arena_new<I32Const>(arena, i32_const);
+        }
+    }
     case grammar::I64Const::OPCODE:
         return arena_new<I64Const>(arena, inst->as<grammar::I64Const>());
         break;
@@ -613,6 +656,256 @@ OperationBase::do_create(const grammar::Instruction& inst,
     }
 }
 
+Operation
+OperationBase::do_create4(const std::array<grammar::Instruction, 4>& inst4,
+                          const std::vector<FunctionType>& func_types,
+                          Operations& targets,
+                          std::pmr::polymorphic_allocator<std::byte>& arena) {
+    uint32_t combined_opcode =
+        inst4[0]->getOpcode() << 24 | inst4[1]->getOpcode() << 16 |
+        inst4[2]->getOpcode() << 8 | inst4[3]->getOpcode();
+
+    switch (combined_opcode) {
+    case LocalAddConstCall::OPCODE:
+        return arena_new<LocalAddConstCall>(
+            arena, inst4[0]->as<grammar::LocalGet>(),
+            inst4[1]->as<grammar::I32Const>(), inst4[3]->as<grammar::Call>());
+    case I32LocalAddConst::OPCODE:
+        if (inst4[0]->as<grammar::LocalGet>().getIndex() ==
+            inst4[3]->as<grammar::LocalSet>().getIndex())
+            return arena_new<I32LocalAddConst>(
+                arena, inst4[0]->as<grammar::LocalGet>(),
+                inst4[1]->as<grammar::I32Const>());
+
+        return arena_new<I32LocalAddConstSet>(
+            arena, inst4[0]->as<grammar::LocalGet>(),
+            inst4[1]->as<grammar::I32Const>(),
+            inst4[3]->as<grammar::LocalSet>());
+    case I32LocalAddConstTee::OPCODE:
+        if (inst4[0]->as<grammar::LocalGet>().getIndex() ==
+            inst4[3]->as<grammar::LocalTee>().getIndex())
+            return arena_new<I32LocalAddConstTee>(
+                arena, inst4[0]->as<grammar::LocalGet>(),
+                inst4[1]->as<grammar::I32Const>());
+
+        return arena_new<I32LocalAddConstTeeTo>(
+            arena, inst4[0]->as<grammar::LocalGet>(),
+            inst4[1]->as<grammar::I32Const>(),
+            inst4[3]->as<grammar::LocalTee>());
+    case LocalSubConstCall::OPCODE:
+        return arena_new<LocalSubConstCall>(
+            arena, inst4[0]->as<grammar::LocalGet>(),
+            inst4[1]->as<grammar::I32Const>(), inst4[3]->as<grammar::Call>());
+    case I32LocalSubConst::OPCODE:
+        if (inst4[0]->as<grammar::LocalGet>().getIndex() ==
+            inst4[3]->as<grammar::LocalSet>().getIndex())
+            return arena_new<I32LocalSubConst>(
+                arena, inst4[0]->as<grammar::LocalGet>(),
+                inst4[1]->as<grammar::I32Const>());
+
+        return arena_new<I32LocalSubConstSet>(
+            arena, inst4[0]->as<grammar::LocalGet>(),
+            inst4[1]->as<grammar::I32Const>(),
+            inst4[3]->as<grammar::LocalSet>());
+    case I32LocalSubConstTee::OPCODE:
+        if (inst4[0]->as<grammar::LocalGet>().getIndex() ==
+            inst4[3]->as<grammar::LocalTee>().getIndex())
+            return arena_new<I32LocalSubConstTee>(
+                arena, inst4[0]->as<grammar::LocalGet>(),
+                inst4[1]->as<grammar::I32Const>());
+
+        return arena_new<I32LocalSubConstTeeTo>(
+            arena, inst4[0]->as<grammar::LocalGet>(),
+            inst4[1]->as<grammar::I32Const>(),
+            inst4[3]->as<grammar::LocalTee>());
+    }
+
+    return nullptr;
+
+    constexpr size_t TOP_N = 16;
+
+    struct Entry {
+        uint32_t key{};
+        uint64_t count = 0;
+    };
+
+    struct Stats {
+        std::mutex mutex;
+        std::unordered_map<uint32_t, uint64_t> counts;
+        std::array<Entry, TOP_N> top{};
+        size_t topSize = 0;
+        uint64_t total = 0;
+    };
+
+    static Stats stats;
+
+    std::lock_guard lock(stats.mutex);
+
+    ++stats.total;
+    const uint64_t count = ++stats.counts[combined_opcode];
+
+    const auto previous = stats.top;
+    const auto previousSize = stats.topSize;
+
+    auto better = [](const Entry& a, const Entry& b) {
+        if (a.count != b.count)
+            return a.count > b.count;
+        return a.key < b.key;
+    };
+
+    const Entry candidate{combined_opcode, count};
+
+    auto end = stats.top.begin() + stats.topSize;
+
+    auto it = std::find_if(stats.top.begin(), end, [&](const Entry& e) {
+        return e.key == combined_opcode;
+    });
+
+    if (it != end) {
+        it->count = count;
+    } else if (stats.topSize < TOP_N) {
+        stats.top[stats.topSize++] = candidate;
+    } else if (better(candidate, stats.top[TOP_N - 1])) {
+        stats.top[TOP_N - 1] = candidate;
+    }
+
+    std::sort(stats.top.begin(), stats.top.begin() + stats.topSize, better);
+
+    bool changed = previousSize != stats.topSize;
+
+    for (size_t i = 0; i < stats.topSize && !changed; ++i) {
+        if (previous[i].key != stats.top[i].key)
+            changed = true;
+    }
+
+    // Anfangsrauschen unterdrücken
+    if (stats.total < 10000)
+        return nullptr;
+
+    // Nur bei Änderungen oder alle 100.000 Kombinationen
+    if (!changed && stats.total % 100000 != 0)
+        return nullptr;
+
+    fmt::print(stderr, "\n[Opcode4] Top {} (total: {}, unique: {}):\n", TOP_N,
+               stats.total, stats.counts.size());
+
+    uint64_t topCount = 0;
+
+    for (size_t i = 0; i < stats.topSize; ++i) {
+        const auto& e = stats.top[i];
+        topCount += e.count;
+
+        fmt::print(stderr,
+                   "  #{:2}: [{:02X} {:02X} {:02X} {:02X}]"
+                   " -> {:>9} ({:6.2f}%)\n",
+                   i + 1, (e.key & 0xff00'0000) >> 24,
+                   (e.key & 0xff'0000) >> 16, (e.key & 0xff00) >> 8,
+                   e.key & 0xff, e.count, 100.0 * e.count / stats.total);
+    }
+
+    fmt::print(stderr, "  Top {} combined: {:.2f}%\n\n", stats.topSize,
+               100.0 * topCount / stats.total);
+
+    return nullptr;
+}
+
+Operation
+OperationBase::do_create3(const std::array<grammar::Instruction, 3>& inst3,
+                          const std::vector<FunctionType>& func_types,
+                          Operations& targets,
+                          std::pmr::polymorphic_allocator<std::byte>& arena) {
+    uint32_t combined_opcode = inst3[0]->getOpcode() << 16 |
+                               inst3[1]->getOpcode() << 8 |
+                               inst3[2]->getOpcode();
+
+    return nullptr;
+
+    constexpr size_t TOP_N = 20;
+
+    struct Entry {
+        uint32_t key{};
+        uint64_t count = 0;
+    };
+
+    struct Stats {
+        std::mutex mutex;
+        std::unordered_map<uint32_t, uint64_t> counts;
+        std::array<Entry, TOP_N> top{};
+        size_t topSize = 0;
+        uint64_t total = 0;
+    };
+
+    static Stats stats;
+
+    std::lock_guard lock(stats.mutex);
+
+    ++stats.total;
+    const uint64_t count = ++stats.counts[combined_opcode];
+
+    const auto previous = stats.top;
+    const auto previousSize = stats.topSize;
+
+    auto better = [](const Entry& a, const Entry& b) {
+        if (a.count != b.count)
+            return a.count > b.count;
+        return a.key < b.key;
+    };
+
+    const Entry candidate{combined_opcode, count};
+
+    auto end = stats.top.begin() + stats.topSize;
+
+    auto it = std::find_if(stats.top.begin(), end, [&](const Entry& e) {
+        return e.key == combined_opcode;
+    });
+
+    if (it != end) {
+        it->count = count;
+    } else if (stats.topSize < TOP_N) {
+        stats.top[stats.topSize++] = candidate;
+    } else if (better(candidate, stats.top[TOP_N - 1])) {
+        stats.top[TOP_N - 1] = candidate;
+    }
+
+    std::sort(stats.top.begin(), stats.top.begin() + stats.topSize, better);
+
+    bool changed = previousSize != stats.topSize;
+
+    for (size_t i = 0; i < stats.topSize && !changed; ++i) {
+        if (previous[i].key != stats.top[i].key)
+            changed = true;
+    }
+
+    // Anfangsrauschen unterdrücken
+    if (stats.total < 10000)
+        return nullptr;
+
+    // Nur bei Änderungen oder alle 100.000 Kombinationen
+    if (!changed && stats.total % 100000 != 0)
+        return nullptr;
+
+    fmt::print(stderr, "\n[Opcode3] Top {} (total: {}, unique: {}):\n", TOP_N,
+               stats.total, stats.counts.size());
+
+    uint64_t topCount = 0;
+
+    for (size_t i = 0; i < stats.topSize; ++i) {
+        const auto& e = stats.top[i];
+        topCount += e.count;
+
+        fmt::print(stderr,
+                   "  #{:2}: [{:02X} {:02X} {:02X}]"
+                   " -> {:>9} ({:6.2f}%)\n",
+                   i + 1, (e.key & 0xff'0000) >> 16, (e.key & 0xff00) >> 8,
+                   e.key & 0xff, e.count, 100.0 * e.count / stats.total);
+    }
+
+    fmt::print(stderr, "  Top {} combined: {:.2f}%\n\n", stats.topSize,
+               100.0 * topCount / stats.total);
+
+    return nullptr;
+}
+
 Continuation OperationBase::trap(Instance& instance, std::string msg,
                                  size_t addr) const {
     std::string fmt_loc =
@@ -640,6 +933,9 @@ void OperationBase::CollectorBase::add(Operation next) {
 
     for (auto it = next; it; it = it->next_) {
         operations_.push_back(it);
+
+        if (it->is<Branch>())
+            break;
 
         if (visited.contains(it)) {
             for (auto v : visited) {
@@ -669,6 +965,9 @@ void OperationBase::CollectorBase::add(Operation next) {
 
 Operation OperationBase::CollectorBase::do_finish() {
     for (size_t i = 0; i + 1 < operations_.size(); ++i) {
+        if (operations_[i]->is<Branch>())
+            continue;
+
         operations_[i]->next_ = operations_[i + 1];
     }
 

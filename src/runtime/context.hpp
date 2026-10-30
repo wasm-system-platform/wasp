@@ -71,6 +71,7 @@ public:
     }
 
     Value getLocal(uint32_t idx) const { return values_[frame_pointer_ + idx]; }
+    Value& getLocal(uint32_t idx) { return values_[frame_pointer_ + idx]; }
 
     void setLocal(uint32_t idx, Value value) {
         values_[frame_pointer_ + idx] = value;
@@ -140,7 +141,8 @@ public:
         return locals_.pushLocals(locals);
     }
     inline void popLocals() { locals_.popLocals(); }
-    inline Value getLocal(uint32_t idx) { return locals_.getLocal(idx); }
+    inline Value getLocal(uint32_t idx) const { return locals_.getLocal(idx); }
+    inline Value& getLocal(uint32_t idx) { return locals_.getLocal(idx); }
     inline void setLocal(uint32_t idx, Value value) {
         locals_.setLocal(idx, value);
     }

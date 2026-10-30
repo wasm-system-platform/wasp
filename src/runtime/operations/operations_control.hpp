@@ -106,9 +106,6 @@ public:
     Branch(const grammar::Branch& branch, Operations& targets);
 
     Continuation action(Instance& instance) override;
-
-private:
-    Operation target_;
 };
 
 class BranchIf : public TaggedOperation<BranchIf> {
@@ -155,6 +152,9 @@ private:
 
     uint32_t func_idx_;
     Epilogue epilogue_;
+
+    friend class LocalAddConstCall;
+    friend class LocalSubConstCall;
 };
 
 class CallIndirect : public TaggedOperation<CallIndirect> {

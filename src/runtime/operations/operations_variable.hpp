@@ -13,7 +13,7 @@ public:
 
     LocalGet(const grammar::LocalGet& local_get)
         : GenericOperation<LocalGet>(local_get.getAddress()),
-          local_idx_(local_get.getLocalIdx()) {}
+          local_idx_(local_get.getIndex()) {}
 
 private:
     uint32_t local_idx_;
@@ -40,7 +40,7 @@ public:
 
     LocalSet(const grammar::LocalSet& local_set)
         : GenericOperation<LocalSet>(local_set.getAddress()),
-          local_idx_(local_set.getLocalIdx()) {}
+          local_idx_(local_set.getIndex()) {}
 
 private:
     uint32_t local_idx_;
@@ -55,7 +55,7 @@ public:
 
     LocalTee(const grammar::LocalTee& local_tee)
         : GenericOperation<LocalTee>(local_tee.getAddress()),
-          local_idx_(local_tee.getLocalIdx()) {};
+          local_idx_(local_tee.getIndex()) {};
 
 private:
     uint32_t local_idx_;

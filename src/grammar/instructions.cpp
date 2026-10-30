@@ -825,7 +825,7 @@ Expected<LocalGet> LocalGet::parse(ByteCursor& in, size_t addr) {
 }
 
 std::string LocalGet::toString() const {
-    return fmt::format("local.get {}", local_idx_);
+    return fmt::format("local.get {}", idx_);
 }
 
 Expected<LocalSet> LocalSet::parse(ByteCursor& in, size_t addr) {
@@ -838,7 +838,7 @@ Expected<LocalSet> LocalSet::parse(ByteCursor& in, size_t addr) {
 }
 
 std::string LocalSet::toString() const {
-    return fmt::format("local.set {}", local_idx_);
+    return fmt::format("local.set {}", idx_);
 }
 
 Expected<LocalTee> LocalTee::parse(ByteCursor& in, size_t addr) {
@@ -849,7 +849,7 @@ Expected<LocalTee> LocalTee::parse(ByteCursor& in, size_t addr) {
 }
 
 std::string LocalTee::toString() const {
-    return fmt::format("local.tee {}", local_idx_);
+    return fmt::format("local.tee {}", idx_);
 }
 
 Expected<GlobalGet> GlobalGet::parse(ByteCursor& in) {

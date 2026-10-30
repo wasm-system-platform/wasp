@@ -21,6 +21,20 @@ private:
     int32_t i_;
 };
 
+template <int32_t N>
+class I32ConstFixed : public GenericOperation<I32ConstFixed<N>> {
+public:
+    using InType = std::tuple<>;
+    using OutType = Value;
+
+    explicit I32ConstFixed(const grammar::I32Const& op)
+        : GenericOperation<I32ConstFixed<N>>(op.getAddress()) {}
+
+    static OutType impl(I32ConstFixed&, Instance&) { return N; }
+
+    Expected<Continuation> eval(Context& context) const override;
+};
+
 class I64Const : public OperationBase {
 public:
     I64Const(const grammar::I64Const& i64_const);

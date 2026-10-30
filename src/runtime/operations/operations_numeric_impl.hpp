@@ -17,6 +17,12 @@ inline Value I32Const::impl(I32Const& i32_const, Instance& instance) {
     return out;
 }
 
+template <int32_t N>
+Expected<Continuation> I32ConstFixed<N>::eval(Context& context) const {
+    context.pushI32(N);
+    return this->next_;
+}
+
 inline Value I32Add::impl(I32Add& i32_add, Instance& instance, Value lhs,
                           Value rhs) {
     (void)i32_add;

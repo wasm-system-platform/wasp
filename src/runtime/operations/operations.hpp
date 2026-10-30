@@ -21,6 +21,18 @@ struct Value {
     Value(int64_t i64) noexcept : i64(i64) {}
     Value(float f32) noexcept : f32(f32) {}
     Value(double f64) noexcept : f64(f64) {}
+
+    Value operator+(int32_t val) { return i32 + val; }
+    Value operator-(int32_t val) { return i32 - val; }
+
+    Value& operator+=(int32_t val) {
+        i32 += val;
+        return *this;
+    }
+    Value& operator-=(int32_t val) {
+        i32 -= val;
+        return *this;
+    }
 };
 static_assert(std::is_trivially_copyable_v<Value>);
 
@@ -127,6 +139,16 @@ private:
     do_create(const grammar::Instruction& inst,
               const std::vector<FunctionType>& func_types, Operations& targets,
               std::pmr::polymorphic_allocator<std::byte>& arena);
+
+    static Operation
+    do_create3(const std::array<grammar::Instruction, 3>& inst3,
+               const std::vector<FunctionType>& func_types, Operations& targets,
+               std::pmr::polymorphic_allocator<std::byte>& arena);
+
+    static Operation
+    do_create4(const std::array<grammar::Instruction, 4>& inst4,
+               const std::vector<FunctionType>& func_types, Operations& targets,
+               std::pmr::polymorphic_allocator<std::byte>& arena);
 };
 
 template <typename Derived> class TaggedOperation : public OperationBase {

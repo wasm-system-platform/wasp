@@ -13,6 +13,7 @@ sp_sources = files(
     'src/grammar/dwarf.cpp',
     'src/runtime/instance.cpp',
     'src/runtime/operations/operations.cpp',
+    'src/runtime/operations/operations_complex.cpp',
     'src/runtime/operations/operations_control.cpp',
     'src/runtime/operations/operations_numeric.cpp',
     'src/runtime/operations/operations_variable.cpp',

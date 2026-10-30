@@ -368,15 +368,15 @@ public:
 
     static Expected<LocalGet> parse(ByteCursor& in, size_t addr);
 
-    uint32_t getLocalIdx() const { return local_idx_; }
+    uint32_t getIndex() const { return idx_; }
 
     std::string toString() const override;
 
 private:
-    uint32_t local_idx_;
+    uint32_t idx_;
 
-    LocalGet(uint32_t local_idx, size_t addr)
-        : InstructionBase(OPCODE, addr), local_idx_(local_idx) {}
+    LocalGet(uint32_t idx, size_t addr)
+        : InstructionBase(OPCODE, addr), idx_(idx) {}
 };
 
 class LocalSet : public InstructionBase {
@@ -385,15 +385,15 @@ public:
 
     static Expected<LocalSet> parse(ByteCursor& in, size_t addr);
 
-    uint32_t getLocalIdx() const { return local_idx_; }
+    uint32_t getIndex() const { return idx_; }
 
     std::string toString() const override;
 
 private:
-    uint32_t local_idx_;
+    uint32_t idx_;
 
-    LocalSet(uint32_t local_idx, size_t addr)
-        : InstructionBase(OPCODE, addr), local_idx_(local_idx) {}
+    LocalSet(uint32_t idx, size_t addr)
+        : InstructionBase(OPCODE, addr), idx_(idx) {}
 };
 
 class LocalTee : public InstructionBase {
@@ -402,15 +402,15 @@ public:
 
     static Expected<LocalTee> parse(ByteCursor& in, size_t addr);
 
-    uint32_t getLocalIdx() const { return local_idx_; }
+    uint32_t getIndex() const { return idx_; }
 
     std::string toString() const override;
 
 private:
-    uint32_t local_idx_;
+    uint32_t idx_;
 
-    LocalTee(uint32_t local_idx, size_t addr)
-        : InstructionBase(OPCODE, addr), local_idx_(local_idx) {}
+    LocalTee(uint32_t idx, size_t addr)
+        : InstructionBase(OPCODE, addr), idx_(idx) {}
 };
 
 class GlobalGet : public InstructionBase {
