@@ -103,10 +103,12 @@ Expected<Imports> Kernel::createImports() {
     // Interrupts
     std::function<int32_t(Instance & instance)> interrupts_enable_func =
         [](Instance& instance) -> int32_t {
+        // fmt::println("kernel: enable interrupts");
         return instance.as<Kernel>().controller_->enableInterrupts();
     };
     std::function<int32_t(Instance&)> interrupts_disable_func =
         [](Instance& instance) -> int32_t {
+        // fmt::println("kernel: disable interrupts");
         return instance.as<Kernel>().controller_->disableInterrupts();
     };
     std::function<int32_t(Instance&)> interrupts_enabled_func =
@@ -261,6 +263,10 @@ Expected<Imports> Kernel::createImports() {
     };
     std::function<int32_t(Instance&, int32_t, int32_t)> process_run_func =
         [](Instance& instance, uint32_t pid, uint32_t execve_stack) -> int32_t {
+
+        if (!instance.as<Kernel>().controller_->getInterruptsEnabled())
+            fmt::println("warning: interrupts are still disabled after forking");
+
         ProcessManager& proc_mgr = *instance.as<Kernel>().proccess_manager_;
         return static_cast<int32_t>(
             proc_mgr.runProcess(pid, instance, execve_stack));
@@ -293,6 +299,9 @@ Expected<Imports> Kernel::createImports() {
     std::function<int32_t(Instance&, int32_t, int32_t)> process_resume_func =
         [](Instance& instance, uint32_t pid, int32_t retval) -> int32_t {
         Kernel& kernel = instance.as<Kernel>();
+        if (!kernel.controller_->getInterruptsEnabled())
+            fmt::println("warning: interrupts are still disabled after forking");
+
         ProcessManager& proc_mgr = *kernel.proccess_manager_;
         return static_cast<int32_t>(
             proc_mgr.resumeProcess(pid, kernel, retval));

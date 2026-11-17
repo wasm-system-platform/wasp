@@ -38,6 +38,8 @@ public:
         return *active_instance_;
     }
 
+    std::shared_ptr<InterruptController> controller_;
+
 protected:
     Kernel(GlobalState&& global_state, std::shared_ptr<Exports>& exports,
            const grammar::Module& module)
@@ -47,7 +49,6 @@ private:
     Instance* active_instance_;
     // std::stack<std::reference_wrapper<Instance>> suspended_instances_;
 
-    std::shared_ptr<InterruptController> controller_;
     std::unique_ptr<MemoryManagementUnit> mmu_;
     std::unique_ptr<ProcessManager> proccess_manager_;
 

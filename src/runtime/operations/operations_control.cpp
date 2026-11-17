@@ -121,10 +121,10 @@ Continuation IfElse::action(Instance& instance) {
 }
 
 Branch::Branch(const grammar::Branch& branch, Operations& targets) {
-        next_ = targets[branch.getLabelIdx()];
-    }
+    next_ = targets[branch.getLabelIdx()];
+}
 
-Continuation Branch::action(Instance&) {
+Continuation Branch::action(Instance& instance) {
     TRACE_VERBOSE("br --> {}", (void*)next_.get());
     return next_;
 }

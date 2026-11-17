@@ -17,6 +17,7 @@ sp_sources = files(
     'src/runtime/operations/operations_control.cpp',
     'src/runtime/operations/operations_numeric.cpp',
     'src/runtime/operations/operations_variable.cpp',
+    'src/runtime/operations/triplets.cpp',
     'src/runtime/process_manager.cpp',
     'src/runtime/context_manager.cpp',
     'src/runtime/waiting_room.cpp',

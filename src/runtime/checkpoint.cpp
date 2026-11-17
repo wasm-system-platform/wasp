@@ -296,6 +296,7 @@ Errno save(Instance& instance, uint32_t checkpoint_offset,
 
 Errno restore(Instance& instance, uint32_t checkpoint_offset,
               uint32_t checkpoint_len) {
+    fmt::println("trying to restore");
     if (checkpoint_len < sizeof(Checkpoint))
         return Errno::invalid;
 
@@ -328,6 +329,7 @@ Errno restore(Instance& instance, uint32_t checkpoint_offset,
         return result;
 
     decode(instance, encoded_state);
+    fmt::println("restore");
     return Errno::success;
 }
 

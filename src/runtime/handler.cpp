@@ -43,6 +43,7 @@ Continuation Interrupt::Epilogue::action(Instance& instance) {
         kernel.getGlobalState().getFunction(parent_.handler_idx_);
     syscall_handler.leaveFrame(kernel_ctx);
 
+    // fmt::println("handler: enable interrupts");
     parent_.controller_.enableInterrupts();
     return nullptr;
 }
@@ -97,6 +98,9 @@ Continuation SysCall::Epilogue::action(Instance& instance) {
     proc_ctxt.setRunState(Context::RunState::running);
     proc_ctxt.pushI32(result);
 
+    if (!kernel.controller_->getInterruptsEnabled())
+        fmt::println("warning: interrupts are still disabled after sys call");
+
     return nullptr;
 }
 
@@ -130,12 +134,15 @@ Continuation PageFault::action(Instance& instance) {
 
 Continuation PageFault::Epilogue::action(Instance& instance) {
     Kernel& kernel = instance.as<Kernel>();
-    kernel.resume();
+    auto suspended_instance = kernel.resume();
 
     Context& kernel_ctxt = instance.getActiveContext();
     Function& page_fault_handler =
         instance.getGlobalState().getFunction(parent_.handler_idx_);
     page_fault_handler.leaveFrame(kernel_ctxt);
+
+    if (suspended_instance.is<Process>() && !kernel.controller_->getInterruptsEnabled())
+        fmt::println("warning: interrupts are still disabled after page fault");
 
     return nullptr;
 }
@@ -187,6 +194,10 @@ Continuation Signal::action(Instance& instance) {
     proc_ctxt.pushI32(handler_idx);
     proc_ctxt.getStack().push(signal);
     proc_ctxt.getEpilogues().push(&epilogue_);
+
+    if (!kernel.controller_->getInterruptsEnabled())
+        fmt::println("warning: interrupts are still disabled when signaling");
+
 
     /* Switch to process and call the handler function. */
     kernel.signal(*proc);

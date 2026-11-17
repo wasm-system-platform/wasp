@@ -11,6 +11,7 @@
 #include "runtime/operations/operations_numeric_impl.hpp"
 #include "runtime/operations/operations_variable.hpp"
 #include "runtime/operations/operations_variable_impl.hpp"
+#include "runtime/operations/triplets.hpp"
 #include "runtime/optimization.hpp"
 #include "runtime/vm.hpp"
 
@@ -42,14 +43,12 @@ OperationBase::create(const std::vector<grammar::Instruction>& instructions,
                     instructions[i + 3],
                 };
 
-                /*
                 Operation next = do_create4(inst4, func_types, targets, arena);
                 if (next) {
                     collector->add(next);
                     i += 3;
                     continue;
                 }
-                    */
             } else if (instructions.size() - i >= 3) {
                 const std::array<grammar::Instruction, 3> inst3 = {
                     instructions[i],
@@ -57,14 +56,12 @@ OperationBase::create(const std::vector<grammar::Instruction>& instructions,
                     instructions[i + 2],
                 };
 
-                /*
                 Operation next = do_create3(inst3, func_types, targets, arena);
                 if (next) {
                     collector->add(next);
                     i += 2;
                     continue;
                 }
-                    */
             }
 
             const auto& inst = instructions[i];
@@ -818,6 +815,13 @@ OperationBase::do_create3(const std::array<grammar::Instruction, 3>& inst3,
                                inst3[1]->getOpcode() << 8 |
                                inst3[2]->getOpcode();
 
+    /* switch (combined_opcode) {
+        case I32LocalSetConstBranch::OPCODE:
+            return arena_new<I32LocalSetConstBranch>(
+                arena, inst3[0]->as<grammar::I32Const>(),
+                inst3[1]->as<grammar::LocalSet>(), inst3[2]->as<grammar::Branch>(), targets);
+    } */
+
     return nullptr;
 
     constexpr size_t TOP_N = 20;
@@ -877,11 +881,11 @@ OperationBase::do_create3(const std::array<grammar::Instruction, 3>& inst3,
     }
 
     // Anfangsrauschen unterdrücken
-    if (stats.total < 10000)
+    if (stats.total < 10'000)
         return nullptr;
 
     // Nur bei Änderungen oder alle 100.000 Kombinationen
-    if (!changed && stats.total % 100000 != 0)
+    if (!changed && stats.total % 1'000'000 != 0)
         return nullptr;
 
     fmt::print(stderr, "\n[Opcode3] Top {} (total: {}, unique: {}):\n", TOP_N,
@@ -934,7 +938,7 @@ void OperationBase::CollectorBase::add(Operation next) {
     for (auto it = next; it; it = it->next_) {
         operations_.push_back(it);
 
-        if (it->is<Branch>())
+        if (it->is<Branch>() || it->is<I32LocalSetConstBranch>())
             break;
 
         if (visited.contains(it)) {
@@ -965,7 +969,7 @@ void OperationBase::CollectorBase::add(Operation next) {
 
 Operation OperationBase::CollectorBase::do_finish() {
     for (size_t i = 0; i + 1 < operations_.size(); ++i) {
-        if (operations_[i]->is<Branch>())
+        if (operations_[i]->is<Branch>() || operations_[i]->is<I32LocalSetConstBranch>())
             continue;
 
         operations_[i]->next_ = operations_[i + 1];
