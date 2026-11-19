@@ -141,7 +141,8 @@ Continuation PageFault::Epilogue::action(Instance& instance) {
         instance.getGlobalState().getFunction(parent_.handler_idx_);
     page_fault_handler.leaveFrame(kernel_ctxt);
 
-    if (suspended_instance.is<Process>() && !kernel.controller_->getInterruptsEnabled())
+    if (suspended_instance.is<Process>() &&
+        !kernel.controller_->getInterruptsEnabled())
         fmt::println("warning: interrupts are still disabled after page fault");
 
     return nullptr;
@@ -197,7 +198,6 @@ Continuation Signal::action(Instance& instance) {
 
     if (!kernel.controller_->getInterruptsEnabled())
         fmt::println("warning: interrupts are still disabled when signaling");
-
 
     /* Switch to process and call the handler function. */
     kernel.signal(*proc);

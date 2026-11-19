@@ -819,7 +819,8 @@ OperationBase::do_create3(const std::array<grammar::Instruction, 3>& inst3,
         case I32LocalSetConstBranch::OPCODE:
             return arena_new<I32LocalSetConstBranch>(
                 arena, inst3[0]->as<grammar::I32Const>(),
-                inst3[1]->as<grammar::LocalSet>(), inst3[2]->as<grammar::Branch>(), targets);
+                inst3[1]->as<grammar::LocalSet>(),
+    inst3[2]->as<grammar::Branch>(), targets);
     } */
 
     return nullptr;
@@ -969,7 +970,8 @@ void OperationBase::CollectorBase::add(Operation next) {
 
 Operation OperationBase::CollectorBase::do_finish() {
     for (size_t i = 0; i + 1 < operations_.size(); ++i) {
-        if (operations_[i]->is<Branch>() || operations_[i]->is<I32LocalSetConstBranch>())
+        if (operations_[i]->is<Branch>() ||
+            operations_[i]->is<I32LocalSetConstBranch>())
             continue;
 
         operations_[i]->next_ = operations_[i + 1];

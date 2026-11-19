@@ -263,9 +263,9 @@ Expected<Imports> Kernel::createImports() {
     };
     std::function<int32_t(Instance&, int32_t, int32_t)> process_run_func =
         [](Instance& instance, uint32_t pid, uint32_t execve_stack) -> int32_t {
-
         if (!instance.as<Kernel>().controller_->getInterruptsEnabled())
-            fmt::println("warning: interrupts are still disabled after forking");
+            fmt::println(
+                "warning: interrupts are still disabled after forking");
 
         ProcessManager& proc_mgr = *instance.as<Kernel>().proccess_manager_;
         return static_cast<int32_t>(
@@ -300,7 +300,8 @@ Expected<Imports> Kernel::createImports() {
         [](Instance& instance, uint32_t pid, int32_t retval) -> int32_t {
         Kernel& kernel = instance.as<Kernel>();
         if (!kernel.controller_->getInterruptsEnabled())
-            fmt::println("warning: interrupts are still disabled after forking");
+            fmt::println(
+                "warning: interrupts are still disabled after forking");
 
         ProcessManager& proc_mgr = *kernel.proccess_manager_;
         return static_cast<int32_t>(

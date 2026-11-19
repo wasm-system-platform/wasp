@@ -1,5 +1,5 @@
-#include "runtime/instance.hpp"
 #include "runtime/operations/triplets.hpp"
+#include "runtime/instance.hpp"
 
 namespace runtime {
 
@@ -9,4 +9,4 @@ Continuation I32LocalSetConstBranch::action(Instance& instance) {
     return next_;
 }
 
-}
+} // namespace runtime
