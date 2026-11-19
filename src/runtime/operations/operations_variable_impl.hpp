@@ -11,7 +11,7 @@ inline Value LocalGet::impl(LocalGet& local_get, Instance& instance) {
                   instance.getActiveContext().getEpilogues().size(),
                   instance.getGlobalState().getDebugInfo().getFormattedLocation(
                       local_get.addr_),
-                  local_get.local_idx_, local.i32, local.i64);
+                  local_get.local_idx_, out.i32, out.i64);
     return out;
 }
 

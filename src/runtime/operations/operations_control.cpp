@@ -125,7 +125,8 @@ Branch::Branch(const grammar::Branch& branch, Operations& targets) {
 }
 
 Continuation Branch::action(Instance& instance) {
-    TRACE_VERBOSE("br --> {}", (void*)next_.get());
+    TRACE_VERBOSE("br --> {}",
+                  next_ ? next_->getFormattedAddress(instance) : "end");
     return next_;
 }
 
@@ -150,7 +151,8 @@ Continuation BranchTable::action(Instance& instance) {
     uint32_t label_idx = label_indices_[idx];
     Continuation target = targets_[label_idx];
 
-    TRACE_VERBOSE("br_table {} --> {}", label_idx, (void*)target.get());
+    TRACE_VERBOSE("br_table {} --> {}", label_idx,
+                  target ? target->getFormattedAddress(instance) : "end");
     return target;
 }
 

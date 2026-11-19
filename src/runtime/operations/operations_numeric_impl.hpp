@@ -29,7 +29,7 @@ inline Value I32Add::impl(I32Add& i32_add, Instance& instance, Value lhs,
     (void)instance;
 
     Value out = lhs.i32 + rhs.i32;
-    TRACE_VERBOSE("[{:3}] {}: i32.add {}: ({}, {}) -> ({})",
+    TRACE_VERBOSE("[{:3}] {}: i32.add: ({}, {}) -> ({})",
                   instance.getActiveContext().getEpilogues().size(),
                   instance.getGlobalState().getDebugInfo().getFormattedLocation(
                       i32_add.addr_),
@@ -43,11 +43,11 @@ inline Value I32Sub::impl(I32Sub& i32_sub, Instance& instance, Value lhs,
     (void)instance;
 
     Value out = lhs.i32 - rhs.i32;
-    TRACE_VERBOSE("[{:3}] {}: i32.sub {}: ({}, {}) -> ({})",
+    TRACE_VERBOSE("[{:3}] {}: i32.sub: ({}, {}) -> ({})",
                   instance.getActiveContext().getEpilogues().size(),
                   instance.getGlobalState().getDebugInfo().getFormattedLocation(
                       i32_sub.addr_),
-                  lhs.i32, rhs.i32, out.32);
+                  lhs.i32, rhs.i32, out.i32);
     return out;
 }
 
@@ -56,7 +56,7 @@ inline Value F64Neg::impl(F64Neg& f64_neg, Instance& instance, Value in) {
     (void)instance;
 
     Value out = -in.f64;
-    TRACE_VERBOSE("[{:3}] {}: f64.neg {}: ({}) -> ({})",
+    TRACE_VERBOSE("[{:3}] {}: f64.neg: ({}) -> ({})",
                   instance.getActiveContext().getEpilogues().size(),
                   instance.getGlobalState().getDebugInfo().getFormattedLocation(
                       f64_neg.addr_),
@@ -70,7 +70,7 @@ inline Value F64Add::impl(F64Add& f64_add, Instance& instance, Value lhs,
     (void)instance;
 
     Value out = lhs.f64 + rhs.f64;
-    TRACE_VERBOSE("[{:3}] {}: f64.add {}: ({}, {}) -> ({})",
+    TRACE_VERBOSE("[{:3}] {}: f64.add: ({}, {}) -> ({})",
                   instance.getActiveContext().getEpilogues().size(),
                   instance.getGlobalState().getDebugInfo().getFormattedLocation(
                       f64_add.addr_),
@@ -84,7 +84,7 @@ inline Value F64Sub::impl(F64Sub& f64_sub, Instance& instance, Value lhs,
     (void)instance;
 
     Value out = lhs.f64 - rhs.f64;
-    TRACE_VERBOSE("[{:3}] {}: f64.sub {}: ({}, {}) -> ({})",
+    TRACE_VERBOSE("[{:3}] {}: f64.sub: ({}, {}) -> ({})",
                   instance.getActiveContext().getEpilogues().size(),
                   instance.getGlobalState().getDebugInfo().getFormattedLocation(
                       f64_sub.addr_),
@@ -159,7 +159,7 @@ inline Value I64ReinterpretF64::impl(I64ReinterpretF64& i64_reinterpret_f64,
     TRACE_VERBOSE("[{:3}] {}: i64.reinterpret_f64: ({}) -> ({})",
                   instance.getActiveContext().getEpilogues().size(),
                   instance.getGlobalState().getDebugInfo().getFormattedLocation(
-                      i32_reinterpret_f32.addr_),
+                      i64_reinterpret_f64.addr_),
                   in.f64, out.i64);
     return out;
 }
@@ -173,7 +173,7 @@ inline Value F32ReinterpretI32::impl(F32ReinterpretI32& f32_reinterpret_i32,
     TRACE_VERBOSE("[{:3}] {}: f32.reinterpret_i32: ({}) -> ({})",
                   instance.getActiveContext().getEpilogues().size(),
                   instance.getGlobalState().getDebugInfo().getFormattedLocation(
-                      i32_reinterpret_f32.addr_),
+                      f32_reinterpret_i32.addr_),
                   in.i32, out.f32);
     return out;
 }
